@@ -8,10 +8,25 @@ import * as authService from '../services/auth.js';
 const router = Router();
 
 router.get('/login', (req, res) => {
-  const state = uuid();
-  res.cookie('oauth_state', state, { httpOnly: true, maxAge: 600000, sameSite: 'lax' });
-  const url = authService.getLoginUrl(state);
-  res.redirect(url);
+  try {
+    const state = uuid();
+    const url = authService.getLoginUrl(state);
+    res.cookie('oauth_state', state, { httpOnly: true, maxAge: 600000, sameSite: 'lax' });
+    res.redirect(url);
+  } catch (err) {
+    res.status(400).json({ ok: false, error: err.message });
+  }
+});
+
+router.get('/google/login', (req, res) => {
+  try {
+    const state = uuid();
+    const url = authService.getGoogleLoginUrl(state);
+    res.cookie('google_oauth_state', state, { httpOnly: true, maxAge: 600000, sameSite: 'lax' });
+    res.redirect(url);
+  } catch (err) {
+    res.status(400).json({ ok: false, error: err.message });
+  }
 });
 
 router.get('/callback', async (req, res) => {
@@ -37,6 +52,33 @@ router.get('/callback', async (req, res) => {
     res.redirect(config.clientUrl);
   } catch (err) {
     console.error('[auth] callback error:', err);
+    res.status(500).json({ ok: false, error: err.message });
+  }
+});
+
+router.get('/google/callback', async (req, res) => {
+  const { code, state } = req.query;
+  const savedState = req.cookies?.google_oauth_state;
+
+  if (!savedState || savedState !== state) {
+    return res.status(400).json({ ok: false, error: 'Google OAuth state 验证失败' });
+  }
+
+  try {
+    const accessToken = await authService.exchangeGoogleCode(code);
+    const googleUser = await authService.getGoogleUser(accessToken);
+    const user = authService.upsertGoogleUser(googleUser);
+    const token = authService.signJwt(user);
+
+    res.clearCookie('google_oauth_state');
+    res.cookie('token', token, {
+      httpOnly: true,
+      maxAge: 7 * 24 * 60 * 60 * 1000,
+      sameSite: 'lax',
+    });
+    res.redirect(config.clientUrl);
+  } catch (err) {
+    console.error('[auth] google callback error:', err);
     res.status(500).json({ ok: false, error: err.message });
   }
 });

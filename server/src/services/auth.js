@@ -5,13 +5,32 @@ import { config } from '../config.js';
 import db from '../db/connection.js';
 
 export function getLoginUrl(state) {
-  const redirectUri = `${config.clientUrl}/api/auth/callback`;
+  if (!config.feishuAppId) {
+    throw new Error('飞书 OAuth 未配置：缺少 FEISHU_APP_ID');
+  }
+  const redirectUri = `${config.serverUrl}/api/auth/callback`;
   const params = new URLSearchParams({
     app_id: config.feishuAppId,
     redirect_uri: redirectUri,
     state,
   });
   return `https://open.feishu.cn/open-apis/authen/v1/authorize?${params}`;
+}
+
+export function getGoogleLoginUrl(state) {
+  if (!config.googleClientId) {
+    throw new Error('Google OAuth 未配置：缺少 GOOGLE_CLIENT_ID');
+  }
+  const params = new URLSearchParams({
+    client_id: config.googleClientId,
+    redirect_uri: `${config.serverUrl}/api/auth/google/callback`,
+    response_type: 'code',
+    scope: 'openid email profile',
+    state,
+    access_type: 'offline',
+    prompt: 'select_account',
+  });
+  return `https://accounts.google.com/o/oauth2/v2/auth?${params}`;
 }
 
 export async function exchangeCode(code) {
@@ -43,6 +62,39 @@ export async function getFeishuUser(accessToken) {
   return data.data;
 }
 
+export async function exchangeGoogleCode(code) {
+  if (!config.googleClientId || !config.googleClientSecret) {
+    throw new Error('Google OAuth 未配置：缺少 GOOGLE_CLIENT_ID 或 GOOGLE_CLIENT_SECRET');
+  }
+  const tokenRes = await fetch('https://oauth2.googleapis.com/token', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+    body: new URLSearchParams({
+      client_id: config.googleClientId,
+      client_secret: config.googleClientSecret,
+      code,
+      grant_type: 'authorization_code',
+      redirect_uri: `${config.serverUrl}/api/auth/google/callback`,
+    }),
+  });
+  const tokenData = await tokenRes.json();
+  if (!tokenRes.ok || !tokenData.access_token) {
+    throw new Error(`Google Token 交换失败: ${tokenData.error_description || tokenData.error || tokenRes.statusText}`);
+  }
+  return tokenData.access_token;
+}
+
+export async function getGoogleUser(accessToken) {
+  const res = await fetch('https://www.googleapis.com/oauth2/v3/userinfo', {
+    headers: { Authorization: `Bearer ${accessToken}` },
+  });
+  const data = await res.json();
+  if (!res.ok || !data.sub) {
+    throw new Error(`Google 用户信息获取失败: ${data.error_description || data.error || res.statusText}`);
+  }
+  return data;
+}
+
 export function upsertUser(feishuUser) {
   const existing = db.prepare('SELECT * FROM users WHERE id = ?').get(feishuUser.open_id);
   if (existing) {
@@ -55,6 +107,24 @@ export function upsertUser(feishuUser) {
     );
   }
   return db.prepare('SELECT * FROM users WHERE id = ?').get(feishuUser.open_id);
+}
+
+export function upsertGoogleUser(googleUser) {
+  const id = `google:${googleUser.sub}`;
+  const name = googleUser.name || googleUser.email || 'Google User';
+  const avatarUrl = googleUser.picture || '';
+  const email = googleUser.email || '';
+  const existing = db.prepare('SELECT * FROM users WHERE id = ?').get(id);
+  if (existing) {
+    db.prepare('UPDATE users SET name = ?, avatar_url = ?, email = ? WHERE id = ?').run(
+      name, avatarUrl, email, id
+    );
+  } else {
+    db.prepare('INSERT INTO users (id, name, avatar_url, email) VALUES (?, ?, ?, ?)').run(
+      id, name, avatarUrl, email
+    );
+  }
+  return db.prepare('SELECT * FROM users WHERE id = ?').get(id);
 }
 
 export function signJwt(user) {

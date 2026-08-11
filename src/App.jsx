@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import {
   ArrowRight,
   BadgeCheck,
@@ -40,8 +40,8 @@ const roles = [
 ]
 
 const providers = {
-  feishu: { name: '飞书账号', hint: '推荐给企业和项目组', icon: Building2 },
-  google: { name: 'Google 登录', hint: '适合外部成员和开源用户', icon: Mail },
+  feishu: { name: '飞书账号', hint: '推荐给企业和项目组', icon: Building2, authPath: '/api/auth/login' },
+  google: { name: 'Google 登录', hint: '适合外部成员和开源用户', icon: Mail, authPath: '/api/auth/google/login' },
 }
 
 const groups = [
@@ -79,13 +79,25 @@ function App() {
   const selected = groups.find((item) => item.id === selectedGroup) ?? groups[0]
   const progress = useMemo(() => Math.round(taskItems.reduce((sum, task) => sum + task.progress, 0) / taskItems.length), [taskItems])
 
+  useEffect(() => {
+    fetch('/api/auth/me', { credentials: 'include' })
+      .then((res) => (res.ok ? res.json() : null))
+      .then((body) => {
+        if (!body?.ok) return
+        setVerified((current) => ({
+          ...current,
+          realName: body.data?.name || current.realName,
+          org: body.data?.department || current.org,
+        }))
+        setStage('groups')
+      })
+      .catch(() => {})
+  }, [])
+
   function startLogin(nextProvider) {
     setProvider(nextProvider)
     setLoadingProvider(nextProvider)
-    window.setTimeout(() => {
-      setLoadingProvider('')
-      setStage('verify')
-    }, 700)
+    window.location.href = providers[nextProvider].authPath
   }
 
   function submitVerify(event) {
@@ -95,6 +107,7 @@ function App() {
   }
 
   function reset() {
+    fetch('/api/auth/logout', { method: 'POST', credentials: 'include' }).catch(() => {})
     setStage('intro')
     setProvider('')
     setLoadingProvider('')
@@ -260,7 +273,7 @@ function AuthScreen({ selectedRole, loadingProvider, onLogin }) {
         </div>
         <div className="mt-6 rounded-2xl bg-slate-50 p-4 text-sm leading-6 text-slate-600 ring-1 ring-slate-200">
           <LockKeyhole className="mb-2 text-teal-700" size={18} />
-          当前是前端模拟登录。真实开源版本应提供 OAuth 回调、组织权限和自部署环境变量配置。
+          这里会跳转到后端 OAuth 路由。开发环境需要同时启动前端和后端，并配置对应登录密钥。
         </div>
       </Panel>
     </section>
