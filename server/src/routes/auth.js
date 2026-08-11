@@ -7,6 +7,12 @@ import * as authService from '../services/auth.js';
 
 const router = Router();
 
+function redirectAuthError(res, message) {
+  const url = new URL(config.clientUrl);
+  url.searchParams.set('auth_error', message);
+  res.redirect(url.toString());
+}
+
 router.get('/login', (req, res) => {
   try {
     const state = uuid();
@@ -14,7 +20,7 @@ router.get('/login', (req, res) => {
     res.cookie('oauth_state', state, { httpOnly: true, maxAge: 600000, sameSite: 'lax' });
     res.redirect(url);
   } catch (err) {
-    res.status(400).json({ ok: false, error: err.message });
+    redirectAuthError(res, err.message);
   }
 });
 
@@ -25,7 +31,7 @@ router.get('/google/login', (req, res) => {
     res.cookie('google_oauth_state', state, { httpOnly: true, maxAge: 600000, sameSite: 'lax' });
     res.redirect(url);
   } catch (err) {
-    res.status(400).json({ ok: false, error: err.message });
+    redirectAuthError(res, err.message);
   }
 });
 
@@ -34,7 +40,7 @@ router.get('/callback', async (req, res) => {
   const savedState = req.cookies?.oauth_state;
 
   if (!savedState || savedState !== state) {
-    return res.status(400).json({ ok: false, error: 'OAuth state 验证失败' });
+    return redirectAuthError(res, 'OAuth state 验证失败');
   }
 
   try {
@@ -52,7 +58,7 @@ router.get('/callback', async (req, res) => {
     res.redirect(config.clientUrl);
   } catch (err) {
     console.error('[auth] callback error:', err);
-    res.status(500).json({ ok: false, error: err.message });
+    redirectAuthError(res, err.message);
   }
 });
 
@@ -61,7 +67,7 @@ router.get('/google/callback', async (req, res) => {
   const savedState = req.cookies?.google_oauth_state;
 
   if (!savedState || savedState !== state) {
-    return res.status(400).json({ ok: false, error: 'Google OAuth state 验证失败' });
+    return redirectAuthError(res, 'Google OAuth state 验证失败');
   }
 
   try {
@@ -79,7 +85,7 @@ router.get('/google/callback', async (req, res) => {
     res.redirect(config.clientUrl);
   } catch (err) {
     console.error('[auth] google callback error:', err);
-    res.status(500).json({ ok: false, error: err.message });
+    redirectAuthError(res, err.message);
   }
 });
 

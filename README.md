@@ -8,7 +8,7 @@
 4. 加入项目组
 5. 进入公共任务池工作台
 
-当前版本已经接入 Express + SQLite 后端骨架，并提供飞书 OAuth 与 Google OAuth 登录路由。没有配置 OAuth 密钥时，登录按钮会进入后端错误提示；配置密钥后即可跳转到对应账号授权页。
+当前版本已经接入 Express + SQLite 后端骨架，并提供飞书 OAuth 与 Google OAuth 登录路由。没有配置 OAuth 密钥时，登录按钮会回到前端并显示配置提示；配置密钥后即可跳转到对应账号授权页。开发阶段也可以使用演示账号先走完整流程。
 
 ## 本地运行前端
 
@@ -49,6 +49,8 @@ npm run dev
 ```text
 http://localhost:3001/api/auth/dev-login
 ```
+
+前端登录页也提供「使用演示账号进入」，用于没有飞书或 Google 密钥时先体验产品流程。
 
 真实飞书登录需要先在飞书开放平台拿到 `FEISHU_APP_ID` 和 `FEISHU_APP_SECRET`，并配置线上回调地址。
 

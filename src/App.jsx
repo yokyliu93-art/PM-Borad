@@ -70,6 +70,7 @@ function App() {
   const [role, setRole] = useState('member')
   const [provider, setProvider] = useState('')
   const [loadingProvider, setLoadingProvider] = useState('')
+  const [authError, setAuthError] = useState('')
   const [verified, setVerified] = useState({ realName: '', org: '', roleName: '项目成员' })
   const [selectedGroup, setSelectedGroup] = useState('demo')
   const [taskItems, setTaskItems] = useState(starterTasks)
@@ -80,6 +81,14 @@ function App() {
   const progress = useMemo(() => Math.round(taskItems.reduce((sum, task) => sum + task.progress, 0) / taskItems.length), [taskItems])
 
   useEffect(() => {
+    const params = new URLSearchParams(window.location.search)
+    const incomingAuthError = params.get('auth_error')
+    if (incomingAuthError) {
+      setAuthError(incomingAuthError)
+      setStage('auth')
+      window.history.replaceState(null, '', window.location.pathname)
+    }
+
     fetch('/api/auth/me', { credentials: 'include' })
       .then((res) => (res.ok ? res.json() : null))
       .then((body) => {
@@ -96,8 +105,16 @@ function App() {
 
   function startLogin(nextProvider) {
     setProvider(nextProvider)
+    setAuthError('')
     setLoadingProvider(nextProvider)
     window.location.href = providers[nextProvider].authPath
+  }
+
+  function startDemoLogin() {
+    setProvider('demo')
+    setAuthError('')
+    setLoadingProvider('demo')
+    window.location.href = '/api/auth/dev-login'
   }
 
   function submitVerify(event) {
@@ -111,6 +128,7 @@ function App() {
     setStage('intro')
     setProvider('')
     setLoadingProvider('')
+    setAuthError('')
     setVerified({ realName: '', org: '', roleName: '项目成员' })
     setSelectedGroup('demo')
     setTaskItems(starterTasks)
@@ -142,7 +160,7 @@ function App() {
           <IntroScreen selectedRole={selectedRole} role={role} setRole={setRole} onContinue={() => setStage('auth')} />
         ) : null}
         {stage === 'auth' ? (
-          <AuthScreen selectedRole={selectedRole} loadingProvider={loadingProvider} onLogin={startLogin} />
+          <AuthScreen selectedRole={selectedRole} loadingProvider={loadingProvider} authError={authError} onLogin={startLogin} onDemoLogin={startDemoLogin} />
         ) : null}
         {stage === 'verify' ? (
           <VerifyScreen provider={provider} verified={verified} setVerified={setVerified} onSubmit={submitVerify} />
@@ -250,7 +268,7 @@ function IntroScreen({ selectedRole, role, setRole, onContinue }) {
   )
 }
 
-function AuthScreen({ selectedRole, loadingProvider, onLogin }) {
+function AuthScreen({ selectedRole, loadingProvider, authError, onLogin, onDemoLogin }) {
   return (
     <section className="grid flex-1 items-center gap-8 py-8 lg:grid-cols-[0.86fr_440px]">
       <div className="max-w-2xl">
@@ -266,14 +284,32 @@ function AuthScreen({ selectedRole, loadingProvider, onLogin }) {
           <p className="text-sm text-slate-500">账号登录</p>
           <h2 className="mt-1 text-2xl font-semibold">选择登录方式</h2>
         </div>
+        {authError ? (
+          <div className="mb-4 rounded-2xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm leading-6 text-amber-900">
+            <span className="block font-semibold">登录暂时没有配置好</span>
+            <span className="mt-1 block">{authError}</span>
+          </div>
+        ) : null}
         <div className="space-y-3">
           {Object.entries(providers).map(([id, provider]) => (
             <ProviderButton key={id} id={id} provider={provider} loadingProvider={loadingProvider} onLogin={onLogin} />
           ))}
         </div>
+        <button onClick={onDemoLogin} disabled={Boolean(loadingProvider)} className="mt-3 flex w-full items-center justify-between rounded-2xl border border-teal-200 bg-teal-50 px-4 py-4 text-left shadow-sm transition hover:border-teal-300 hover:bg-white active:translate-y-px disabled:opacity-60">
+          <span className="flex items-center gap-3">
+            <span className="grid h-11 w-11 place-items-center rounded-2xl bg-white text-teal-700 shadow-sm ring-1 ring-teal-100">
+              <Sparkles size={20} />
+            </span>
+            <span>
+              <span className="block font-medium">使用演示账号进入</span>
+              <span className="mt-1 block text-sm text-slate-500">先体验入组、认领和邀请流程</span>
+            </span>
+          </span>
+          {loadingProvider === 'demo' ? <span className="h-5 w-5 animate-spin rounded-full border-2 border-teal-600 border-t-transparent" /> : <ChevronRight size={19} />}
+        </button>
         <div className="mt-6 rounded-2xl bg-slate-50 p-4 text-sm leading-6 text-slate-600 ring-1 ring-slate-200">
           <LockKeyhole className="mb-2 text-teal-700" size={18} />
-          这里会跳转到后端 OAuth 路由。开发环境需要同时启动前端和后端，并配置对应登录密钥。
+          飞书和 Google 都是正式 OAuth 登录。开发环境没有密钥时，可以先用演示账号走完整流程。
         </div>
       </Panel>
     </section>
