@@ -65,6 +65,7 @@ function LandingPage() {
               <ArrowRight size={17} />
             </a>
             <a href="#tour" className="pm-secondary">看看怎么用</a>
+            <a href="/api/auth/dev-login" className="pm-secondary">本地开发进入</a>
           </div>
           <div className="pm-signal-strip" aria-label="PM Board 核心流程">
             <span>组织授权</span>
@@ -123,7 +124,7 @@ function LandingPage() {
         <div className="pm-showcase-board">
           <div className="pm-showcase-header">
             <div>
-              <p>PM Board Demo</p>
+              <p>PM Board</p>
               <h2>一个项目如何跑起来</h2>
             </div>
             <span>进行中</span>
@@ -147,7 +148,7 @@ function LandingPage() {
           </div>
         </div>
         <div className="pm-section-copy">
-          <h2>给大家演示的不是页面，而是一套协作动作</h2>
+          <h2>给团队展示的不是页面，而是一套协作动作</h2>
           <p>发起项目的人负责把任务拆清楚；成员进入项目组后主动认领；每次更新都会进入项目复盘记录。</p>
         </div>
       </section>
@@ -186,6 +187,7 @@ function LandingPage() {
           飞书登录
           <ArrowRight size={17} />
         </a>
+        <a href="/api/auth/dev-login" className="pm-secondary">本地开发进入</a>
       </section>
     </main>
   );
