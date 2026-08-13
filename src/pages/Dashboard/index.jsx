@@ -6,11 +6,11 @@ import { Avatar } from '../../components/ui/Avatar';
 import { StatusPill } from '../../components/ui/StatusPill';
 import { Progress } from '../../components/ui/Progress';
 import { PanelTitle } from '../../components/ui/PanelTitle';
-import { Activity, AlertTriangle, Filter, Gauge, Loader2 } from 'lucide-react';
+import { Activity, AlertTriangle, Filter, Gauge, Loader2, Pencil } from 'lucide-react';
 
 export function Dashboard() {
   const { projectId } = useParams();
-  const { filterPerson, filterMode, setFilterPerson, setFilterMode } = useStore();
+  const { filterPerson, filterMode, setFilterPerson, setFilterMode, currentUser } = useStore();
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
@@ -46,6 +46,7 @@ export function Dashboard() {
   if (!data) return <div className="text-slate-400">暂无数据</div>;
 
   const { project, tasks, teamMembers, workloads } = data;
+  const isProjectPM = project?.pm_user_id === currentUser?.id;
   const overallProgress = tasks.length ? Math.round(tasks.reduce((s, t) => s + t.progress, 0) / tasks.length) : 0;
 
   const filteredTasks = tasks.filter((task) => {
@@ -63,9 +64,19 @@ export function Dashboard() {
             <h2 className="text-3xl font-semibold tracking-normal text-white">所有子PM、进度、阻塞和更新一屏总控</h2>
             <p className="mt-2 text-sm text-slate-400">项目总面板不替每个人干活，只看哪里需要推进、调人和补资源。</p>
           </div>
-          <div className="min-w-56">
-            <div className="mb-2 flex justify-between text-sm"><span className="text-slate-400">整体进度</span><span className="text-white">{overallProgress}%</span></div>
-            <Progress value={overallProgress} />
+          <div className="flex min-w-56 flex-col gap-3">
+            <div>
+              <div className="mb-2 flex justify-between text-sm"><span className="text-slate-400">整体进度</span><span className="text-white">{overallProgress}%</span></div>
+              <Progress value={overallProgress} />
+            </div>
+            {isProjectPM && (
+              <button
+                onClick={() => navigate(`/projects/${projectId}/edit`)}
+                className="inline-flex items-center justify-center gap-2 rounded-md border border-white/10 bg-white px-3 py-2 text-sm font-semibold text-[#0f1117] transition hover:bg-emerald-50"
+              >
+                <Pencil size={15} /> 编辑项目详情
+              </button>
+            )}
           </div>
         </div>
       </div>

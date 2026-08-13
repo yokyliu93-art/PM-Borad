@@ -57,10 +57,31 @@ export function update(id, fields) {
       values.push(key === 'timeline_json' ? JSON.stringify(fields[key]) : fields[key]);
     }
   }
-  if (sets.length === 0) return getById(id);
-  sets.push("updated_at = datetime('now')");
-  values.push(id);
-  db.prepare(`UPDATE projects SET ${sets.join(', ')} WHERE id = ?`).run(...values);
+  const project = db.prepare('SELECT team_id, pm_user_id FROM projects WHERE id = ?').get(id);
+  if (!project) return null;
+  const hasMemberUpdate = Array.isArray(fields.memberIds);
+
+  if (sets.length === 0 && !hasMemberUpdate) return getById(id);
+
+  const tx = db.transaction(() => {
+    if (sets.length > 0) {
+      sets.push("updated_at = datetime('now')");
+      values.push(id);
+      db.prepare(`UPDATE projects SET ${sets.join(', ')} WHERE id = ?`).run(...values);
+    }
+
+    if (hasMemberUpdate) {
+      const teamMemberRows = db.prepare('SELECT user_id FROM team_members WHERE team_id = ?').all(project.team_id);
+      const allowedMemberIds = new Set(teamMemberRows.map((row) => row.user_id));
+      const memberIds = [...new Set([...fields.memberIds, project.pm_user_id])]
+        .filter((userId) => allowedMemberIds.has(userId));
+      db.prepare('DELETE FROM project_members WHERE project_id = ?').run(id);
+      const insert = db.prepare('INSERT OR IGNORE INTO project_members (project_id, user_id) VALUES (?, ?)');
+      for (const userId of memberIds) insert.run(id, userId);
+    }
+  });
+
+  tx();
   return getById(id);
 }
 

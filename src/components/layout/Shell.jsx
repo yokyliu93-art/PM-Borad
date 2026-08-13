@@ -4,10 +4,10 @@ import { ErrorBoundary } from '../ui/ErrorBoundary';
 import { NavLink, Outlet, useLocation } from 'react-router-dom';
 import { useStore } from '../../store';
 import { UserSwitcher } from '../UserSwitcher';
-import { Users, UserCheck, LayoutDashboard, BarChart3, List, Plus } from 'lucide-react';
+import { Users, UserCheck, LayoutDashboard, BarChart3, List, Plus, Settings } from 'lucide-react';
 
 export function Shell() {
-  const { tasks } = useStore();
+  const { tasks, activeProject, currentUser } = useStore();
   const location = useLocation();
 
   // Extract projectId from URL: /projects/:projectId/...
@@ -22,6 +22,7 @@ export function Shell() {
         [`/projects/${projectId}/mine`, '个人面板', UserCheck],
         [`/projects/${projectId}/commander`, '项目总面板', LayoutDashboard],
         [`/projects/${projectId}/boss`, '部门大盘', BarChart3],
+        ...(activeProject?.pm_user_id === currentUser?.id ? [[`/projects/${projectId}/edit`, '项目设置', Settings]] : []),
       ]
     : [
         ['/projects', '项目列表', List],

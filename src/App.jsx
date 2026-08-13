@@ -244,6 +244,7 @@ function ProjectRoutes() {
     <Routes>
       <Route index element={<Navigate to="pool" replace />} />
       <Route path="pool" element={<TaskPool />} />
+      <Route path="edit" element={<ProjectCreate />} />
       <Route path="mine" element={<PersonalPanel />} />
       <Route path="tasks/:taskId" element={<Subproject />} />
       <Route path="commander" element={<Dashboard />} />

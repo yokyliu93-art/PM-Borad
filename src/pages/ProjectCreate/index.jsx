@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useParams } from 'react-router-dom';
 import toast from 'react-hot-toast';
-import { get, post } from '../../lib/api';
+import { get, post, put } from '../../lib/api';
 import { useStore } from '../../store';
 import { Avatar } from '../../components/ui/Avatar';
 import { PanelTitle } from '../../components/ui/PanelTitle';
@@ -24,9 +24,12 @@ const defaultPlan = `# 项目计划书
 PM拆解任务→成员自主认领→认领人自动成为该任务的子PM，可在任务组内调动其他成员协作。`;
 
 export function ProjectCreate() {
+  const { projectId } = useParams();
+  const isEditing = !!projectId;
   const { currentTeamId, setActiveProjectId, currentUser } = useStore();
   const [templates, setTemplates] = useState([]);
   const [allTeamMembers, setAllTeamMembers] = useState([]);
+  const [loadingProject, setLoadingProject] = useState(isEditing);
   const [form, setForm] = useState({
     name: '',
     description: '',
@@ -58,14 +61,51 @@ export function ProjectCreate() {
       if (r.ok) {
         const members = r.data.members || [];
         setAllTeamMembers(members);
-        setForm((f) => ({
-          ...f,
-          teamSize: String(members.length),
-          selectedMembers: members.map((m) => m.id),
-        }));
+        if (!isEditing) {
+          setForm((f) => ({
+            ...f,
+            teamSize: String(members.length),
+            selectedMembers: members.map((m) => m.id),
+          }));
+        }
       }
     });
-  }, [currentTeamId]);
+  }, [currentTeamId, isEditing]);
+
+  useEffect(() => {
+    if (!isEditing) return;
+    setLoadingProject(true);
+    get(`/api/projects/${projectId}`).then((r) => {
+      if (!r.ok || !r.data) {
+        toast.error(r.error || '项目不存在');
+        navigate('/projects');
+        return;
+      }
+
+      let timeline = [];
+      try {
+        timeline = typeof r.data.timeline_json === 'string'
+          ? JSON.parse(r.data.timeline_json || '[]')
+          : r.data.timeline_json || [];
+      } catch {
+        timeline = [];
+      }
+
+      const members = r.data.members || [];
+      setForm((f) => ({
+        ...f,
+        name: r.data.name || '',
+        description: r.data.description || '',
+        planMarkdown: r.data.plan_markdown || defaultPlan,
+        teamSize: String(members.length),
+        selectedMembers: members.map((m) => m.id),
+        timeline: timeline.length ? timeline : [['W1', ''], ['W2', ''], ['W3', ''], ['W4', '']],
+      }));
+    }).catch(() => {
+      toast.error('读取项目失败，请确认后端服务是否运行');
+      navigate('/projects');
+    }).finally(() => setLoadingProject(false));
+  }, [isEditing, projectId, navigate]);
 
   function toggleMember(userId) {
     setForm((f) => {
@@ -98,6 +138,28 @@ export function ProjectCreate() {
 
     try {
       const timelineJson = form.timeline.filter(([t]) => t.trim());
+
+      if (isEditing) {
+        const res = await put(`/api/projects/${projectId}`, {
+          name: form.name,
+          description: form.description,
+          plan_markdown: form.planMarkdown,
+          timeline_json: timelineJson,
+          memberIds: form.selectedMembers,
+        });
+
+        if (!res.ok || !res.data) {
+          toast.error(res.error || '保存项目失败');
+          setCreating(false);
+          return;
+        }
+
+        toast.success('项目详情已保存');
+        setActiveProjectId(projectId);
+        setCreating(false);
+        navigate(`/projects/${projectId}/commander`);
+        return;
+      }
 
       const res = await post('/api/projects', {
         teamId: currentTeamId,
@@ -137,8 +199,8 @@ export function ProjectCreate() {
       setActiveProjectId(project.id);
       setCreating(false);
       navigate(`/projects/${project.id}/pool`);
-    } catch (err) {
-      toast.error('创建项目失败，请检查后端服务是否运行');
+    } catch {
+      toast.error(isEditing ? '保存项目失败，请检查后端服务是否运行' : '创建项目失败，请检查后端服务是否运行');
     } finally {
       setCreating(false);
     }
@@ -175,7 +237,9 @@ export function ProjectCreate() {
     }
   }
 
-  const selectedMemberObjects = allTeamMembers.filter((m) => form.selectedMembers.includes(m.id));
+  if (loadingProject) {
+    return <div className="grid h-64 place-items-center"><Loader2 className="animate-spin text-slate-400" size={32} /></div>;
+  }
 
   return (
     <section className="grid gap-5 xl:grid-cols-[1.1fr_0.9fr]">
@@ -184,7 +248,7 @@ export function ProjectCreate() {
         <div className="rounded-lg border border-white/10 bg-white/[0.035] p-5 shadow-2xl shadow-black/20">
           <div className="flex items-center gap-2 text-violet-200">
             <Sparkles size={18} />
-            <span className="text-sm font-medium">Step 1 · 项目发起</span>
+            <span className="text-sm font-medium">{isEditing ? '项目设置' : 'Step 1 · 项目发起'}</span>
           </div>
 
           <input
@@ -220,7 +284,7 @@ export function ProjectCreate() {
             </div>
           </div>
 
-          {/* Split mode + publish toggle */}
+          {!isEditing && (
           <div className="mt-5">
             <label className="mb-2 block text-sm font-medium text-slate-300">任务拆解方式</label>
             <div className="grid gap-2 md:grid-cols-3">
@@ -296,6 +360,7 @@ export function ProjectCreate() {
               创建后立即发布到任务池
             </label>
           </div>
+          )}
         </div>
 
         {/* Feishu doc import */}
@@ -364,7 +429,9 @@ export function ProjectCreate() {
         >
           <Check size={16} className={creating ? 'hidden' : ''} />
           <Loader2 size={16} className={creating ? 'animate-spin' : 'hidden'} />
-          {creating ? (form.templateId === '__ai__' ? 'AI 正在拆解任务池...' : '正在发起并拆分任务池...') : '发起项目，生成公共任务池'}
+          {isEditing
+            ? (creating ? '正在保存项目详情...' : '保存项目详情')
+            : (creating ? (form.templateId === '__ai__' ? 'AI 正在拆解任务池...' : '正在发起并拆分任务池...') : '发起项目，生成公共任务池')}
         </button>
       </div>
 

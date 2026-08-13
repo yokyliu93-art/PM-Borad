@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import { get, del } from '../../lib/api';
 import { useStore } from '../../store';
-import { Plus, ArrowRight, Loader2, AlertTriangle, Trash2 } from 'lucide-react';
+import { Plus, ArrowRight, Loader2, AlertTriangle, Trash2, Pencil } from 'lucide-react';
 import { Progress } from '../../components/ui/Progress';
 
 export function ProjectList() {
@@ -45,6 +45,12 @@ export function ProjectList() {
     } else {
       toast.error(res.error || '删除失败');
     }
+  }
+
+  function editProject(e, project) {
+    e.stopPropagation();
+    setActiveProjectId(project.id);
+    navigate(`/projects/${project.id}/edit`);
   }
 
   if (loading) return <div className="grid place-items-center h-64"><Loader2 className="animate-spin text-slate-400" size={32} /></div>;
@@ -113,14 +119,24 @@ export function ProjectList() {
                   </div>
                   <div className="ml-2 flex shrink-0 items-center gap-2">
                     {isPM && (
-                      <button
-                        onClick={(e) => deleteProject(e, p)}
-                        title="删除项目"
-                        aria-label="删除项目"
-                        className="grid h-7 w-7 place-items-center rounded-md border border-white/10 text-slate-500 transition hover:border-red-400/40 hover:bg-red-500/10 hover:text-red-300"
-                      >
-                        <Trash2 size={14} />
-                      </button>
+                      <>
+                        <button
+                          onClick={(e) => editProject(e, p)}
+                          title="编辑项目"
+                          aria-label="编辑项目"
+                          className="grid h-7 w-7 place-items-center rounded-md border border-white/10 text-slate-500 transition hover:border-emerald-400/40 hover:bg-emerald-500/10 hover:text-emerald-200"
+                        >
+                          <Pencil size={14} />
+                        </button>
+                        <button
+                          onClick={(e) => deleteProject(e, p)}
+                          title="删除项目"
+                          aria-label="删除项目"
+                          className="grid h-7 w-7 place-items-center rounded-md border border-white/10 text-slate-500 transition hover:border-red-400/40 hover:bg-red-500/10 hover:text-red-300"
+                        >
+                          <Trash2 size={14} />
+                        </button>
+                      </>
                     )}
                     <ArrowRight size={18} className="text-slate-500" />
                   </div>
