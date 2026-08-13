@@ -1,8 +1,10 @@
 import { v4 as uuid } from 'uuid';
 import { unlinkSync } from 'fs';
 import path from 'path';
+import crypto from 'crypto';
 import db from '../db/connection.js';
 import { config } from '../config.js';
+import * as taskService from './task.js';
 
 export function create({ teamId, name, description, planMarkdown, pmUserId, timelineJson, memberIds }) {
   const id = uuid();
@@ -12,6 +14,7 @@ export function create({ teamId, name, description, planMarkdown, pmUserId, time
   `).run(id, teamId, name, description || '', planMarkdown || '', pmUserId, JSON.stringify(timelineJson || []));
   const stmt = db.prepare('INSERT OR IGNORE INTO project_members (project_id, user_id) VALUES (?, ?)');
   for (const uid of new Set([pmUserId, ...(memberIds || [])])) stmt.run(id, uid);
+  ensureDefaultProjectAgentSetup(id);
   return getById(id);
 }
 
@@ -115,6 +118,103 @@ export function update(id, fields) {
   return getById(id);
 }
 
+function hashAgentKey(apiKey) {
+  return crypto.createHash('sha256').update(apiKey).digest('hex');
+}
+
+function createProjectAgentKey(projectId) {
+  const secret = crypto.randomBytes(24).toString('base64url');
+  return `pmb_project_${projectId.slice(0, 8)}_${secret}`;
+}
+
+function keyPrefix(apiKey) {
+  return `${apiKey.slice(0, 18)}...`;
+}
+
+export function buildDefaultProjectAgentInstructions(project) {
+  return [
+    `你是 PM Board 中「${project.name}」这个项目的总 PM Agent。`,
+    project.description ? `项目简介：${project.description}` : '',
+    project.plan_markdown ? `项目计划书：\n${project.plan_markdown}` : '',
+    '你的权限边界：只能管理这个项目下的任务块，不能越权到其他项目。',
+    '你需要把项目计划拆成可被成员认领的任务块。每个任务块要有标题、目标说明、周期和建议子任务。',
+    '当总 PM 说“传到 PM Board”时，请调用项目 Agent API 创建任务块并发布到任务大厅。',
+  ].filter(Boolean).join('\n');
+}
+
+export function ensureDefaultProjectAgentSetup(projectId) {
+  const project = getById(projectId);
+  if (!project) throw new Error('项目不存在');
+  if (!project.agent_instructions) {
+    db.prepare('UPDATE projects SET agent_instructions = ? WHERE id = ?')
+      .run(buildDefaultProjectAgentInstructions(project), projectId);
+  }
+  if (!project.agent_api_key_hash) {
+    const apiKey = createProjectAgentKey(projectId);
+    db.prepare('UPDATE projects SET agent_api_key_hash = ?, agent_api_key_prefix = ? WHERE id = ?')
+      .run(hashAgentKey(apiKey), keyPrefix(apiKey), projectId);
+  }
+  return getProjectAgentPackageByProjectId(projectId);
+}
+
+export function generateProjectAgentKey(projectId) {
+  const project = getById(projectId);
+  if (!project) throw new Error('项目不存在');
+  const apiKey = createProjectAgentKey(projectId);
+  db.prepare(`
+    UPDATE projects
+    SET agent_api_key_hash = ?, agent_api_key_prefix = ?, agent_last_update_at = datetime('now')
+    WHERE id = ?
+  `).run(hashAgentKey(apiKey), keyPrefix(apiKey), projectId);
+  return { apiKey, project: getProjectAgentPackageByProjectId(projectId).project };
+}
+
+export function updateProjectAgentConfig(projectId, fields = {}) {
+  const project = getById(projectId);
+  if (!project) throw new Error('项目不存在');
+  if (fields.agentInstructions !== undefined || fields.agent_instructions !== undefined) {
+    db.prepare('UPDATE projects SET agent_instructions = ? WHERE id = ?')
+      .run(fields.agentInstructions ?? fields.agent_instructions ?? '', projectId);
+  }
+  return getProjectAgentPackageByProjectId(projectId).project;
+}
+
+export function getProjectAgentPackageByProjectId(projectId) {
+  const project = getById(projectId);
+  if (!project) throw new Error('项目不存在');
+  const tasks = taskService.listByProject(projectId).map((task) => taskService.ensureDefaultTaskAgentSetup(task.id).task);
+  return {
+    project,
+    tasks,
+    instructions: project.agent_instructions || buildDefaultProjectAgentInstructions(project),
+  };
+}
+
+export function getProjectAgentPackageByKey(apiKey) {
+  const apiKeyHash = hashAgentKey(String(apiKey || '').trim());
+  const project = db.prepare('SELECT id FROM projects WHERE agent_api_key_hash = ?').get(apiKeyHash);
+  if (!project) throw new Error('API Key 无效');
+  return getProjectAgentPackageByProjectId(project.id);
+}
+
+export function createTasksFromAgent(apiKey, payload = {}) {
+  const pkg = getProjectAgentPackageByKey(apiKey);
+  const rows = Array.isArray(payload.tasks) ? payload.tasks : [];
+  if (rows.length === 0) throw new Error('请提供 tasks 数组');
+  const created = taskService.createTasksFromDefs(pkg.project.id, rows);
+  if (payload.publishNow ?? payload.publish_now ?? true) {
+    taskService.publishAll(pkg.project.id);
+  }
+  db.prepare(`
+    INSERT INTO project_agent_events (id, project_id, action, progress_note, payload_json)
+    VALUES (?, ?, ?, ?, ?)
+  `).run(uuid(), pkg.project.id, 'create_tasks', payload.progressNote || payload.progress_note || '', JSON.stringify(payload));
+  return {
+    created,
+    package: getProjectAgentPackageByProjectId(pkg.project.id),
+  };
+}
+
 export function remove(id) {
   // FKs are enforced without CASCADE, so delete child rows first.
   const tx = db.transaction(() => {
@@ -125,6 +225,8 @@ export function remove(id) {
       SELECT file_path FROM subtask_attachments WHERE task_id IN (SELECT id FROM tasks WHERE project_id = ?)
     `).all(id);
     db.prepare('DELETE FROM progress_updates WHERE task_id IN (SELECT id FROM tasks WHERE project_id = ?)').run(id);
+    db.prepare('DELETE FROM task_agent_events WHERE project_id = ?').run(id);
+    db.prepare('DELETE FROM project_agent_events WHERE project_id = ?').run(id);
     db.prepare('DELETE FROM subtask_steps WHERE task_id IN (SELECT id FROM tasks WHERE project_id = ?)').run(id);
     db.prepare('DELETE FROM subtask_schedule_items WHERE task_id IN (SELECT id FROM tasks WHERE project_id = ?)').run(id);
     db.prepare('DELETE FROM agent_events WHERE task_id IN (SELECT id FROM tasks WHERE project_id = ?)').run(id);

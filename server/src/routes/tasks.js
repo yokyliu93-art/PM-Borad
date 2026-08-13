@@ -118,8 +118,10 @@ router.post('/publish', authRequired, (req, res) => {
 
 // Get single task
 router.get('/:taskId', authRequired, (req, res) => {
-  const task = taskService.getById(req.params.taskId);
+  let task = taskService.getById(req.params.taskId);
   if (!task) return res.status(404).json({ ok: false, error: '任务不存在' });
+  taskService.ensureDefaultTaskAgentSetup(task.id);
+  task = taskService.getById(req.params.taskId);
   task.subtasks = taskService.attachSubtaskPayloads(db.prepare(`
     SELECT s.*, u.name as assignee_name, u.avatar_url as assignee_avatar, su.name as submitted_by_name
     FROM subtasks s
@@ -138,6 +140,26 @@ router.get('/:taskId', authRequired, (req, res) => {
   task.project_pm_user_id = project?.pm_user_id || null;
   task.isProjectPM = task.project_pm_user_id === req.user.id;
   res.json({ ok: true, data: task });
+});
+
+router.post('/:taskId/agent-key', authRequired, requireTaskManager, (req, res) => {
+  try {
+    const data = taskService.generateTaskAgentKey(req.params.taskId);
+    broadcast(req, 'task:updated', { taskId: req.params.taskId, patch: {} });
+    res.json({ ok: true, data });
+  } catch (err) {
+    res.status(400).json({ ok: false, error: err.message });
+  }
+});
+
+router.put('/:taskId/agent-config', authRequired, requireTaskManager, (req, res) => {
+  try {
+    const task = taskService.updateTaskAgentConfig(req.params.taskId, req.body || {});
+    broadcast(req, 'task:updated', { taskId: req.params.taskId, patch: {} });
+    res.json({ ok: true, data: task });
+  } catch (err) {
+    res.status(400).json({ ok: false, error: err.message });
+  }
 });
 
 // Update task — task owner (sub-PM) or project PM only.

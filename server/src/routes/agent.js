@@ -1,5 +1,6 @@
 import { Router } from 'express';
 import * as taskService from '../services/task.js';
+import * as projectService from '../services/project.js';
 
 const router = Router();
 
@@ -22,6 +23,51 @@ router.get('/subtask', agentAuth, (req, res) => {
     res.json({ ok: true, data });
   } catch (err) {
     res.status(401).json({ ok: false, error: err.message });
+  }
+});
+
+router.get('/project', agentAuth, (req, res) => {
+  try {
+    const data = projectService.getProjectAgentPackageByKey(req.agentApiKey);
+    res.json({ ok: true, data });
+  } catch (err) {
+    res.status(401).json({ ok: false, error: err.message });
+  }
+});
+
+router.post('/project/tasks', agentAuth, (req, res) => {
+  try {
+    const data = projectService.createTasksFromAgent(req.agentApiKey, req.body || {});
+    res.status(201).json({ ok: true, data });
+  } catch (err) {
+    res.status(400).json({ ok: false, error: err.message });
+  }
+});
+
+router.get('/task', agentAuth, (req, res) => {
+  try {
+    const data = taskService.getTaskAgentPackageByKey(req.agentApiKey);
+    res.json({ ok: true, data });
+  } catch (err) {
+    res.status(401).json({ ok: false, error: err.message });
+  }
+});
+
+router.post('/task/subtasks', agentAuth, (req, res) => {
+  try {
+    const data = taskService.createSubtasksFromAgent(req.agentApiKey, req.body || {});
+    res.status(201).json({ ok: true, data });
+  } catch (err) {
+    res.status(400).json({ ok: false, error: err.message });
+  }
+});
+
+router.post('/task/progress', agentAuth, (req, res) => {
+  try {
+    const data = taskService.updateTaskFromAgent(req.agentApiKey, req.body || {});
+    res.json({ ok: true, data });
+  } catch (err) {
+    res.status(400).json({ ok: false, error: err.message });
   }
 });
 

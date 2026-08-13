@@ -22,9 +22,28 @@ router.get('/', authRequired, (req, res) => {
 });
 
 router.get('/:projectId', authRequired, requireProjectMember, (req, res) => {
-  const project = projectService.getById(req.params.projectId);
+  let project = projectService.getById(req.params.projectId);
   if (!project) return res.status(404).json({ ok: false, error: '项目不存在' });
+  project = projectService.ensureDefaultProjectAgentSetup(project.id).project;
   res.json({ ok: true, data: project });
+});
+
+router.post('/:projectId/agent-key', authRequired, requireProjectPM, (req, res) => {
+  try {
+    const data = projectService.generateProjectAgentKey(req.params.projectId);
+    res.json({ ok: true, data });
+  } catch (err) {
+    res.status(400).json({ ok: false, error: err.message });
+  }
+});
+
+router.put('/:projectId/agent-config', authRequired, requireProjectPM, (req, res) => {
+  try {
+    const data = projectService.updateProjectAgentConfig(req.params.projectId, req.body || {});
+    res.json({ ok: true, data });
+  } catch (err) {
+    res.status(400).json({ ok: false, error: err.message });
+  }
 });
 
 router.put('/:projectId', authRequired, requireProjectPM, (req, res) => {

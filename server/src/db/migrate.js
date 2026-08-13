@@ -174,7 +174,57 @@ export function migrate() {
       payload_json TEXT DEFAULT '{}',
       created_at TEXT DEFAULT (datetime('now'))
     );
+
+    CREATE TABLE IF NOT EXISTS task_agent_events (
+      id TEXT PRIMARY KEY,
+      task_id TEXT NOT NULL REFERENCES tasks(id),
+      project_id TEXT NOT NULL REFERENCES projects(id),
+      action TEXT DEFAULT '',
+      progress_note TEXT DEFAULT '',
+      payload_json TEXT DEFAULT '{}',
+      created_at TEXT DEFAULT (datetime('now'))
+    );
+
+    CREATE TABLE IF NOT EXISTS project_agent_events (
+      id TEXT PRIMARY KEY,
+      project_id TEXT NOT NULL REFERENCES projects(id),
+      action TEXT DEFAULT '',
+      progress_note TEXT DEFAULT '',
+      payload_json TEXT DEFAULT '{}',
+      created_at TEXT DEFAULT (datetime('now'))
+    );
   `);
+
+  const projectCols = db.prepare('PRAGMA table_info(projects)').all().map((c) => c.name);
+  if (!projectCols.includes('agent_api_key_hash')) {
+    db.exec("ALTER TABLE projects ADD COLUMN agent_api_key_hash TEXT DEFAULT ''");
+  }
+  if (!projectCols.includes('agent_api_key_prefix')) {
+    db.exec("ALTER TABLE projects ADD COLUMN agent_api_key_prefix TEXT DEFAULT ''");
+  }
+  if (!projectCols.includes('agent_instructions')) {
+    db.exec("ALTER TABLE projects ADD COLUMN agent_instructions TEXT DEFAULT ''");
+  }
+  if (!projectCols.includes('agent_last_update_at')) {
+    db.exec('ALTER TABLE projects ADD COLUMN agent_last_update_at TEXT');
+  }
+
+  const taskCols = db.prepare('PRAGMA table_info(tasks)').all().map((c) => c.name);
+  if (!taskCols.includes('agent_api_key_hash')) {
+    db.exec("ALTER TABLE tasks ADD COLUMN agent_api_key_hash TEXT DEFAULT ''");
+  }
+  if (!taskCols.includes('agent_api_key_prefix')) {
+    db.exec("ALTER TABLE tasks ADD COLUMN agent_api_key_prefix TEXT DEFAULT ''");
+  }
+  if (!taskCols.includes('agent_instructions')) {
+    db.exec("ALTER TABLE tasks ADD COLUMN agent_instructions TEXT DEFAULT ''");
+  }
+  if (!taskCols.includes('agent_progress_note')) {
+    db.exec("ALTER TABLE tasks ADD COLUMN agent_progress_note TEXT DEFAULT ''");
+  }
+  if (!taskCols.includes('agent_last_update_at')) {
+    db.exec('ALTER TABLE tasks ADD COLUMN agent_last_update_at TEXT');
+  }
 
   // Add submission fields to subtasks. CREATE TABLE IF NOT EXISTS won't add
   // columns to an existing table, so guard each ALTER by checking the schema.

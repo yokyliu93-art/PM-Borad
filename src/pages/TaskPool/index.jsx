@@ -1,12 +1,12 @@
 import { useEffect, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
 import toast from 'react-hot-toast';
-import { get, post, del } from '../../lib/api';
+import { get, post, put, del } from '../../lib/api';
 import { useStore } from '../../store';
 import { useSocket } from '../../hooks/useSocket';
 import { TaskCard } from '../../components/ui/TaskCard';
 import { EmptyState } from '../../components/ui/EmptyState';
-import { Loader2, AlertTriangle, Plus, X, Sparkles } from 'lucide-react';
+import { AlertTriangle, BookOpen, Copy, KeyRound, Loader2, Plus, RefreshCw, X, Sparkles } from 'lucide-react';
 
 export function TaskPool() {
   const { projectId } = useParams();
@@ -14,6 +14,9 @@ export function TaskPool() {
   const [tasks, setTasks] = useState([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [project, setProject] = useState(null);
+  const [projectAgentKey, setProjectAgentKey] = useState('');
+  const [projectAgentInstructions, setProjectAgentInstructions] = useState('');
   const [isProjectPM, setIsProjectPM] = useState(false);
   const [showAddForm, setShowAddForm] = useState(false);
   const [adding, setAdding] = useState(false);
@@ -31,7 +34,11 @@ export function TaskPool() {
   useEffect(() => {
     if (!projectId) return;
     get(`/api/projects/${projectId}`).then((r) => {
-      setIsProjectPM(r.ok && r.data?.pm_user_id === currentUser?.id);
+      if (r.ok) {
+        setProject(r.data);
+        setProjectAgentInstructions(r.data?.agent_instructions || '');
+        setIsProjectPM(r.data?.pm_user_id === currentUser?.id);
+      }
     });
   }, [projectId, currentUser?.id]);
 
@@ -147,6 +154,45 @@ export function TaskPool() {
     }
   }
 
+  async function regenerateProjectAgentKey() {
+    const res = await post(`/api/projects/${projectId}/agent-key`, {});
+    if (res.ok) {
+      setProjectAgentKey(res.data.apiKey);
+      setProject((p) => ({ ...p, agent_api_key_prefix: res.data.project.agent_api_key_prefix }));
+      toast.success('总PM API Key 已生成，只显示这一次');
+    } else {
+      toast.error(res.error || '生成失败');
+    }
+  }
+
+  async function saveProjectAgentDoc() {
+    const res = await put(`/api/projects/${projectId}/agent-config`, { agentInstructions: projectAgentInstructions });
+    if (res.ok) toast.success('总PM需求文档已保存');
+    else toast.error(res.error || '保存失败');
+  }
+
+  async function copyText(text, message = '已复制') {
+    if (!text) return;
+    await navigator.clipboard.writeText(text);
+    toast.success(message);
+  }
+
+  function projectAgentGuide() {
+    const origin = window.location.origin;
+    return [
+      '总PM Agent 包',
+      `项目：${project?.name || ''}`,
+      '',
+      projectAgentInstructions || project?.agent_instructions || '',
+      '',
+      'API 使用方式：',
+      `GET ${origin}/api/agent/project 读取项目需求文档和已有任务块。`,
+      `POST ${origin}/api/agent/project/tasks 创建任务块并发布到任务大厅。`,
+      '请求头：Authorization: Bearer <API_KEY>',
+      '创建示例：{"tasks":[{"title":"任务块标题","summary":"目标","cycle":"第1周","subtasks":[{"title":"子任务","note":"说明"}]}],"publishNow":true}',
+    ].join('\n');
+  }
+
   if (loading) return <div className="grid place-items-center h-64"><Loader2 className="animate-spin text-slate-400" size={32} /></div>;
 
   if (error) return (
@@ -168,7 +214,23 @@ export function TaskPool() {
       </div>
 
       {isProjectPM && (
-        <div className="rounded-lg border border-white/10 bg-white/[0.03] p-4">
+        <div className="space-y-4 rounded-lg border border-white/10 bg-white/[0.03] p-4">
+          <div className="rounded-md border border-emerald-400/20 bg-emerald-500/[0.06] p-3">
+            <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+              <div>
+                <p className="flex items-center gap-1.5 text-sm font-medium text-emerald-100"><KeyRound size={15} />总PM Agent 包</p>
+                <p className="mt-1 text-sm text-slate-500">复制需求文档和 API Key 给你的 Agent，它可以把项目计划拆成任务块并传回 PM Board。</p>
+                <p className="mt-2 text-xs text-slate-500">当前 Key：{projectAgentKey || project?.agent_api_key_prefix || '还没有生成'}</p>
+              </div>
+              <div className="flex flex-wrap gap-2">
+                <button onClick={() => copyText(projectAgentGuide(), '总PM Agent 说明书已复制')} className="inline-flex items-center gap-1 rounded-md border border-white/10 px-2 py-1.5 text-xs text-slate-300 hover:bg-white/8"><BookOpen size={12} />复制说明书</button>
+                {projectAgentKey ? <button onClick={() => copyText(projectAgentKey, 'API Key 已复制')} className="inline-flex items-center gap-1 rounded-md border border-white/10 px-2 py-1.5 text-xs text-slate-300 hover:bg-white/8"><Copy size={12} />复制 Key</button> : null}
+                <button onClick={regenerateProjectAgentKey} className="inline-flex items-center gap-1 rounded-md bg-emerald-400 px-2 py-1.5 text-xs font-semibold text-[#08110f] hover:bg-emerald-300"><RefreshCw size={12} />生成/重置 Key</button>
+              </div>
+            </div>
+            <textarea value={projectAgentInstructions} onChange={(e) => setProjectAgentInstructions(e.target.value)} className="mt-3 h-28 w-full resize-none rounded-md border border-white/10 bg-[#0c0f16] p-3 text-sm leading-6 text-slate-200 outline-none focus:border-emerald-300/60" />
+            <button onClick={saveProjectAgentDoc} className="mt-2 rounded-md bg-white px-3 py-1.5 text-xs font-semibold text-[#0f1117]">保存需求文档</button>
+          </div>
           {!showAddForm ? (
             <div className="flex flex-wrap gap-2">
               <button

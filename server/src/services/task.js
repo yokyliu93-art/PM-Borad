@@ -19,6 +19,7 @@ export function create({ projectId, title, summary, cycle, docUrl, sortOrder, pu
     INSERT INTO tasks (id, project_id, title, summary, cycle, doc_url, status, sort_order, is_published)
     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
   `).run(id, projectId, title, summary || '', cycle || '', docUrl || '', '待开始', order, publish ? 1 : 0);
+  ensureDefaultTaskAgentSetup(id);
   return getById(id);
 }
 
@@ -302,6 +303,11 @@ function createAgentKey(subtaskId) {
   return `pmb_sub_${subtaskId.slice(0, 8)}_${secret}`;
 }
 
+function createTaskAgentKey(taskId) {
+  const secret = crypto.randomBytes(24).toString('base64url');
+  return `pmb_task_${taskId.slice(0, 8)}_${secret}`;
+}
+
 function keyPrefix(apiKey) {
   return `${apiKey.slice(0, 18)}...`;
 }
@@ -326,6 +332,138 @@ export function buildDefaultAgentInstructions({ task, subtask }) {
     '你需要按周计划推进工作，定期回写进度；如果有阶段性交付，请提交飞书文档链接。',
     '回写进度时请说明：本周完成了什么、遇到什么阻塞、下一步做什么、交付文档在哪里。',
   ].filter(Boolean).join('\n');
+}
+
+export function buildDefaultTaskAgentInstructions({ project, task }) {
+  return [
+    `你是 PM Board 中「${task.title}」这块任务的子 PM Agent。`,
+    `所属项目：${project.name}。`,
+    task.summary ? `任务目标：${task.summary}` : '',
+    task.cycle ? `周期：${task.cycle}` : '',
+    '你的权限边界：只能管理这块任务，不能改整个项目，也不能改其他子 PM 的任务块。',
+    '你需要把这块任务继续拆成可执行子任务，给每个子任务生成说明书、周计划和交付要求。',
+    '当负责人说“传到 PM Board”时，请调用任务块 Agent API 创建或更新子任务，并回写当前进度。',
+  ].filter(Boolean).join('\n');
+}
+
+export function ensureDefaultTaskAgentSetup(taskId) {
+  const task = getById(taskId);
+  if (!task) throw new Error('任务不存在');
+  const project = db.prepare('SELECT id, name, description, plan_markdown, timeline_json FROM projects WHERE id = ?').get(task.project_id);
+  if (!task.agent_instructions) {
+    db.prepare('UPDATE tasks SET agent_instructions = ? WHERE id = ?')
+      .run(buildDefaultTaskAgentInstructions({ project, task }), taskId);
+  }
+  if (!task.agent_api_key_hash) {
+    const apiKey = createTaskAgentKey(taskId);
+    db.prepare('UPDATE tasks SET agent_api_key_hash = ?, agent_api_key_prefix = ? WHERE id = ?')
+      .run(hashAgentKey(apiKey), keyPrefix(apiKey), taskId);
+  }
+  return getTaskAgentPackageByTaskId(taskId);
+}
+
+export function generateTaskAgentKey(taskId) {
+  const task = getById(taskId);
+  if (!task) throw new Error('任务不存在');
+  const apiKey = createTaskAgentKey(taskId);
+  db.prepare(`
+    UPDATE tasks
+    SET agent_api_key_hash = ?, agent_api_key_prefix = ?, agent_last_update_at = datetime('now')
+    WHERE id = ?
+  `).run(hashAgentKey(apiKey), keyPrefix(apiKey), taskId);
+  return { apiKey, task: getTaskAgentPackageByTaskId(taskId).task };
+}
+
+export function updateTaskAgentConfig(taskId, fields = {}) {
+  const task = getById(taskId);
+  if (!task) throw new Error('任务不存在');
+  if (fields.agentInstructions !== undefined || fields.agent_instructions !== undefined) {
+    db.prepare('UPDATE tasks SET agent_instructions = ? WHERE id = ?')
+      .run(fields.agentInstructions ?? fields.agent_instructions ?? '', taskId);
+  }
+  return getTaskAgentPackageByTaskId(taskId).task;
+}
+
+export function getTaskAgentPackageByTaskId(taskId) {
+  const task = getById(taskId);
+  if (!task) throw new Error('任务不存在');
+  const project = db.prepare('SELECT id, name, description, plan_markdown, timeline_json, status FROM projects WHERE id = ?').get(task.project_id);
+  const subtasks = attachSubtaskPayloads(db.prepare(`
+    SELECT s.*, u.name as assignee_name, u.avatar_url as assignee_avatar, su.name as submitted_by_name
+    FROM subtasks s
+    LEFT JOIN users u ON s.assignee_id = u.id
+    LEFT JOIN users su ON s.submitted_by = su.id
+    WHERE s.task_id = ?
+    ORDER BY s.sort_order, s.created_at
+  `).all(task.id));
+  return {
+    project,
+    task: { ...task, subtasks },
+    instructions: task.agent_instructions || buildDefaultTaskAgentInstructions({ project, task }),
+  };
+}
+
+export function getTaskAgentPackageByKey(apiKey) {
+  const apiKeyHash = hashAgentKey(String(apiKey || '').trim());
+  const task = db.prepare('SELECT id FROM tasks WHERE agent_api_key_hash = ?').get(apiKeyHash);
+  if (!task) throw new Error('API Key 无效');
+  return getTaskAgentPackageByTaskId(task.id);
+}
+
+export function createSubtasksFromAgent(apiKey, payload = {}) {
+  const pkg = getTaskAgentPackageByKey(apiKey);
+  const rows = Array.isArray(payload.subtasks) ? payload.subtasks : [];
+  if (rows.length === 0) throw new Error('请提供 subtasks 数组');
+  const taskId = pkg.task.id;
+  const maxSort = db.prepare('SELECT MAX(sort_order) as m FROM subtasks WHERE task_id = ?').get(taskId);
+  let sortOrder = (maxSort?.m ?? -1) + 1;
+  const insertSub = db.prepare('INSERT INTO subtasks (id, task_id, title, assignee_id, note, sort_order) VALUES (?, ?, ?, ?, ?, ?)');
+  const created = [];
+  const tx = db.transaction(() => {
+    for (const item of rows) {
+      const title = String(item.title || '').trim();
+      if (!title) continue;
+      const id = uuid();
+      insertSub.run(id, taskId, title, item.assigneeId || item.assignee_id || null, item.note || '', sortOrder++);
+      replaceSubtaskSteps(taskId, id, Array.isArray(item.steps) && item.steps.length ? item.steps : [
+        { title: `明确「${title}」的输出标准` },
+        { title: '推进执行并同步进展' },
+        { title: '整理飞书文档并提交确认' },
+      ]);
+      if (Array.isArray(item.schedule)) replaceSubtaskSchedule(taskId, id, item.schedule);
+      ensureDefaultAgentSetup(taskId, id);
+      created.push(id);
+    }
+    db.prepare(`
+      INSERT INTO task_agent_events (id, task_id, project_id, action, progress_note, payload_json)
+      VALUES (?, ?, ?, ?, ?, ?)
+    `).run(uuid(), taskId, pkg.project.id, 'create_subtasks', payload.progressNote || payload.progress_note || '', JSON.stringify(payload));
+  });
+  tx();
+  recomputeProgress(taskId);
+  return {
+    created: attachSubtaskPayloads(created.map((id) => getSubtask(id))),
+    package: getTaskAgentPackageByTaskId(taskId),
+  };
+}
+
+export function updateTaskFromAgent(apiKey, payload = {}) {
+  const pkg = getTaskAgentPackageByKey(apiKey);
+  const patch = {};
+  if (payload.status) patch.status = payload.status;
+  if (payload.progress !== undefined) patch.progress = Number(payload.progress);
+  if (payload.summary !== undefined) patch.summary = payload.summary;
+  if (payload.docUrl !== undefined || payload.doc_url !== undefined) patch.doc_url = payload.docUrl ?? payload.doc_url;
+  if (Object.keys(patch).length) update(pkg.task.id, patch);
+  if (payload.progressNote !== undefined || payload.progress_note !== undefined) {
+    db.prepare('UPDATE tasks SET agent_progress_note = ?, agent_last_update_at = datetime(\'now\') WHERE id = ?')
+      .run(payload.progressNote ?? payload.progress_note ?? '', pkg.task.id);
+  }
+  db.prepare(`
+    INSERT INTO task_agent_events (id, task_id, project_id, action, progress_note, payload_json)
+    VALUES (?, ?, ?, ?, ?, ?)
+  `).run(uuid(), pkg.task.id, pkg.project.id, 'update_progress', payload.progressNote || payload.progress_note || '', JSON.stringify(payload));
+  return getTaskAgentPackageByTaskId(pkg.task.id);
 }
 
 export function ensureDefaultAgentSetup(taskId, subtaskId) {

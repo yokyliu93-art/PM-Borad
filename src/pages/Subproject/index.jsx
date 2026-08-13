@@ -49,15 +49,18 @@ export function Subproject() {
   const [stepDrafts, setStepDrafts] = useState({});
   const [agentDrafts, setAgentDrafts] = useState({});
   const [agentKeys, setAgentKeys] = useState({});
+  const [taskAgentKey, setTaskAgentKey] = useState('');
+  const [taskAgentInstructions, setTaskAgentInstructions] = useState('');
 
   useEffect(() => { loadTask(); }, [taskId]);
 
   useEffect(() => {
-    if (!task?.subtasks) return;
+    if (!task) return;
+    setTaskAgentInstructions(task.agent_instructions || '');
     const nextSteps = {};
     const nextDocs = {};
     const nextAgents = {};
-    for (const sub of task.subtasks) {
+    for (const sub of task.subtasks || []) {
       nextSteps[sub.id] = (sub.steps || []).map((step) => ({
         id: step.id,
         title: step.title || '',
@@ -297,6 +300,40 @@ export function Subproject() {
     if (!text) return;
     await navigator.clipboard.writeText(text);
     toast.success(message);
+  }
+
+  async function regenerateTaskAgentKey() {
+    const res = await post(`/api/projects/${projectId}/tasks/${taskId}/agent-key`, {});
+    if (res.ok) {
+      setTaskAgentKey(res.data.apiKey);
+      setTask((t) => ({ ...t, agent_api_key_prefix: res.data.task.agent_api_key_prefix }));
+      toast.success('子PM API Key 已生成，只显示这一次');
+    } else {
+      toast.error(res.error || '生成 API Key 失败');
+    }
+  }
+
+  async function saveTaskAgentDoc() {
+    const res = await put(`/api/projects/${projectId}/tasks/${taskId}/agent-config`, { agentInstructions: taskAgentInstructions });
+    if (res.ok) toast.success('子PM需求文档已保存');
+    else toast.error(res.error || '保存需求文档失败');
+  }
+
+  function taskAgentGuide() {
+    const origin = window.location.origin;
+    return [
+      '子PM Agent 包',
+      `任务块：${task?.title || ''}`,
+      '',
+      taskAgentInstructions || task?.agent_instructions || '',
+      '',
+      'API 使用方式：',
+      `GET ${origin}/api/agent/task 读取这块任务的需求文档、子任务和成员执行状态。`,
+      `POST ${origin}/api/agent/task/subtasks 创建子任务、执行步骤和周计划。`,
+      `POST ${origin}/api/agent/task/progress 回写这块任务的整体进度。`,
+      '请求头：Authorization: Bearer <API_KEY>',
+      '创建子任务示例：{"subtasks":[{"title":"子任务标题","note":"给执行人的说明","steps":[{"title":"第一步"}],"schedule":[{"weekIndex":1,"goal":"本周目标","reminderDay":1,"reminderTime":"10:00"}]}]}',
+    ].join('\n');
   }
 
   async function handleConfirmSubtask(subtaskId) {
@@ -690,6 +727,39 @@ export function Subproject() {
             ))}
           </div>
         </div>
+
+        {canManage && !isLocked ? (
+          <div className="rounded-lg border border-emerald-400/20 bg-emerald-500/[0.06] p-5">
+            <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+              <div>
+                <p className="flex items-center gap-1.5 text-sm font-medium text-emerald-100"><KeyRound size={15} />子PM Agent 包</p>
+                <p className="mt-1 text-sm text-slate-500">把这块任务的 API Key 和需求文档发给你的 Agent。它只能拆解和更新你认领的这一块。</p>
+                <p className="mt-2 text-xs text-slate-500">当前 Key：{taskAgentKey || task.agent_api_key_prefix || '还没有生成'}</p>
+              </div>
+              <div className="flex flex-wrap gap-2">
+                <button onClick={() => copyText(taskAgentGuide(), '子PM Agent 说明书已复制')} className="inline-flex items-center gap-1 rounded-md border border-white/10 px-2 py-1.5 text-xs text-slate-300 hover:bg-white/8">
+                  <BookOpen size={12} />复制说明书
+                </button>
+                {taskAgentKey ? (
+                  <button onClick={() => copyText(taskAgentKey, 'API Key 已复制')} className="inline-flex items-center gap-1 rounded-md border border-white/10 px-2 py-1.5 text-xs text-slate-300 hover:bg-white/8">
+                    <Copy size={12} />复制 Key
+                  </button>
+                ) : null}
+                <button onClick={regenerateTaskAgentKey} className="inline-flex items-center gap-1 rounded-md bg-emerald-400 px-2 py-1.5 text-xs font-semibold text-[#08110f] hover:bg-emerald-300">
+                  <RefreshCw size={12} />生成/重置 Key
+                </button>
+              </div>
+            </div>
+            <textarea
+              value={taskAgentInstructions}
+              onChange={(e) => setTaskAgentInstructions(e.target.value)}
+              className="mt-3 h-28 w-full resize-none rounded-md border border-white/10 bg-[#0c0f16] p-3 text-sm leading-6 text-slate-200 outline-none focus:border-emerald-300/60"
+            />
+            <button onClick={saveTaskAgentDoc} className="mt-2 rounded-md bg-white px-3 py-1.5 text-xs font-semibold text-[#0f1117]">
+              保存需求文档
+            </button>
+          </div>
+        ) : null}
 
         <div className="rounded-lg border border-white/10 bg-white/[0.03] p-5">
           <PanelTitle icon={ClipboardList} title="子PM分配的子任务" />
