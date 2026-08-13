@@ -177,12 +177,12 @@ router.post('/:taskId/unclaim', authRequired, requireTaskManager, (req, res) => 
 // --- Subtasks ---
 
 router.get('/:taskId/subtasks', authRequired, (req, res) => {
-  const subtasks = db.prepare(`
+  const subtasks = taskService.attachSubtaskPayloads(db.prepare(`
     SELECT s.*, u.name as assignee_name, u.avatar_url as assignee_avatar
     FROM subtasks s LEFT JOIN users u ON s.assignee_id = u.id
     WHERE s.task_id = ?
     ORDER BY s.sort_order, s.created_at
-  `).all(req.params.taskId);
+  `).all(req.params.taskId));
   res.json({ ok: true, data: subtasks });
 });
 
@@ -198,6 +198,12 @@ router.post('/:taskId/subtasks', authRequired, requireTaskManager, (req, res) =>
     SELECT s.*, u.name as assignee_name, u.avatar_url as assignee_avatar
     FROM subtasks s LEFT JOIN users u ON s.assignee_id = u.id WHERE s.id = ?
   `).get(id);
+  taskService.replaceSubtaskSteps(req.params.taskId, id, [
+    { title: `明确「${title}」的输出标准` },
+    { title: '推进执行并同步进展' },
+    { title: '整理飞书文档并提交确认' },
+  ]);
+  subtask.steps = taskService.getSubtaskSteps(id);
   res.status(201).json({ ok: true, data: subtask });
 });
 
@@ -226,15 +232,35 @@ router.put('/:taskId/subtasks', authRequired, requireTaskManager, (req, res) => 
 });
 
 router.delete('/:taskId/subtasks/:subtaskId', authRequired, requireTaskManager, (req, res) => {
+  db.prepare('DELETE FROM subtask_steps WHERE subtask_id = ? AND task_id = ?').run(req.params.subtaskId, req.params.taskId);
   db.prepare('DELETE FROM subtasks WHERE id = ? AND task_id = ?').run(req.params.subtaskId, req.params.taskId);
   taskService.recomputeProgress(req.params.taskId);
   res.json({ ok: true });
 });
 
+router.put('/:taskId/subtasks/:subtaskId/steps', authRequired, requireTaskManager, (req, res) => {
+  const { steps } = req.body;
+  if (!Array.isArray(steps)) return res.status(400).json({ ok: false, error: '请提供执行步骤' });
+  try {
+    const updated = taskService.replaceSubtaskSteps(req.params.taskId, req.params.subtaskId, steps);
+    broadcast(req, 'task:updated', { taskId: req.params.taskId, patch: {} });
+    res.json({ ok: true, data: updated });
+  } catch (err) {
+    res.status(400).json({ ok: false, error: err.message });
+  }
+});
+
 // Submit a subtask -> 已提交 (any logged-in user, mirrors the task-level submit)
 router.post('/:taskId/subtasks/:subtaskId/submit', authRequired, (req, res) => {
   try {
-    const sub = taskService.submitSubtask(req.params.taskId, req.params.subtaskId, req.user.id, req.body?.description);
+    const docUrl = String(req.body?.docUrl || req.body?.doc_url || '').trim();
+    if (!/^https:\/\/.+\.feishu\.cn\/(docx|docs|wiki)\//.test(docUrl)) {
+      return res.status(400).json({ ok: false, error: '请填写有效的飞书文档链接' });
+    }
+    const sub = taskService.submitSubtask(req.params.taskId, req.params.subtaskId, req.user.id, {
+      description: req.body?.description,
+      docUrl,
+    });
     broadcast(req, 'task:updated', { taskId: req.params.taskId, patch: {} });
     res.json({ ok: true, data: sub });
   } catch (err) {

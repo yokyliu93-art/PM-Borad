@@ -9,10 +9,17 @@ import { PanelTitle } from '../../components/ui/PanelTitle';
 import { InfoField } from '../../components/ui/InfoField';
 import { EmptyState } from '../../components/ui/EmptyState';
 import { FeedList } from '../../components/ui/FeedList';
-import { ClipboardList, MessageSquarePlus, Plus, Send, Loader2, AlertTriangle, UploadCloud, X, Paperclip, PackageCheck } from 'lucide-react';
+import { Bell, ClipboardList, Link2, MessageSquarePlus, Plus, Send, Loader2, AlertTriangle, UploadCloud, X, Paperclip, PackageCheck, Trash2 } from 'lucide-react';
 
 const TASK_STATUSES = ['待开始', '进行中'];
 const SUBTASK_STATUSES = ['待开始', '进行中', '已提交', '已完成'];
+const STEP_STATUSES = ['待开始', '进行中', '已完成'];
+const REMINDER_OPTIONS = [
+  ['none', '不提醒'],
+  ['daily', '每天提醒'],
+  ['workday', '工作日提醒'],
+  ['weekly', '每周提醒'],
+];
 
 export function Subproject() {
   const { projectId, taskId } = useParams();
@@ -27,9 +34,30 @@ export function Subproject() {
   const [submitting, setSubmitting] = useState(false);
   const [expanded, setExpanded] = useState({});
   const [drafts, setDrafts] = useState({});
-  const [uploadingSub, setUploadingSub] = useState({});
+  const [docDrafts, setDocDrafts] = useState({});
+  const [stepDrafts, setStepDrafts] = useState({});
 
   useEffect(() => { loadTask(); }, [taskId]);
+
+  useEffect(() => {
+    if (!task?.subtasks) return;
+    const nextSteps = {};
+    const nextDocs = {};
+    for (const sub of task.subtasks) {
+      nextSteps[sub.id] = (sub.steps || []).map((step) => ({
+        id: step.id,
+        title: step.title || '',
+        status: step.status || '待开始',
+        dueText: step.due_text || '',
+        reminderFrequency: step.reminder_frequency || 'none',
+        reminderEnabled: !!step.reminder_enabled,
+        sortOrder: step.sort_order ?? 0,
+      }));
+      nextDocs[sub.id] = sub.delivery_doc_url || '';
+    }
+    setStepDrafts(nextSteps);
+    setDocDrafts(nextDocs);
+  }, [task]);
 
   async function loadTask() {
     setLoading(true);
@@ -56,7 +84,7 @@ export function Subproject() {
 
   async function handleAddSubtask() {
     if (!newSubtask.title.trim()) return;
-    const res = await post(`/api/projects/${projectId}/tasks/${taskId}/subtasks`, { title: newSubtask.title });
+    await post(`/api/projects/${projectId}/tasks/${taskId}/subtasks`, { title: newSubtask.title });
     setNewSubtask({ title: '' });
     loadTask();
   }
@@ -71,24 +99,6 @@ export function Subproject() {
     setExpanded((e) => ({ ...e, [subId]: !e[subId] }));
   }
 
-  async function handleSubUpload(e, subId) {
-    const files = Array.from(e.target.files || []);
-    if (!files.length) return;
-    setUploadingSub((u) => ({ ...u, [subId]: true }));
-    try {
-      for (const file of files) {
-        const res = await uploadFile(`/api/projects/${projectId}/tasks/${taskId}/subtasks/${subId}/attachments`, file);
-        if (!res.ok) toast.error(res.error || '上传失败');
-      }
-      toast.success('上传成功');
-      loadTask();
-    } catch {
-      toast.error('上传失败，请确认后端已启动');
-    }
-    setUploadingSub((u) => ({ ...u, [subId]: false }));
-    e.target.value = '';
-  }
-
   async function handleRemoveSubAttachment(subId, att) {
     const res = await del(`/api/projects/${projectId}/tasks/${taskId}/subtasks/${subId}/attachments/${att.id}`);
     if (res.ok) loadTask();
@@ -96,10 +106,48 @@ export function Subproject() {
   }
 
   async function handleSubmitSubtask(subtaskId) {
-    const res = await post(`/api/projects/${projectId}/tasks/${taskId}/subtasks/${subtaskId}/submit`, { description: drafts[subtaskId] || '' });
+    const res = await post(`/api/projects/${projectId}/tasks/${taskId}/subtasks/${subtaskId}/submit`, {
+      description: drafts[subtaskId] || '',
+      docUrl: docDrafts[subtaskId] || '',
+    });
     if (res.ok) toast.success('已提交，等待项目PM确认');
     else toast.error(res.error || '提交失败');
     loadTask();
+  }
+
+  function updateStepDraft(subtaskId, index, patch) {
+    setStepDrafts((all) => ({
+      ...all,
+      [subtaskId]: (all[subtaskId] || []).map((step, i) => (i === index ? { ...step, ...patch } : step)),
+    }));
+  }
+
+  function addStepDraft(subtaskId) {
+    setStepDrafts((all) => ({
+      ...all,
+      [subtaskId]: [
+        ...(all[subtaskId] || []),
+        { title: '', status: '待开始', dueText: '', reminderFrequency: 'none', reminderEnabled: false },
+      ],
+    }));
+  }
+
+  function removeStepDraft(subtaskId, index) {
+    setStepDrafts((all) => ({
+      ...all,
+      [subtaskId]: (all[subtaskId] || []).filter((_, i) => i !== index),
+    }));
+  }
+
+  async function saveSteps(subtaskId) {
+    const steps = (stepDrafts[subtaskId] || []).filter((step) => step.title.trim());
+    const res = await put(`/api/projects/${projectId}/tasks/${taskId}/subtasks/${subtaskId}/steps`, { steps });
+    if (res.ok) {
+      toast.success('执行步骤已保存');
+      loadTask();
+    } else {
+      toast.error(res.error || '保存步骤失败');
+    }
   }
 
   async function handleConfirmSubtask(subtaskId) {
@@ -249,6 +297,78 @@ export function Subproject() {
     );
   }
 
+  function renderSteps(sub, editable) {
+    const steps = stepDrafts[sub.id] || [];
+    return (
+      <div className="space-y-2 rounded-md border border-white/10 bg-[#0c0f16] p-3">
+        <div className="flex items-center justify-between gap-2">
+          <p className="text-xs font-medium text-slate-400">详细执行步骤</p>
+          {editable ? (
+            <button onClick={() => addStepDraft(sub.id)} className="inline-flex items-center gap-1 rounded-md border border-white/10 px-2 py-1 text-xs text-slate-300 hover:bg-white/8">
+              <Plus size={12} /> 添加步骤
+            </button>
+          ) : null}
+        </div>
+        {steps.length === 0 ? (
+          <p className="text-sm text-slate-500">还没有执行步骤</p>
+        ) : (
+          <div className="space-y-2">
+            {steps.map((step, index) => (
+              <div key={step.id || index} className="grid gap-2 rounded-md border border-white/10 bg-[#11141d] p-2 md:grid-cols-[1fr_104px_112px_126px_28px] md:items-center">
+                <input
+                  value={step.title}
+                  onChange={(e) => updateStepDraft(sub.id, index, { title: e.target.value })}
+                  disabled={!editable}
+                  placeholder={`步骤 ${index + 1}`}
+                  className="min-w-0 rounded-md border border-white/10 bg-[#0c0f16] px-2 py-1.5 text-sm text-slate-200 outline-none disabled:border-transparent disabled:bg-transparent"
+                />
+                <select
+                  value={step.status}
+                  onChange={(e) => updateStepDraft(sub.id, index, { status: e.target.value })}
+                  disabled={!editable}
+                  className="rounded-md border border-white/10 bg-[#0c0f16] px-2 py-1.5 text-xs text-slate-200 outline-none disabled:border-transparent disabled:bg-transparent"
+                >
+                  {STEP_STATUSES.map((status) => <option key={status}>{status}</option>)}
+                </select>
+                <input
+                  value={step.dueText}
+                  onChange={(e) => updateStepDraft(sub.id, index, { dueText: e.target.value })}
+                  disabled={!editable}
+                  placeholder="如 周五前"
+                  className="rounded-md border border-white/10 bg-[#0c0f16] px-2 py-1.5 text-xs text-slate-200 outline-none disabled:border-transparent disabled:bg-transparent"
+                />
+                <select
+                  value={step.reminderFrequency}
+                  onChange={(e) => updateStepDraft(sub.id, index, {
+                    reminderFrequency: e.target.value,
+                    reminderEnabled: e.target.value !== 'none',
+                  })}
+                  disabled={!editable}
+                  className="rounded-md border border-white/10 bg-[#0c0f16] px-2 py-1.5 text-xs text-slate-200 outline-none disabled:border-transparent disabled:bg-transparent"
+                >
+                  {REMINDER_OPTIONS.map(([value, label]) => <option key={value} value={value}>{label}</option>)}
+                </select>
+                {editable ? (
+                  <button onClick={() => removeStepDraft(sub.id, index)} aria-label="删除步骤" className="grid h-7 w-7 place-items-center rounded text-slate-500 hover:bg-red-500/10 hover:text-red-300">
+                    <Trash2 size={13} />
+                  </button>
+                ) : null}
+              </div>
+            ))}
+          </div>
+        )}
+        {editable ? (
+          <button onClick={() => saveSteps(sub.id)} className="inline-flex items-center gap-1.5 rounded-md bg-white px-3 py-1.5 text-xs font-semibold text-[#0f1117] hover:bg-emerald-50">
+            保存执行步骤
+          </button>
+        ) : null}
+        <p className="flex items-center gap-1.5 text-xs text-slate-500">
+          <Bell size={12} /> 飞书提醒会按这里的频率配置，待飞书消息权限开通后自动发送
+        </p>
+      </div>
+    );
+  }
+
   return (
     <section className="grid gap-5 xl:grid-cols-[1fr_360px]">
       <div className="space-y-5">
@@ -267,7 +387,7 @@ export function Subproject() {
 
           <div className="mt-6 grid gap-4 md:grid-cols-3">
             <InfoField label="子PM" value={owner?.name || '未认领'} />
-            <InfoField label="交付文件" value={`${(task.attachments || []).length} 个`} />
+            <InfoField label="交付方式" value="飞书文档" />
             <InfoField label="协作权限" value={canManage ? '可管理' : '仅查看'} />
           </div>
 
@@ -295,7 +415,6 @@ export function Subproject() {
               const assignee = sub.assignee_name ? { name: sub.assignee_name, color: 'from-slate-500 to-slate-400' } : { name: '未分配', color: 'from-slate-500 to-slate-400' };
               const editable = sub.status !== '已提交' && sub.status !== '已完成' && task.status !== '已完成';
               const panelOpen = expanded[sub.id] || sub.status === '已提交' || sub.status === '已完成';
-              const subFiles = sub.attachments || [];
               return (
                 <div key={sub.id} className="rounded-md border border-white/10 bg-[#11141d] p-3">
                   <div className="grid gap-3 md:grid-cols-[1fr_150px_150px_auto] md:items-center">
@@ -320,50 +439,49 @@ export function Subproject() {
                     </div>
                   </div>
 
-                  {panelOpen ? (
-                    <div className="mt-3 space-y-3 border-t border-white/10 pt-3">
-                      {sub.status === '已提交' || sub.status === '已完成' ? (
-                        <div className="space-y-2">
-                          {sub.submission_description ? (
-                            <p className="text-sm text-slate-300"><span className="text-slate-500">完成说明：</span>{sub.submission_description}</p>
-                          ) : null}
-                          {subFiles.length > 0 ? (
+	                  {panelOpen ? (
+	                    <div className="mt-3 space-y-3 border-t border-white/10 pt-3">
+                          {renderSteps(sub, canManage && editable)}
+	                      {sub.status === '已提交' || sub.status === '已完成' ? (
+	                        <div className="space-y-2">
+	                          {sub.submission_description ? (
+	                            <p className="text-sm text-slate-300"><span className="text-slate-500">完成说明：</span>{sub.submission_description}</p>
+	                          ) : null}
+                            {sub.delivery_doc_url ? (
+                              <a href={sub.delivery_doc_url} target="_blank" rel="noreferrer" className="inline-flex max-w-full items-center gap-2 rounded-md border border-emerald-400/30 bg-emerald-500/10 px-3 py-2 text-sm text-emerald-100 hover:bg-emerald-500/15">
+                                <Link2 size={15} />
+                                <span className="truncate">打开飞书交付文档</span>
+                              </a>
+                            ) : null}
+                            {renderSubFiles(sub, false)}
+	                          {sub.status === '已提交' ? (
+	                            <p className="text-xs text-amber-200">已提交{sub.submitted_by_name ? `（${sub.submitted_by_name}）` : ''}，等待项目PM确认</p>
+	                          ) : null}
+	                        </div>
+	                      ) : (
+	                        <div className="space-y-3">
                             <div>
-                              <p className="mb-1.5 text-xs text-slate-500">交付文件（{subFiles.length}）</p>
-                              {renderSubFiles(sub, false)}
+                              <label className="mb-1.5 block text-xs text-slate-500">飞书交付文档</label>
+                              <div className="flex items-center gap-2 rounded-md border border-white/10 bg-[#0c0f16] px-3 py-2 focus-within:border-violet-400/60">
+                                <Link2 size={15} className="shrink-0 text-slate-500" />
+                                <input
+                                  value={docDrafts[sub.id] || ''}
+                                  onChange={(e) => setDocDrafts((d) => ({ ...d, [sub.id]: e.target.value }))}
+                                  placeholder="https://xxx.feishu.cn/docx/xxxx"
+                                  className="min-w-0 flex-1 bg-transparent text-sm text-slate-200 outline-none placeholder:text-slate-600"
+                                />
+                              </div>
                             </div>
-                          ) : null}
-                          {sub.status === '已提交' ? (
-                            <p className="text-xs text-amber-200">已提交{sub.submitted_by_name ? `（${sub.submitted_by_name}）` : ''}，等待项目PM确认</p>
-                          ) : null}
-                        </div>
-                      ) : (
-                        <div className="space-y-3">
-                          <textarea
-                            value={drafts[sub.id] || ''}
-                            onChange={(e) => setDrafts((d) => ({ ...d, [sub.id]: e.target.value }))}
-                            placeholder="填写任务完成描述（可选）..."
-                            className="h-20 w-full resize-none rounded-md border border-white/10 bg-[#0c0f16] p-3 text-sm text-slate-200 outline-none focus:border-violet-400/60"
-                          />
-                          <div>
-                            <label className="mb-1.5 block text-xs text-slate-500">上传交付文件（图片、文档等，单个不超过20MB）</label>
-                            <label className="inline-flex cursor-pointer items-center gap-2 rounded-md border border-white/10 px-3 py-2 text-sm text-slate-200 transition hover:bg-white/8">
-                              <UploadCloud size={15} />
-                              {uploadingSub[sub.id] ? '上传中...' : '选择文件'}
-                              <input type="file" multiple className="hidden" onChange={(e) => handleSubUpload(e, sub.id)} disabled={uploadingSub[sub.id]} />
-                            </label>
-                            {uploadingSub[sub.id] && <Loader2 size={16} className="ml-2 inline animate-spin text-slate-400" />}
-                          </div>
-                          {subFiles.length > 0 ? (
-                            <div>
-                              <p className="mb-1.5 text-xs text-slate-500">交付文件（{subFiles.length}）</p>
-                              {renderSubFiles(sub, true)}
-                            </div>
-                          ) : null}
-                          <button onClick={() => handleSubmitSubtask(sub.id)} className="inline-flex items-center gap-2 rounded-md bg-violet-500 px-3 py-2 text-sm font-semibold text-white transition hover:bg-violet-400">
-                            <Send size={15} />确认提交
-                          </button>
-                        </div>
+	                          <textarea
+	                            value={drafts[sub.id] || ''}
+	                            onChange={(e) => setDrafts((d) => ({ ...d, [sub.id]: e.target.value }))}
+	                            placeholder="填写任务完成描述（可选）..."
+	                            className="h-20 w-full resize-none rounded-md border border-white/10 bg-[#0c0f16] p-3 text-sm text-slate-200 outline-none focus:border-violet-400/60"
+	                          />
+	                          <button onClick={() => handleSubmitSubtask(sub.id)} disabled={!docDrafts[sub.id]?.trim()} className="inline-flex items-center gap-2 rounded-md bg-violet-500 px-3 py-2 text-sm font-semibold text-white transition hover:bg-violet-400 disabled:opacity-50">
+	                            <Send size={15} />确认提交
+	                          </button>
+	                        </div>
                       )}
                     </div>
                   ) : null}

@@ -17,7 +17,7 @@ router.post('/', authRequired, (req, res) => {
 router.get('/', authRequired, (req, res) => {
   const { teamId } = req.query;
   if (!teamId) return res.status(400).json({ ok: false, error: '请指定团队' });
-  const projects = projectService.listByTeam(teamId);
+  const projects = projectService.listByTeam(teamId, req.user.id);
   res.json({ ok: true, data: projects });
 });
 

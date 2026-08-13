@@ -22,23 +22,29 @@ export function authRequired(req, res, next) {
   next();
 }
 
-// Project-scoped route guard: user must be a member of the project's team
-// (project PM passes even if not listed in team_members). Must run after a
-// route has a :projectId param; skips when there is none.
+export function canAccessProject(projectId, userId) {
+  const project = db.prepare('SELECT team_id, pm_user_id FROM projects WHERE id = ?').get(projectId);
+  if (!project) return { ok: false, status: 404, error: '项目不存在' };
+  const isPM = project.pm_user_id === userId;
+  const member = db.prepare('SELECT 1 FROM project_members WHERE project_id = ? AND user_id = ?').get(projectId, userId);
+  if (!isPM && !member) {
+    return { ok: false, status: 403, error: '你不是该项目成员' };
+  }
+  return { ok: true, project };
+}
+
+// Project-scoped route guard: user must be a member of this project.
+// Project PM passes even if older data did not put them in project_members.
+// Must run after a route has a :projectId param; skips when there is none.
 export function requireProjectMember(req, res, next) {
   if (!resolveUser(req)) {
     return res.status(401).json({ ok: false, error: '请先登录' });
   }
   const { projectId } = req.params;
   if (!projectId) return next();
-  const project = db.prepare('SELECT team_id, pm_user_id FROM projects WHERE id = ?').get(projectId);
-  if (!project) return res.status(404).json({ ok: false, error: '项目不存在' });
-  const isPM = project.pm_user_id === req.user.id;
-  const member = db.prepare('SELECT 1 FROM team_members WHERE team_id = ? AND user_id = ?').get(project.team_id, req.user.id);
-  if (!isPM && !member) {
-    return res.status(403).json({ ok: false, error: '你不是该项目团队成员' });
-  }
-  req.project = project;
+  const access = canAccessProject(projectId, req.user.id);
+  if (!access.ok) return res.status(access.status).json({ ok: false, error: access.error });
+  req.project = access.project;
   next();
 }
 

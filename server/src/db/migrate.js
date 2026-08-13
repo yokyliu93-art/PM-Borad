@@ -130,6 +130,20 @@ export function migrate() {
       created_by TEXT NOT NULL REFERENCES users(id),
       created_at TEXT DEFAULT (datetime('now'))
     );
+
+    CREATE TABLE IF NOT EXISTS subtask_steps (
+      id TEXT PRIMARY KEY,
+      subtask_id TEXT NOT NULL REFERENCES subtasks(id),
+      task_id TEXT NOT NULL REFERENCES tasks(id),
+      title TEXT NOT NULL,
+      status TEXT DEFAULT '待开始',
+      due_text TEXT DEFAULT '',
+      reminder_frequency TEXT DEFAULT 'none',
+      reminder_enabled INTEGER DEFAULT 0,
+      sort_order INTEGER DEFAULT 0,
+      created_at TEXT DEFAULT (datetime('now')),
+      updated_at TEXT DEFAULT (datetime('now'))
+    );
   `);
 
   // Add submission fields to subtasks. CREATE TABLE IF NOT EXISTS won't add
@@ -143,6 +157,9 @@ export function migrate() {
   }
   if (!subCols.includes('submitted_at')) {
     db.exec('ALTER TABLE subtasks ADD COLUMN submitted_at TEXT');
+  }
+  if (!subCols.includes('delivery_doc_url')) {
+    db.exec("ALTER TABLE subtasks ADD COLUMN delivery_doc_url TEXT DEFAULT ''");
   }
 
   // Normalize task/subtask statuses to the Chinese values used by the UI

@@ -1,5 +1,5 @@
 import { Router } from 'express';
-import { authRequired } from '../middleware/auth.js';
+import { authRequired, canAccessProject } from '../middleware/auth.js';
 import db from '../db/connection.js';
 
 const router = Router();
@@ -8,6 +8,8 @@ const router = Router();
 router.get('/commander', authRequired, (req, res) => {
   const { projectId } = req.query;
   if (!projectId) return res.status(400).json({ ok: false, error: '请指定项目' });
+  const access = canAccessProject(projectId, req.user.id);
+  if (!access.ok) return res.status(access.status).json({ ok: false, error: access.error });
 
   const project = db.prepare(`
     SELECT p.*, u.name as pm_name, u.avatar_url as pm_avatar
@@ -58,6 +60,8 @@ router.get('/commander', authRequired, (req, res) => {
 router.get('/personal', authRequired, (req, res) => {
   const { projectId } = req.query;
   if (!projectId) return res.status(400).json({ ok: false, error: '请指定项目' });
+  const access = canAccessProject(projectId, req.user.id);
+  if (!access.ok) return res.status(access.status).json({ ok: false, error: access.error });
 
   const myTasks = db.prepare(`
     SELECT t.* FROM tasks t
@@ -102,8 +106,15 @@ router.get('/boss', authRequired, (req, res) => {
     SELECT p.*, u.name as pm_name, u.avatar_url as pm_avatar
     FROM projects p JOIN users u ON p.pm_user_id = u.id
     WHERE p.team_id = ?
+      AND (
+        p.pm_user_id = ?
+        OR EXISTS (
+          SELECT 1 FROM project_members pm
+          WHERE pm.project_id = p.id AND pm.user_id = ?
+        )
+      )
     ORDER BY p.created_at DESC
-  `).all(teamId);
+  `).all(teamId, req.user.id, req.user.id);
 
   for (const project of projects) {
     project.tasks = db.prepare(`

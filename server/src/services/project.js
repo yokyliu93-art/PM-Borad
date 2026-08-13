@@ -11,17 +11,24 @@ export function create({ teamId, name, description, planMarkdown, pmUserId, time
     VALUES (?, ?, ?, ?, ?, ?, ?)
   `).run(id, teamId, name, description || '', planMarkdown || '', pmUserId, JSON.stringify(timelineJson || []));
   const stmt = db.prepare('INSERT OR IGNORE INTO project_members (project_id, user_id) VALUES (?, ?)');
-  for (const uid of memberIds || []) stmt.run(id, uid);
+  for (const uid of new Set([pmUserId, ...(memberIds || [])])) stmt.run(id, uid);
   return getById(id);
 }
 
-export function listByTeam(teamId) {
+export function listByTeam(teamId, userId) {
   const projects = db.prepare(`
     SELECT p.*, u.name as pm_name, u.avatar_url as pm_avatar
     FROM projects p JOIN users u ON p.pm_user_id = u.id
     WHERE p.team_id = ?
+      AND (
+        p.pm_user_id = ?
+        OR EXISTS (
+          SELECT 1 FROM project_members pm
+          WHERE pm.project_id = p.id AND pm.user_id = ?
+        )
+      )
     ORDER BY p.created_at DESC
-  `).all(teamId);
+  `).all(teamId, userId, userId);
   const progressStmt = db.prepare(
     'SELECT COALESCE(AVG(progress), 0) as p FROM tasks WHERE project_id = ? AND is_published = 1'
   );
@@ -95,6 +102,7 @@ export function remove(id) {
       SELECT file_path FROM subtask_attachments WHERE task_id IN (SELECT id FROM tasks WHERE project_id = ?)
     `).all(id);
     db.prepare('DELETE FROM progress_updates WHERE task_id IN (SELECT id FROM tasks WHERE project_id = ?)').run(id);
+    db.prepare('DELETE FROM subtask_steps WHERE task_id IN (SELECT id FROM tasks WHERE project_id = ?)').run(id);
     db.prepare('DELETE FROM task_attachments WHERE task_id IN (SELECT id FROM tasks WHERE project_id = ?)').run(id);
     db.prepare('DELETE FROM subtask_attachments WHERE task_id IN (SELECT id FROM tasks WHERE project_id = ?)').run(id);
     db.prepare('DELETE FROM subtasks WHERE task_id IN (SELECT id FROM tasks WHERE project_id = ?)').run(id);

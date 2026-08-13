@@ -28,6 +28,10 @@ export function createTasksFromDefs(projectId, taskDefs) {
   const insertSub = db.prepare(
     'INSERT INTO subtasks (id, task_id, title, note, sort_order) VALUES (?, ?, ?, ?, ?)'
   );
+  const insertStep = db.prepare(`
+    INSERT INTO subtask_steps (id, subtask_id, task_id, title, due_text, reminder_frequency, reminder_enabled, sort_order)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+  `);
   for (let i = 0; i < taskDefs.length; i++) {
     const def = taskDefs[i];
     const task = create({
@@ -39,7 +43,29 @@ export function createTasksFromDefs(projectId, taskDefs) {
       sortOrder: i,
     });
     if (Array.isArray(def.subtasks)) {
-      def.subtasks.forEach((s, j) => insertSub.run(uuid(), task.id, s.title || '', s.note || '', j));
+      def.subtasks.forEach((s, j) => {
+        const subtaskId = uuid();
+        insertSub.run(subtaskId, task.id, s.title || '', s.note || '', j);
+        const steps = Array.isArray(s.steps) && s.steps.length
+          ? s.steps
+          : [
+              { title: `明确「${s.title || '子任务'}」的输出标准` },
+              { title: '推进执行并同步进展' },
+              { title: '整理飞书文档并提交确认' },
+            ];
+        steps.forEach((step, k) => {
+          insertStep.run(
+            uuid(),
+            subtaskId,
+            task.id,
+            step.title || '',
+            step.dueText || step.due_text || '',
+            step.reminderFrequency || step.reminder_frequency || 'none',
+            step.reminderEnabled || step.reminder_enabled ? 1 : 0,
+            k
+          );
+        });
+      });
     }
     created.push(task);
   }
@@ -124,14 +150,21 @@ function getSubtask(subtaskId) {
 }
 
 // Anyone submits a subtask -> 已提交 (awaits project PM confirmation), storing the completion description.
-export function submitSubtask(taskId, subtaskId, userId, description) {
+export function submitSubtask(taskId, subtaskId, userId, { description = '', docUrl = '' } = {}) {
   const sub = db.prepare('SELECT * FROM subtasks WHERE id = ? AND task_id = ?').get(subtaskId, taskId);
   if (!sub) throw new Error('子任务不存在');
   if (sub.status === '已完成') throw new Error('子任务已完成，无需重复提交');
   if (sub.status === '已提交') throw new Error('子任务已提交，等待PM确认');
+  if (!docUrl) throw new Error('请填写飞书文档链接作为交付物');
   db.prepare(`
-    UPDATE subtasks SET status = '已提交', submission_description = ?, submitted_by = ?, submitted_at = datetime('now') WHERE id = ?
-  `).run(description || '', userId || null, subtaskId);
+    UPDATE subtasks
+    SET status = '已提交',
+        submission_description = ?,
+        delivery_doc_url = ?,
+        submitted_by = ?,
+        submitted_at = datetime('now')
+    WHERE id = ?
+  `).run(description || '', docUrl || '', userId || null, subtaskId);
   recomputeProgress(taskId);
   return getSubtask(subtaskId);
 }
@@ -158,8 +191,48 @@ export function getSubtaskAttachments(subtaskId) {
 
 // Attach each subtask's attachment list so detail/list payloads carry submissions.
 export function attachSubtaskPayloads(subtasks) {
-  for (const s of subtasks) s.attachments = getSubtaskAttachments(s.id);
+  for (const s of subtasks) {
+    s.attachments = getSubtaskAttachments(s.id);
+    s.steps = getSubtaskSteps(s.id);
+  }
   return subtasks;
+}
+
+export function getSubtaskSteps(subtaskId) {
+  return db.prepare(`
+    SELECT * FROM subtask_steps
+    WHERE subtask_id = ?
+    ORDER BY sort_order, created_at
+  `).all(subtaskId);
+}
+
+export function replaceSubtaskSteps(taskId, subtaskId, steps) {
+  const sub = db.prepare('SELECT id FROM subtasks WHERE id = ? AND task_id = ?').get(subtaskId, taskId);
+  if (!sub) throw new Error('子任务不存在');
+  const tx = db.transaction(() => {
+    db.prepare('DELETE FROM subtask_steps WHERE subtask_id = ?').run(subtaskId);
+    const insert = db.prepare(`
+      INSERT INTO subtask_steps (id, subtask_id, task_id, title, status, due_text, reminder_frequency, reminder_enabled, sort_order)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `);
+    steps.forEach((step, index) => {
+      const title = String(step.title || '').trim();
+      if (!title) return;
+      insert.run(
+        uuid(),
+        subtaskId,
+        taskId,
+        title,
+        step.status || '待开始',
+        step.dueText || step.due_text || '',
+        step.reminderFrequency || step.reminder_frequency || 'none',
+        step.reminderEnabled || step.reminder_enabled ? 1 : 0,
+        step.sortOrder ?? step.sort_order ?? index
+      );
+    });
+  });
+  tx();
+  return getSubtaskSteps(subtaskId);
 }
 
 export function addSubtaskAttachment({ subtaskId, taskId, fileName, filePath, size, mime, userId }) {
@@ -183,6 +256,7 @@ export function remove(id) {
   const tx = db.transaction(() => {
     const files = db.prepare('SELECT file_path FROM task_attachments WHERE task_id = ?').all(id);
     const subFiles = db.prepare('SELECT file_path FROM subtask_attachments WHERE task_id = ?').all(id);
+    db.prepare('DELETE FROM subtask_steps WHERE task_id = ?').run(id);
     db.prepare('DELETE FROM subtask_attachments WHERE task_id = ?').run(id);
     db.prepare('DELETE FROM task_attachments WHERE task_id = ?').run(id);
     db.prepare('DELETE FROM progress_updates WHERE task_id = ?').run(id);
