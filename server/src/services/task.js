@@ -1,6 +1,7 @@
 import { v4 as uuid } from 'uuid';
 import { unlinkSync } from 'fs';
 import path from 'path';
+import crypto from 'crypto';
 import db from '../db/connection.js';
 import { config } from '../config.js';
 
@@ -66,6 +67,7 @@ export function createTasksFromDefs(projectId, taskDefs) {
             k
           );
         });
+        ensureDefaultAgentSetup(task.id, subtaskId);
       });
     }
     created.push(task);
@@ -140,7 +142,7 @@ export function recomputeProgress(taskId) {
   return getById(taskId);
 }
 
-function getSubtask(subtaskId) {
+export function getSubtask(subtaskId) {
   return db.prepare(`
     SELECT s.*, u.name as assignee_name, u.avatar_url as assignee_avatar, su.name as submitted_by_name
     FROM subtasks s
@@ -195,6 +197,8 @@ export function attachSubtaskPayloads(subtasks) {
   for (const s of subtasks) {
     s.attachments = getSubtaskAttachments(s.id);
     s.steps = getSubtaskSteps(s.id);
+    s.schedule = getSubtaskSchedule(s.id);
+    s.agent_events = getAgentEvents(s.id);
   }
   return subtasks;
 }
@@ -237,6 +241,254 @@ export function replaceSubtaskSteps(taskId, subtaskId, steps) {
   return getSubtaskSteps(subtaskId);
 }
 
+export function getSubtaskSchedule(subtaskId) {
+  return db.prepare(`
+    SELECT * FROM subtask_schedule_items
+    WHERE subtask_id = ?
+    ORDER BY sort_order, week_index, created_at
+  `).all(subtaskId);
+}
+
+export function replaceSubtaskSchedule(taskId, subtaskId, schedule = []) {
+  const sub = db.prepare('SELECT id FROM subtasks WHERE id = ? AND task_id = ?').get(subtaskId, taskId);
+  if (!sub) throw new Error('子任务不存在');
+  const rows = Array.isArray(schedule) ? schedule : [];
+  const tx = db.transaction(() => {
+    db.prepare('DELETE FROM subtask_schedule_items WHERE subtask_id = ?').run(subtaskId);
+    const insert = db.prepare(`
+      INSERT INTO subtask_schedule_items (
+        id, subtask_id, task_id, week_index, goal, reminder_day, reminder_time,
+        delivery_doc_url, status, reminder_enabled, sort_order
+      )
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `);
+    rows.forEach((item, index) => {
+      const goal = String(item.goal || '').trim();
+      if (!goal) return;
+      insert.run(
+        uuid(),
+        subtaskId,
+        taskId,
+        Number(item.weekIndex ?? item.week_index ?? index + 1) || index + 1,
+        goal,
+        clampReminderDay(item.reminderDay ?? item.reminder_day),
+        normalizeReminderTime(item.reminderTime ?? item.reminder_time),
+        item.deliveryDocUrl || item.delivery_doc_url || '',
+        item.status || '未开始',
+        item.reminderEnabled ?? item.reminder_enabled ?? true ? 1 : 0,
+        item.sortOrder ?? item.sort_order ?? index
+      );
+    });
+  });
+  tx();
+  return getSubtaskSchedule(subtaskId);
+}
+
+export function getAgentEvents(subtaskId) {
+  return db.prepare(`
+    SELECT * FROM agent_events
+    WHERE subtask_id = ?
+    ORDER BY created_at DESC
+    LIMIT 20
+  `).all(subtaskId);
+}
+
+function hashAgentKey(apiKey) {
+  return crypto.createHash('sha256').update(apiKey).digest('hex');
+}
+
+function createAgentKey(subtaskId) {
+  const secret = crypto.randomBytes(24).toString('base64url');
+  return `pmb_sub_${subtaskId.slice(0, 8)}_${secret}`;
+}
+
+function keyPrefix(apiKey) {
+  return `${apiKey.slice(0, 18)}...`;
+}
+
+function clampReminderDay(day) {
+  const value = Number(day);
+  if (!Number.isFinite(value)) return 1;
+  return Math.min(7, Math.max(1, Math.round(value)));
+}
+
+function normalizeReminderTime(time) {
+  const value = String(time || '').trim();
+  return /^\d{2}:\d{2}$/.test(value) ? value : '10:00';
+}
+
+export function buildDefaultAgentInstructions({ task, subtask }) {
+  return [
+    `你是 PM Board 中「${subtask.title}」这个子任务的执行 Agent。`,
+    `所属总任务：${task.title}。`,
+    task.summary ? `总任务背景：${task.summary}` : '',
+    subtask.note ? `子任务备注：${subtask.note}` : '',
+    '你需要按周计划推进工作，定期回写进度；如果有阶段性交付，请提交飞书文档链接。',
+    '回写进度时请说明：本周完成了什么、遇到什么阻塞、下一步做什么、交付文档在哪里。',
+  ].filter(Boolean).join('\n');
+}
+
+export function ensureDefaultAgentSetup(taskId, subtaskId) {
+  const subtask = db.prepare('SELECT * FROM subtasks WHERE id = ? AND task_id = ?').get(subtaskId, taskId);
+  const task = getById(taskId);
+  if (!subtask || !task) throw new Error('子任务不存在');
+  if (!subtask.agent_instructions) {
+    db.prepare('UPDATE subtasks SET agent_instructions = ? WHERE id = ?')
+      .run(buildDefaultAgentInstructions({ task, subtask }), subtaskId);
+  }
+  const scheduleCount = db.prepare('SELECT COUNT(*) as count FROM subtask_schedule_items WHERE subtask_id = ?').get(subtaskId)?.count || 0;
+  if (scheduleCount === 0) {
+    replaceSubtaskSchedule(taskId, subtaskId, [{
+      weekIndex: 1,
+      goal: `完成「${subtask.title}」的输出标准确认与第一轮推进`,
+      reminderDay: 1,
+      reminderTime: '10:00',
+      status: '未开始',
+      reminderEnabled: true,
+    }]);
+  }
+  if (!subtask.agent_api_key_hash) {
+    const apiKey = createAgentKey(subtaskId);
+    db.prepare('UPDATE subtasks SET agent_api_key_hash = ?, agent_api_key_prefix = ? WHERE id = ?')
+      .run(hashAgentKey(apiKey), keyPrefix(apiKey), subtaskId);
+  }
+  return attachSubtaskPayloads([getSubtask(subtaskId)])[0];
+}
+
+export function generateSubtaskAgentKey(taskId, subtaskId) {
+  const subtask = db.prepare('SELECT * FROM subtasks WHERE id = ? AND task_id = ?').get(subtaskId, taskId);
+  if (!subtask) throw new Error('子任务不存在');
+  const apiKey = createAgentKey(subtaskId);
+  db.prepare(`
+    UPDATE subtasks
+    SET agent_api_key_hash = ?, agent_api_key_prefix = ?, agent_last_update_at = datetime('now')
+    WHERE id = ?
+  `).run(hashAgentKey(apiKey), keyPrefix(apiKey), subtaskId);
+  return { apiKey, subtask: attachSubtaskPayloads([getSubtask(subtaskId)])[0] };
+}
+
+export function updateSubtaskAgentConfig(taskId, subtaskId, fields = {}) {
+  const subtask = db.prepare('SELECT * FROM subtasks WHERE id = ? AND task_id = ?').get(subtaskId, taskId);
+  if (!subtask) throw new Error('子任务不存在');
+  const sets = [];
+  const values = [];
+  if (fields.agentInstructions !== undefined || fields.agent_instructions !== undefined) {
+    sets.push('agent_instructions = ?');
+    values.push(fields.agentInstructions ?? fields.agent_instructions ?? '');
+  }
+  if (fields.feishuPushEnabled !== undefined || fields.feishu_push_enabled !== undefined) {
+    sets.push('feishu_push_enabled = ?');
+    values.push(fields.feishuPushEnabled ?? fields.feishu_push_enabled ? 1 : 0);
+  }
+  if (fields.feishuChatId !== undefined || fields.feishu_chat_id !== undefined) {
+    sets.push('feishu_chat_id = ?');
+    values.push(fields.feishuChatId ?? fields.feishu_chat_id ?? '');
+  }
+  if (sets.length) {
+    values.push(subtaskId);
+    db.prepare(`UPDATE subtasks SET ${sets.join(', ')} WHERE id = ?`).run(...values);
+  }
+  if (Array.isArray(fields.schedule)) {
+    replaceSubtaskSchedule(taskId, subtaskId, fields.schedule);
+  }
+  return attachSubtaskPayloads([getSubtask(subtaskId)])[0];
+}
+
+export function getAgentPackageByKey(apiKey) {
+  const apiKeyHash = hashAgentKey(String(apiKey || '').trim());
+  const subtask = db.prepare('SELECT * FROM subtasks WHERE agent_api_key_hash = ?').get(apiKeyHash);
+  if (!subtask) throw new Error('API Key 无效');
+  const task = getById(subtask.task_id);
+  const project = db.prepare('SELECT id, name, description, plan_markdown, timeline_json, status FROM projects WHERE id = ?').get(task.project_id);
+  const hydrated = attachSubtaskPayloads([getSubtask(subtask.id)])[0];
+  return {
+    project,
+    task,
+    subtask: hydrated,
+    instructions: hydrated.agent_instructions || buildDefaultAgentInstructions({ task, subtask: hydrated }),
+  };
+}
+
+export function updateSubtaskFromAgent(apiKey, payload = {}) {
+  const pkg = getAgentPackageByKey(apiKey);
+  const { task, subtask } = pkg;
+  const status = payload.status ? String(payload.status).trim() : '';
+  const allowedStatuses = new Set(['待开始', '进行中', '已提交', '已完成']);
+  const fields = [];
+  const values = [];
+  if (status && allowedStatuses.has(status)) {
+    fields.push('status = ?');
+    values.push(status);
+  }
+  if (payload.progressNote !== undefined || payload.progress_note !== undefined) {
+    fields.push('agent_progress_note = ?');
+    values.push(payload.progressNote ?? payload.progress_note ?? '');
+  }
+  if (payload.deliveryDocUrl !== undefined || payload.delivery_doc_url !== undefined) {
+    fields.push('delivery_doc_url = ?');
+    values.push(payload.deliveryDocUrl ?? payload.delivery_doc_url ?? '');
+  }
+  if (fields.length) {
+    fields.push("agent_last_update_at = datetime('now')");
+    values.push(subtask.id);
+    db.prepare(`UPDATE subtasks SET ${fields.join(', ')} WHERE id = ?`).run(...values);
+  }
+
+  if (Array.isArray(payload.stepUpdates) || Array.isArray(payload.step_updates)) {
+    applyAgentStepUpdates(subtask.id, payload.stepUpdates || payload.step_updates);
+  }
+  if (Array.isArray(payload.scheduleUpdates) || Array.isArray(payload.schedule_updates)) {
+    applyAgentScheduleUpdates(subtask.id, payload.scheduleUpdates || payload.schedule_updates);
+  }
+
+  db.prepare(`
+    INSERT INTO agent_events (id, subtask_id, task_id, status, week_index, progress_note, delivery_doc_url, payload_json)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+  `).run(
+    uuid(),
+    subtask.id,
+    task.id,
+    status,
+    payload.weekIndex ?? payload.week_index ?? null,
+    payload.progressNote ?? payload.progress_note ?? '',
+    payload.deliveryDocUrl ?? payload.delivery_doc_url ?? '',
+    JSON.stringify(payload)
+  );
+  recomputeProgress(task.id);
+  return getAgentPackageByKey(apiKey);
+}
+
+function applyAgentStepUpdates(subtaskId, updates) {
+  const allowed = new Set(['待开始', '进行中', '已完成']);
+  const update = db.prepare(`
+    UPDATE subtask_steps
+    SET status = COALESCE(?, status),
+        delivery_doc_url = COALESCE(?, delivery_doc_url),
+        updated_at = datetime('now')
+    WHERE id = ? AND subtask_id = ?
+  `);
+  for (const item of updates) {
+    if (!item?.id) continue;
+    const status = item.status && allowed.has(item.status) ? item.status : null;
+    const docUrl = item.deliveryDocUrl ?? item.delivery_doc_url ?? null;
+    update.run(status, docUrl, item.id, subtaskId);
+  }
+}
+
+function applyAgentScheduleUpdates(subtaskId, updates) {
+  const update = db.prepare(`
+    UPDATE subtask_schedule_items
+    SET status = COALESCE(?, status),
+        delivery_doc_url = COALESCE(?, delivery_doc_url),
+        updated_at = datetime('now')
+    WHERE id = ? AND subtask_id = ?
+  `);
+  for (const item of updates) {
+    if (!item?.id) continue;
+    update.run(item.status || null, item.deliveryDocUrl ?? item.delivery_doc_url ?? null, item.id, subtaskId);
+  }
+}
+
 export function addSubtaskAttachment({ subtaskId, taskId, fileName, filePath, size, mime, userId }) {
   const id = uuid();
   db.prepare(`
@@ -259,6 +511,8 @@ export function remove(id) {
     const files = db.prepare('SELECT file_path FROM task_attachments WHERE task_id = ?').all(id);
     const subFiles = db.prepare('SELECT file_path FROM subtask_attachments WHERE task_id = ?').all(id);
     db.prepare('DELETE FROM subtask_steps WHERE task_id = ?').run(id);
+    db.prepare('DELETE FROM subtask_schedule_items WHERE task_id = ?').run(id);
+    db.prepare('DELETE FROM agent_events WHERE task_id = ?').run(id);
     db.prepare('DELETE FROM subtask_attachments WHERE task_id = ?').run(id);
     db.prepare('DELETE FROM task_attachments WHERE task_id = ?').run(id);
     db.prepare('DELETE FROM progress_updates WHERE task_id = ?').run(id);

@@ -16,7 +16,9 @@ import projectRoutes from './routes/projects.js';
 import taskRoutes from './routes/tasks.js';
 import templateRoutes from './routes/templates.js';
 import dashboardRoutes from './routes/dashboard.js';
+import agentRoutes from './routes/agent.js';
 import { feishuRouter, projectFeishuRouter } from './routes/feishu.js';
+import { startReminderWorker } from './services/reminder.js';
 
 const app = express();
 const server = createServer(app);
@@ -44,6 +46,7 @@ app.use('/api/projects', projectRoutes);
 app.use('/api/projects/:projectId/tasks', taskRoutes);
 app.use('/api/templates', templateRoutes);
 app.use('/api/dashboard', dashboardRoutes);
+app.use('/api/agent', agentRoutes);
 app.use('/api/feishu', feishuRouter);
 app.use('/api/projects/:projectId/feishu', projectFeishuRouter);
 
@@ -73,6 +76,7 @@ app.use((err, req, res, next) => {
 migrate();
 seed();
 setupSocket(io);
+startReminderWorker();
 
 server.listen(config.port, () => {
   console.log(`[server] Running on http://localhost:${config.port}`);

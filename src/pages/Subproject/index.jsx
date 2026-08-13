@@ -9,7 +9,7 @@ import { PanelTitle } from '../../components/ui/PanelTitle';
 import { InfoField } from '../../components/ui/InfoField';
 import { EmptyState } from '../../components/ui/EmptyState';
 import { FeedList } from '../../components/ui/FeedList';
-import { Bell, ClipboardList, Link2, MessageSquarePlus, Plus, Send, Loader2, AlertTriangle, UploadCloud, X, Paperclip, PackageCheck, Trash2 } from 'lucide-react';
+import { Bell, BookOpen, CalendarDays, ClipboardList, Copy, KeyRound, Link2, MessageSquarePlus, Plus, RefreshCw, Send, Loader2, AlertTriangle, UploadCloud, X, Paperclip, PackageCheck, Trash2 } from 'lucide-react';
 
 const TASK_STATUSES = ['待开始', '进行中'];
 const SUBTASK_STATUSES = ['待开始', '进行中', '已提交', '已完成'];
@@ -20,6 +20,16 @@ const REMINDER_OPTIONS = [
   ['workday', '工作日提醒'],
   ['weekly', '每周提醒'],
 ];
+const WEEK_DAYS = [
+  [1, '周一'],
+  [2, '周二'],
+  [3, '周三'],
+  [4, '周四'],
+  [5, '周五'],
+  [6, '周六'],
+  [7, '周日'],
+];
+const SCHEDULE_STATUSES = ['未开始', '进行中', '已交付', '已完成'];
 
 export function Subproject() {
   const { projectId, taskId } = useParams();
@@ -36,6 +46,8 @@ export function Subproject() {
   const [drafts, setDrafts] = useState({});
   const [docDrafts, setDocDrafts] = useState({});
   const [stepDrafts, setStepDrafts] = useState({});
+  const [agentDrafts, setAgentDrafts] = useState({});
+  const [agentKeys, setAgentKeys] = useState({});
 
   useEffect(() => { loadTask(); }, [taskId]);
 
@@ -43,6 +55,7 @@ export function Subproject() {
     if (!task?.subtasks) return;
     const nextSteps = {};
     const nextDocs = {};
+    const nextAgents = {};
     for (const sub of task.subtasks) {
       nextSteps[sub.id] = (sub.steps || []).map((step) => ({
         id: step.id,
@@ -55,9 +68,26 @@ export function Subproject() {
         sortOrder: step.sort_order ?? 0,
       }));
       nextDocs[sub.id] = sub.delivery_doc_url || '';
+      nextAgents[sub.id] = {
+        agentInstructions: sub.agent_instructions || '',
+        feishuPushEnabled: !!sub.feishu_push_enabled,
+        feishuChatId: sub.feishu_chat_id || '',
+        schedule: (sub.schedule || []).map((item, index) => ({
+          id: item.id,
+          weekIndex: item.week_index ?? index + 1,
+          goal: item.goal || '',
+          reminderDay: item.reminder_day || 1,
+          reminderTime: item.reminder_time || '10:00',
+          deliveryDocUrl: item.delivery_doc_url || '',
+          status: item.status || '未开始',
+          reminderEnabled: !!item.reminder_enabled,
+          sortOrder: item.sort_order ?? index,
+        })),
+      };
     }
     setStepDrafts(nextSteps);
     setDocDrafts(nextDocs);
+    setAgentDrafts(nextAgents);
   }, [task]);
 
   async function loadTask() {
@@ -151,6 +181,90 @@ export function Subproject() {
     }
   }
 
+  function updateAgentDraft(subtaskId, patch) {
+    setAgentDrafts((all) => ({
+      ...all,
+      [subtaskId]: { ...(all[subtaskId] || {}), ...patch },
+    }));
+  }
+
+  function updateScheduleDraft(subtaskId, index, patch) {
+    setAgentDrafts((all) => {
+      const current = all[subtaskId] || { schedule: [] };
+      return {
+        ...all,
+        [subtaskId]: {
+          ...current,
+          schedule: (current.schedule || []).map((item, i) => (i === index ? { ...item, ...patch } : item)),
+        },
+      };
+    });
+  }
+
+  function addScheduleDraft(subtaskId) {
+    setAgentDrafts((all) => {
+      const current = all[subtaskId] || { schedule: [] };
+      const nextWeek = (current.schedule || []).length + 1;
+      return {
+        ...all,
+        [subtaskId]: {
+          ...current,
+          schedule: [
+            ...(current.schedule || []),
+            { weekIndex: nextWeek, goal: '', reminderDay: 1, reminderTime: '10:00', deliveryDocUrl: '', status: '未开始', reminderEnabled: true },
+          ],
+        },
+      };
+    });
+  }
+
+  function removeScheduleDraft(subtaskId, index) {
+    setAgentDrafts((all) => {
+      const current = all[subtaskId] || { schedule: [] };
+      return {
+        ...all,
+        [subtaskId]: { ...current, schedule: (current.schedule || []).filter((_, i) => i !== index) },
+      };
+    });
+  }
+
+  async function saveAgentConfig(subtaskId) {
+    const draft = agentDrafts[subtaskId] || {};
+    const res = await put(`/api/projects/${projectId}/tasks/${taskId}/subtasks/${subtaskId}/agent-config`, {
+      ...draft,
+      schedule: (draft.schedule || []).filter((item) => String(item.goal || '').trim()),
+    });
+    if (res.ok) {
+      toast.success('Agent 配置已保存');
+      loadTask();
+    } else {
+      toast.error(res.error || '保存 Agent 配置失败');
+    }
+  }
+
+  async function regenerateAgentKey(subtaskId) {
+    const res = await post(`/api/projects/${projectId}/tasks/${taskId}/subtasks/${subtaskId}/agent-key`, {});
+    if (res.ok) {
+      setAgentKeys((keys) => ({ ...keys, [subtaskId]: res.data.apiKey }));
+      toast.success('API Key 已生成，只显示这一次');
+      loadTask();
+    } else {
+      toast.error(res.error || '生成 API Key 失败');
+    }
+  }
+
+  async function testFeishuReminder(subtaskId) {
+    const res = await post(`/api/projects/${projectId}/tasks/${taskId}/subtasks/${subtaskId}/agent-reminder/test`, {});
+    if (res.ok) toast.success('测试提醒已发送');
+    else toast.error(res.error || '发送测试提醒失败');
+  }
+
+  async function copyText(text, message = '已复制') {
+    if (!text) return;
+    await navigator.clipboard.writeText(text);
+    toast.success(message);
+  }
+
   async function handleConfirmSubtask(subtaskId) {
     const res = await post(`/api/projects/${projectId}/tasks/${taskId}/subtasks/${subtaskId}/confirm`, {});
     if (res.ok) toast.success('已确认，子任务完成');
@@ -236,8 +350,8 @@ export function Subproject() {
   if (!task) return <EmptyState title="任务不存在" />;
 
   const owner = task.owner_name ? { name: task.owner_name, avatar_url: task.owner_avatar, id: task.owner_id, color: 'from-violet-500 to-fuchsia-500' } : null;
-  const canManage = task.owner_id === currentUser?.id;
   const isReviewer = task.isProjectPM;
+  const canManage = task.owner_id === currentUser?.id || isReviewer;
   const isLocked = task.status === '审核中' || task.status === '已完成';
 
   // Deliverable file list — visible to everyone; delete only for owner when not locked.
@@ -380,6 +494,129 @@ export function Subproject() {
     );
   }
 
+  function renderAgentConfig(sub, editable) {
+    const draft = agentDrafts[sub.id] || { schedule: [] };
+    const apiKey = agentKeys[sub.id];
+    const origin = window.location.origin;
+    const guide = [
+      'Agent 使用说明',
+      `1. GET ${origin}/api/agent/subtask 读取任务包。`,
+      `2. POST ${origin}/api/agent/subtask/progress 回写进度。`,
+      '3. 请求头：Authorization: Bearer <API_KEY>。',
+      '4. 回写示例：{"status":"进行中","weekIndex":1,"progressNote":"本周完成...","deliveryDocUrl":"https://xxx.feishu.cn/docx/..."}。',
+    ].join('\n');
+
+    return (
+      <div className="space-y-3 rounded-md border border-emerald-400/20 bg-emerald-500/[0.06] p-3">
+        <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
+          <div>
+            <p className="flex items-center gap-1.5 text-xs font-medium text-emerald-100"><KeyRound size={13} />Agent 工作包</p>
+            <p className="mt-1 text-xs text-slate-500">给外部 Agent 自动读取任务、更新进度、提交飞书文档用。</p>
+          </div>
+          {editable ? (
+            <div className="flex flex-wrap gap-2">
+              <button onClick={() => copyText(guide, 'Agent 说明书已复制')} className="inline-flex items-center gap-1 rounded-md border border-white/10 px-2 py-1.5 text-xs text-slate-300 hover:bg-white/8">
+                <BookOpen size={12} />复制说明书
+              </button>
+              <button onClick={() => regenerateAgentKey(sub.id)} className="inline-flex items-center gap-1 rounded-md bg-emerald-400 px-2 py-1.5 text-xs font-semibold text-[#08110f] hover:bg-emerald-300">
+                <RefreshCw size={12} />生成/重置 Key
+              </button>
+            </div>
+          ) : null}
+        </div>
+
+        <div className="grid gap-2 md:grid-cols-[1fr_auto]">
+          <div className="min-w-0 rounded-md border border-white/10 bg-[#0c0f16] px-3 py-2">
+            <p className="text-[11px] text-slate-500">API Key</p>
+            <p className="mt-1 truncate text-sm text-slate-300">{apiKey || sub.agent_api_key_prefix || '还没有生成'}</p>
+          </div>
+          {apiKey ? (
+            <button onClick={() => copyText(apiKey, 'API Key 已复制')} className="inline-flex items-center justify-center gap-1 rounded-md border border-white/10 px-3 py-2 text-xs text-slate-200 hover:bg-white/8">
+              <Copy size={13} />复制 Key
+            </button>
+          ) : null}
+        </div>
+
+        <div>
+          <label className="mb-1.5 block text-xs text-slate-500">Agent 说明书</label>
+          <textarea
+            value={draft.agentInstructions || ''}
+            onChange={(e) => updateAgentDraft(sub.id, { agentInstructions: e.target.value })}
+            disabled={!editable}
+            className="h-32 w-full resize-none rounded-md border border-white/10 bg-[#0c0f16] p-3 text-sm leading-6 text-slate-200 outline-none focus:border-emerald-300/60 disabled:border-transparent disabled:bg-[#0c0f16]/60"
+          />
+        </div>
+
+        <div className="grid gap-2 md:grid-cols-[auto_1fr_auto] md:items-center">
+          <label className="flex items-center gap-2 text-xs text-slate-400">
+            <input
+              type="checkbox"
+              checked={!!draft.feishuPushEnabled}
+              onChange={(e) => updateAgentDraft(sub.id, { feishuPushEnabled: e.target.checked })}
+              disabled={!editable}
+              className="accent-emerald-400"
+            />
+            飞书 Push
+          </label>
+          <input
+            value={draft.feishuChatId || ''}
+            onChange={(e) => updateAgentDraft(sub.id, { feishuChatId: e.target.value })}
+            disabled={!editable}
+            placeholder="飞书群 chat_id"
+            className="rounded-md border border-white/10 bg-[#0c0f16] px-3 py-2 text-xs text-slate-200 outline-none focus:border-emerald-300/60 disabled:opacity-60"
+          />
+          {editable ? (
+            <button onClick={() => testFeishuReminder(sub.id)} className="inline-flex items-center justify-center gap-1 rounded-md border border-white/10 px-3 py-2 text-xs text-slate-300 hover:bg-white/8">
+              <Bell size={13} />测试提醒
+            </button>
+          ) : null}
+        </div>
+
+        <div className="space-y-2">
+          <div className="flex items-center justify-between gap-2">
+            <p className="flex items-center gap-1.5 text-xs font-medium text-slate-400"><CalendarDays size={13} />周时间表</p>
+            {editable ? (
+              <button onClick={() => addScheduleDraft(sub.id)} className="inline-flex items-center gap-1 rounded-md border border-white/10 px-2 py-1 text-xs text-slate-300 hover:bg-white/8">
+                <Plus size={12} />加一周
+              </button>
+            ) : null}
+          </div>
+          {(draft.schedule || []).length === 0 ? (
+            <p className="text-sm text-slate-500">还没有周计划</p>
+          ) : (
+            <div className="space-y-2">
+              {(draft.schedule || []).map((item, index) => (
+                <div key={item.id || index} className="grid gap-2 rounded-md border border-white/10 bg-[#0c0f16] p-2 md:grid-cols-[74px_1fr_88px_92px_100px_1fr_28px] md:items-center">
+                  <input type="number" min="1" value={item.weekIndex} onChange={(e) => updateScheduleDraft(sub.id, index, { weekIndex: e.target.value })} disabled={!editable} className="rounded-md border border-white/10 bg-[#11141d] px-2 py-1.5 text-xs text-slate-200 outline-none disabled:border-transparent disabled:bg-transparent" />
+                  <input value={item.goal} onChange={(e) => updateScheduleDraft(sub.id, index, { goal: e.target.value })} disabled={!editable} placeholder="这一周要完成什么" className="min-w-0 rounded-md border border-white/10 bg-[#11141d] px-2 py-1.5 text-xs text-slate-200 outline-none disabled:border-transparent disabled:bg-transparent" />
+                  <select value={item.reminderDay} onChange={(e) => updateScheduleDraft(sub.id, index, { reminderDay: e.target.value })} disabled={!editable} className="rounded-md border border-white/10 bg-[#11141d] px-2 py-1.5 text-xs text-slate-200 outline-none disabled:border-transparent disabled:bg-transparent">
+                    {WEEK_DAYS.map(([value, label]) => <option key={value} value={value}>{label}</option>)}
+                  </select>
+                  <input type="time" value={item.reminderTime} onChange={(e) => updateScheduleDraft(sub.id, index, { reminderTime: e.target.value })} disabled={!editable} className="rounded-md border border-white/10 bg-[#11141d] px-2 py-1.5 text-xs text-slate-200 outline-none disabled:border-transparent disabled:bg-transparent" />
+                  <select value={item.status} onChange={(e) => updateScheduleDraft(sub.id, index, { status: e.target.value })} disabled={!editable} className="rounded-md border border-white/10 bg-[#11141d] px-2 py-1.5 text-xs text-slate-200 outline-none disabled:border-transparent disabled:bg-transparent">
+                    {SCHEDULE_STATUSES.map((status) => <option key={status}>{status}</option>)}
+                  </select>
+                  <input value={item.deliveryDocUrl} onChange={(e) => updateScheduleDraft(sub.id, index, { deliveryDocUrl: e.target.value })} disabled={!editable} placeholder="阶段交付飞书文档" className="min-w-0 rounded-md border border-white/10 bg-[#11141d] px-2 py-1.5 text-xs text-slate-200 outline-none disabled:border-transparent disabled:bg-transparent" />
+                  {editable ? (
+                    <button onClick={() => removeScheduleDraft(sub.id, index)} aria-label="删除周计划" className="grid h-7 w-7 place-items-center rounded text-slate-500 hover:bg-red-500/10 hover:text-red-300">
+                      <Trash2 size={13} />
+                    </button>
+                  ) : null}
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+
+        {editable ? (
+          <button onClick={() => saveAgentConfig(sub.id)} className="inline-flex items-center gap-1.5 rounded-md bg-white px-3 py-1.5 text-xs font-semibold text-[#0f1117] hover:bg-emerald-50">
+            保存 Agent 配置
+          </button>
+        ) : null}
+      </div>
+    );
+  }
+
   return (
     <section className="grid gap-5 xl:grid-cols-[1fr_360px]">
       <div className="space-y-5">
@@ -453,6 +690,7 @@ export function Subproject() {
 	                  {panelOpen ? (
 	                    <div className="mt-3 space-y-3 border-t border-white/10 pt-3">
                           {renderSteps(sub, canManage && editable)}
+                          {renderAgentConfig(sub, canManage && editable)}
 	                      {sub.status === '已提交' || sub.status === '已完成' ? (
 	                        <div className="space-y-2">
 	                          {sub.submission_description ? (

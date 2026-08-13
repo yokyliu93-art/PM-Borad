@@ -7,6 +7,7 @@ import { authRequired, requireProjectMember, requireProjectPM } from '../middlew
 import * as taskService from '../services/task.js';
 import * as templateService from '../services/template.js';
 import * as aiService from '../services/ai.js';
+import * as feishuPushService from '../services/feishuPush.js';
 import db from '../db/connection.js';
 import { config } from '../config.js';
 import { emit } from '../socket/index.js';
@@ -126,6 +127,7 @@ router.get('/:taskId', authRequired, (req, res) => {
     LEFT JOIN users su ON s.submitted_by = su.id
     WHERE s.task_id = ? ORDER BY s.sort_order, s.created_at
   `).all(task.id));
+  task.subtasks = task.subtasks.map((sub) => taskService.ensureDefaultAgentSetup(task.id, sub.id));
   task.updates = db.prepare(`
     SELECT pu.*, u.name as user_name, u.avatar_url as user_avatar
     FROM progress_updates pu JOIN users u ON pu.user_id = u.id
@@ -183,7 +185,7 @@ router.get('/:taskId/subtasks', authRequired, (req, res) => {
     WHERE s.task_id = ?
     ORDER BY s.sort_order, s.created_at
   `).all(req.params.taskId));
-  res.json({ ok: true, data: subtasks });
+  res.json({ ok: true, data: subtasks.map((sub) => taskService.ensureDefaultAgentSetup(req.params.taskId, sub.id)) });
 });
 
 router.post('/:taskId/subtasks', authRequired, requireTaskManager, (req, res) => {
@@ -203,7 +205,11 @@ router.post('/:taskId/subtasks', authRequired, requireTaskManager, (req, res) =>
     { title: '推进执行并同步进展' },
     { title: '整理飞书文档并提交确认' },
   ]);
-  subtask.steps = taskService.getSubtaskSteps(id);
+  const hydrated = taskService.ensureDefaultAgentSetup(req.params.taskId, id);
+  subtask.steps = hydrated.steps;
+  subtask.schedule = hydrated.schedule;
+  subtask.agent_api_key_prefix = hydrated.agent_api_key_prefix;
+  subtask.agent_instructions = hydrated.agent_instructions;
   res.status(201).json({ ok: true, data: subtask });
 });
 
@@ -233,9 +239,50 @@ router.put('/:taskId/subtasks', authRequired, requireTaskManager, (req, res) => 
 
 router.delete('/:taskId/subtasks/:subtaskId', authRequired, requireTaskManager, (req, res) => {
   db.prepare('DELETE FROM subtask_steps WHERE subtask_id = ? AND task_id = ?').run(req.params.subtaskId, req.params.taskId);
+  db.prepare('DELETE FROM subtask_schedule_items WHERE subtask_id = ? AND task_id = ?').run(req.params.subtaskId, req.params.taskId);
+  db.prepare('DELETE FROM agent_events WHERE subtask_id = ? AND task_id = ?').run(req.params.subtaskId, req.params.taskId);
   db.prepare('DELETE FROM subtasks WHERE id = ? AND task_id = ?').run(req.params.subtaskId, req.params.taskId);
   taskService.recomputeProgress(req.params.taskId);
   res.json({ ok: true });
+});
+
+router.post('/:taskId/subtasks/:subtaskId/agent-key', authRequired, requireTaskManager, (req, res) => {
+  try {
+    const data = taskService.generateSubtaskAgentKey(req.params.taskId, req.params.subtaskId);
+    broadcast(req, 'task:updated', { taskId: req.params.taskId, patch: {} });
+    res.json({ ok: true, data });
+  } catch (err) {
+    res.status(400).json({ ok: false, error: err.message });
+  }
+});
+
+router.put('/:taskId/subtasks/:subtaskId/agent-config', authRequired, requireTaskManager, (req, res) => {
+  try {
+    const subtask = taskService.updateSubtaskAgentConfig(req.params.taskId, req.params.subtaskId, req.body || {});
+    broadcast(req, 'task:updated', { taskId: req.params.taskId, patch: {} });
+    res.json({ ok: true, data: subtask });
+  } catch (err) {
+    res.status(400).json({ ok: false, error: err.message });
+  }
+});
+
+router.post('/:taskId/subtasks/:subtaskId/agent-reminder/test', authRequired, requireTaskManager, async (req, res) => {
+  try {
+    const subtask = taskService.getSubtask(req.params.subtaskId);
+    if (!subtask || subtask.task_id !== req.params.taskId) {
+      return res.status(404).json({ ok: false, error: '子任务不存在' });
+    }
+    if (!subtask.feishu_chat_id) {
+      return res.status(400).json({ ok: false, error: '请先填写飞书群 chat_id' });
+    }
+    await feishuPushService.sendTextToChat(
+      subtask.feishu_chat_id,
+      `PM Board 提醒：请更新子任务「${subtask.title}」的本周进度，并附上飞书交付文档链接。`
+    );
+    res.json({ ok: true });
+  } catch (err) {
+    res.status(400).json({ ok: false, error: err.userMessage || err.message });
+  }
 });
 
 router.put('/:taskId/subtasks/:subtaskId/steps', authRequired, requireTaskManager, (req, res) => {

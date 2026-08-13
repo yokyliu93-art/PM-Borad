@@ -145,6 +145,35 @@ export function migrate() {
       created_at TEXT DEFAULT (datetime('now')),
       updated_at TEXT DEFAULT (datetime('now'))
     );
+
+    CREATE TABLE IF NOT EXISTS subtask_schedule_items (
+      id TEXT PRIMARY KEY,
+      subtask_id TEXT NOT NULL REFERENCES subtasks(id),
+      task_id TEXT NOT NULL REFERENCES tasks(id),
+      week_index INTEGER NOT NULL DEFAULT 1,
+      goal TEXT DEFAULT '',
+      reminder_day INTEGER DEFAULT 1,
+      reminder_time TEXT DEFAULT '10:00',
+      delivery_doc_url TEXT DEFAULT '',
+      status TEXT DEFAULT '未开始',
+      reminder_enabled INTEGER DEFAULT 1,
+      last_reminded_at TEXT,
+      sort_order INTEGER DEFAULT 0,
+      created_at TEXT DEFAULT (datetime('now')),
+      updated_at TEXT DEFAULT (datetime('now'))
+    );
+
+    CREATE TABLE IF NOT EXISTS agent_events (
+      id TEXT PRIMARY KEY,
+      subtask_id TEXT NOT NULL REFERENCES subtasks(id),
+      task_id TEXT NOT NULL REFERENCES tasks(id),
+      status TEXT DEFAULT '',
+      week_index INTEGER,
+      progress_note TEXT DEFAULT '',
+      delivery_doc_url TEXT DEFAULT '',
+      payload_json TEXT DEFAULT '{}',
+      created_at TEXT DEFAULT (datetime('now'))
+    );
   `);
 
   // Add submission fields to subtasks. CREATE TABLE IF NOT EXISTS won't add
@@ -161,6 +190,27 @@ export function migrate() {
   }
   if (!subCols.includes('delivery_doc_url')) {
     db.exec("ALTER TABLE subtasks ADD COLUMN delivery_doc_url TEXT DEFAULT ''");
+  }
+  if (!subCols.includes('agent_api_key_hash')) {
+    db.exec("ALTER TABLE subtasks ADD COLUMN agent_api_key_hash TEXT DEFAULT ''");
+  }
+  if (!subCols.includes('agent_api_key_prefix')) {
+    db.exec("ALTER TABLE subtasks ADD COLUMN agent_api_key_prefix TEXT DEFAULT ''");
+  }
+  if (!subCols.includes('agent_instructions')) {
+    db.exec("ALTER TABLE subtasks ADD COLUMN agent_instructions TEXT DEFAULT ''");
+  }
+  if (!subCols.includes('agent_progress_note')) {
+    db.exec("ALTER TABLE subtasks ADD COLUMN agent_progress_note TEXT DEFAULT ''");
+  }
+  if (!subCols.includes('agent_last_update_at')) {
+    db.exec('ALTER TABLE subtasks ADD COLUMN agent_last_update_at TEXT');
+  }
+  if (!subCols.includes('feishu_push_enabled')) {
+    db.exec('ALTER TABLE subtasks ADD COLUMN feishu_push_enabled INTEGER DEFAULT 0');
+  }
+  if (!subCols.includes('feishu_chat_id')) {
+    db.exec("ALTER TABLE subtasks ADD COLUMN feishu_chat_id TEXT DEFAULT ''");
   }
 
   const stepCols = db.prepare('PRAGMA table_info(subtask_steps)').all().map((c) => c.name);
