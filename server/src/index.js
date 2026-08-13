@@ -16,6 +16,7 @@ import projectRoutes from './routes/projects.js';
 import taskRoutes from './routes/tasks.js';
 import templateRoutes from './routes/templates.js';
 import dashboardRoutes from './routes/dashboard.js';
+import { feishuRouter, projectFeishuRouter } from './routes/feishu.js';
 
 const app = express();
 const server = createServer(app);
@@ -43,6 +44,8 @@ app.use('/api/projects', projectRoutes);
 app.use('/api/projects/:projectId/tasks', taskRoutes);
 app.use('/api/templates', templateRoutes);
 app.use('/api/dashboard', dashboardRoutes);
+app.use('/api/feishu', feishuRouter);
+app.use('/api/projects/:projectId/feishu', projectFeishuRouter);
 
 app.get('/api/health', (req, res) => {
   res.json({ ok: true, time: new Date().toISOString() });
@@ -62,7 +65,7 @@ if (fs.existsSync(clientDist)) {
   });
 }
 
-app.use((err, req, res, _next) => {
+app.use((err, req, res, next) => {
   console.error('[server] Error:', err);
   res.status(500).json({ ok: false, error: err.message || 'Internal server error' });
 });

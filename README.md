@@ -1,126 +1,28 @@
-# PM Board Demo
+# PM board
 
-一个清爽的「人人都是 PM」协作入口 Demo。它展示了开源 PM board 产品的核心 onboarding：
+一个使用 React + Tailwind CSS 构建的「人人都是PM」认领制协作面板 SPA 原型。
 
-1. 先理解产品：PM Board 如何把计划变成可认领的任务池
-2. 选择登录方式：飞书账号或 Google 登录
-3. 完成实名信息
-4. 加入项目组
-5. 进入公共任务池工作台
-
-当前版本已经接入 Express + SQLite 后端骨架，并提供飞书 OAuth 与 Google OAuth 登录路由。没有配置 OAuth 密钥时，登录按钮会回到前端并显示配置提示；配置密钥后即可跳转到对应账号授权页。开发阶段也可以使用演示账号先走完整流程。
-
-## 本地运行前端
+## 启动方式
 
 ```bash
 npm install
 npm run dev
 ```
 
-打开终端显示的本地地址，通常是：
+开发服务器启动后，打开终端里显示的 Local URL。
 
-```text
-http://127.0.0.1:5173/
-```
+## 演示链路
 
-## 后端
+- 项目发起：创建 PM board World Cup 项目，编辑 Markdown 项目计划书
+- 任务拆分：点击 AI 智能拆分，1.5 秒后生成 7 个预设任务
+- 公共任务池：切换团队成员视角，认领任务并生成子项目入口
+- 子项目管理：调整进度、切换状态、添加子任务、分配协作者、关联飞书文档、发布更新
+- 总PM Dashboard：查看整体进度、任务卡片、更新 Feed、人员负载和成员筛选
+- 部门大盘：老板视角查看多个项目，并展开内部任务分布
 
-压缩包中的后端已经整理到 `server/`，包含：
+## 技术说明
 
-- Express API
-- SQLite 数据库迁移和 seed
-- JWT cookie 登录态
-- 飞书 OAuth 路由
-- Google OAuth 路由
-- 项目、团队、任务、模板和 dashboard API
-- Socket.IO 实时事件骨架
-
-启动后端：
-
-```bash
-cd server
-npm install
-cp .env.example .env
-npm run dev
-```
-
-开发环境可以用：
-
-```text
-http://localhost:3001/api/auth/dev-login
-```
-
-前端登录页也提供「使用演示账号进入」，用于没有飞书或 Google 密钥时先体验产品流程。
-
-真实飞书登录需要先在飞书开放平台拿到 `FEISHU_APP_ID` 和 `FEISHU_APP_SECRET`，并配置线上回调地址。
-
-## Google 登录配置
-
-在 Google Cloud Console 创建 OAuth Client：
-
-1. 打开 Google Cloud Console
-2. 创建或选择一个项目
-3. 进入 APIs & Services
-4. 配置 OAuth consent screen
-5. 创建 OAuth 2.0 Client ID，类型选择 Web application
-6. 添加本地回调地址：
-
-```text
-http://localhost:3001/api/auth/google/callback
-```
-
-7. 线上部署后，再添加线上回调地址，例如：
-
-```text
-https://pmboard.yourcompany.com/api/auth/google/callback
-```
-
-8. 把拿到的值填到 `server/.env`：
-
-```text
-GOOGLE_CLIENT_ID=your-google-client-id
-GOOGLE_CLIENT_SECRET=your-google-client-secret
-SERVER_URL=http://localhost:3001
-CLIENT_URL=http://localhost:5173
-```
-
-本地开发时需要同时启动：
-
-```bash
-npm run dev
-cd server
-npm run dev
-```
-
-## 演示路径
-
-- 第一屏先阅读产品介绍
-- 点击「使用组织账号登录」进入登录页
-- 没有 OAuth 密钥时，点击「使用演示账号进入」
-- 在实名页确认真实姓名
-- 选择 `PM Board Demo`
-- 点击「进入工作台」
-- 对无人认领的任务点击「邀请」
-- 选择一个成员，生成邀请记录
-
-## 技术栈
-
-- Vite
-- React 18
+- Vite + React 18
 - Tailwind CSS
-- lucide-react
-- Express
-- SQLite
-- Socket.IO
-- 本地 React state 模拟前端 Demo 数据
-
-## 下一步
-
-如果要变成公司内部可用版本，需要补齐：
-
-- 后端服务
-- 飞书 OAuth 回调
-- 用户表和组织表
-- 项目组权限
-- 任务数据持久化
-- 部署域名和环境变量
+- 本地 React state 模拟数据，不依赖后端
+- 代码集中在 `src/App.jsx`，方便后续拆分模块并接入飞书 API

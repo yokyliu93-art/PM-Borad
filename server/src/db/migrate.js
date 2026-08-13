@@ -110,6 +110,26 @@ export function migrate() {
       created_at TEXT DEFAULT (datetime('now')),
       PRIMARY KEY (project_id, user_id)
     );
+
+    CREATE TABLE IF NOT EXISTS user_feishu_tokens (
+      user_id TEXT PRIMARY KEY REFERENCES users(id),
+      access_token TEXT NOT NULL,
+      refresh_token TEXT DEFAULT '',
+      token_expires_at INTEGER,
+      updated_at TEXT DEFAULT (datetime('now'))
+    );
+
+    CREATE TABLE IF NOT EXISTS feishu_docs (
+      id TEXT PRIMARY KEY,
+      project_id TEXT REFERENCES projects(id),
+      doc_token TEXT NOT NULL,
+      doc_type TEXT DEFAULT 'docx',
+      title TEXT DEFAULT '',
+      url TEXT DEFAULT '',
+      content_markdown TEXT DEFAULT '',
+      created_by TEXT NOT NULL REFERENCES users(id),
+      created_at TEXT DEFAULT (datetime('now'))
+    );
   `);
 
   // Add submission fields to subtasks. CREATE TABLE IF NOT EXISTS won't add

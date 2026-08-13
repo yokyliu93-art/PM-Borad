@@ -4,33 +4,20 @@ import path from 'path';
 import { config } from '../config.js';
 import db from '../db/connection.js';
 
+// Scopes requested during Feishu OAuth. Doc read scopes let the app import
+// document content on the user's behalf; keep them in sync with the scopes
+// granted in the Feishu console.
+export const FEISHU_SCOPES = 'docx:document:readonly wiki:wiki:readonly drive:drive:readonly';
+
 export function getLoginUrl(state) {
-  if (!config.feishuAppId) {
-    throw new Error('飞书 OAuth 未配置：缺少 FEISHU_APP_ID');
-  }
-  const redirectUri = `${config.serverUrl}/api/auth/callback`;
+  const redirectUri = `${config.clientUrl}/api/auth/callback`;
   const params = new URLSearchParams({
     app_id: config.feishuAppId,
     redirect_uri: redirectUri,
     state,
+    scope: FEISHU_SCOPES,
   });
   return `https://open.feishu.cn/open-apis/authen/v1/authorize?${params}`;
-}
-
-export function getGoogleLoginUrl(state) {
-  if (!config.googleClientId) {
-    throw new Error('Google OAuth 未配置：缺少 GOOGLE_CLIENT_ID');
-  }
-  const params = new URLSearchParams({
-    client_id: config.googleClientId,
-    redirect_uri: `${config.serverUrl}/api/auth/google/callback`,
-    response_type: 'code',
-    scope: 'openid email profile',
-    state,
-    access_type: 'offline',
-    prompt: 'select_account',
-  });
-  return `https://accounts.google.com/o/oauth2/v2/auth?${params}`;
 }
 
 export async function exchangeCode(code) {
@@ -48,7 +35,22 @@ export async function exchangeCode(code) {
   if (tokenData.code !== 0) {
     throw new Error(`飞书Token交换失败: ${tokenData.msg}`);
   }
-  return tokenData.data.access_token;
+  return tokenData.data; // { access_token, refresh_token, expires_in, ... }
+}
+
+// Persist the user's Feishu user_access_token (and refresh token) so the
+// backend can call Feishu APIs on their behalf for doc import.
+export function saveUserTokens(userId, { accessToken, refreshToken = '', expiresIn = 7200 }) {
+  const expiresAt = Date.now() + Number(expiresIn || 7200) * 1000;
+  db.prepare(`
+    INSERT INTO user_feishu_tokens (user_id, access_token, refresh_token, token_expires_at, updated_at)
+    VALUES (?, ?, ?, ?, datetime('now'))
+    ON CONFLICT(user_id) DO UPDATE SET
+      access_token = excluded.access_token,
+      refresh_token = excluded.refresh_token,
+      token_expires_at = excluded.token_expires_at,
+      updated_at = datetime('now')
+  `).run(userId, accessToken, refreshToken, expiresAt);
 }
 
 export async function getFeishuUser(accessToken) {
@@ -60,39 +62,6 @@ export async function getFeishuUser(accessToken) {
     throw new Error(`飞书用户信息获取失败: ${data.msg}`);
   }
   return data.data;
-}
-
-export async function exchangeGoogleCode(code) {
-  if (!config.googleClientId || !config.googleClientSecret) {
-    throw new Error('Google OAuth 未配置：缺少 GOOGLE_CLIENT_ID 或 GOOGLE_CLIENT_SECRET');
-  }
-  const tokenRes = await fetch('https://oauth2.googleapis.com/token', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-    body: new URLSearchParams({
-      client_id: config.googleClientId,
-      client_secret: config.googleClientSecret,
-      code,
-      grant_type: 'authorization_code',
-      redirect_uri: `${config.serverUrl}/api/auth/google/callback`,
-    }),
-  });
-  const tokenData = await tokenRes.json();
-  if (!tokenRes.ok || !tokenData.access_token) {
-    throw new Error(`Google Token 交换失败: ${tokenData.error_description || tokenData.error || tokenRes.statusText}`);
-  }
-  return tokenData.access_token;
-}
-
-export async function getGoogleUser(accessToken) {
-  const res = await fetch('https://www.googleapis.com/oauth2/v3/userinfo', {
-    headers: { Authorization: `Bearer ${accessToken}` },
-  });
-  const data = await res.json();
-  if (!res.ok || !data.sub) {
-    throw new Error(`Google 用户信息获取失败: ${data.error_description || data.error || res.statusText}`);
-  }
-  return data;
 }
 
 export function upsertUser(feishuUser) {
@@ -109,22 +78,12 @@ export function upsertUser(feishuUser) {
   return db.prepare('SELECT * FROM users WHERE id = ?').get(feishuUser.open_id);
 }
 
-export function upsertGoogleUser(googleUser) {
-  const id = `google:${googleUser.sub}`;
-  const name = googleUser.name || googleUser.email || 'Google User';
-  const avatarUrl = googleUser.picture || '';
-  const email = googleUser.email || '';
-  const existing = db.prepare('SELECT * FROM users WHERE id = ?').get(id);
-  if (existing) {
-    db.prepare('UPDATE users SET name = ?, avatar_url = ?, email = ? WHERE id = ?').run(
-      name, avatarUrl, email, id
-    );
-  } else {
-    db.prepare('INSERT INTO users (id, name, avatar_url, email) VALUES (?, ?, ?, ?)').run(
-      id, name, avatarUrl, email
-    );
-  }
-  return db.prepare('SELECT * FROM users WHERE id = ?').get(id);
+// New users are joined to the configured default team on login so everyone
+// lands in the shared workspace and can see the same projects.
+export function ensureDefaultTeamMembership(userId) {
+  if (!config.defaultTeamId) return;
+  db.prepare('INSERT OR IGNORE INTO team_members (team_id, user_id, role) VALUES (?, ?, ?)')
+    .run(config.defaultTeamId, userId, 'member');
 }
 
 export function signJwt(user) {

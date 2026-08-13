@@ -1,3 +1,4 @@
+import { v4 as uuid } from 'uuid';
 import db from './connection.js';
 
 export function seed() {

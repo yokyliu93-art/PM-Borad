@@ -7,32 +7,11 @@ import * as authService from '../services/auth.js';
 
 const router = Router();
 
-function redirectAuthError(res, message) {
-  const url = new URL(config.clientUrl);
-  url.searchParams.set('auth_error', message);
-  res.redirect(url.toString());
-}
-
 router.get('/login', (req, res) => {
-  try {
-    const state = uuid();
-    const url = authService.getLoginUrl(state);
-    res.cookie('oauth_state', state, { httpOnly: true, maxAge: 600000, sameSite: 'lax' });
-    res.redirect(url);
-  } catch (err) {
-    redirectAuthError(res, err.message);
-  }
-});
-
-router.get('/google/login', (req, res) => {
-  try {
-    const state = uuid();
-    const url = authService.getGoogleLoginUrl(state);
-    res.cookie('google_oauth_state', state, { httpOnly: true, maxAge: 600000, sameSite: 'lax' });
-    res.redirect(url);
-  } catch (err) {
-    redirectAuthError(res, err.message);
-  }
+  const state = uuid();
+  res.cookie('oauth_state', state, { httpOnly: true, maxAge: 600000, sameSite: 'lax' });
+  const url = authService.getLoginUrl(state);
+  res.redirect(url);
 });
 
 router.get('/callback', async (req, res) => {
@@ -40,13 +19,23 @@ router.get('/callback', async (req, res) => {
   const savedState = req.cookies?.oauth_state;
 
   if (!savedState || savedState !== state) {
-    return redirectAuthError(res, 'OAuth state 验证失败');
+    return res.status(400).json({ ok: false, error: 'OAuth state 验证失败' });
   }
 
   try {
-    const accessToken = await authService.exchangeCode(code);
-    const feishuUser = await authService.getFeishuUser(accessToken);
+    const tokenData = await authService.exchangeCode(code);
+    // The access_token response embeds the user identity (open_id, name, ...),
+    // so we avoid a separate user_info call that would need the authen scope.
+    const feishuUser = tokenData.open_id
+      ? tokenData
+      : await authService.getFeishuUser(tokenData.access_token);
     const user = authService.upsertUser(feishuUser);
+    authService.ensureDefaultTeamMembership(user.id);
+    authService.saveUserTokens(user.id, {
+      accessToken: tokenData.access_token,
+      refreshToken: tokenData.refresh_token,
+      expiresIn: tokenData.expires_in,
+    });
     const token = authService.signJwt(user);
 
     res.clearCookie('oauth_state');
@@ -58,39 +47,21 @@ router.get('/callback', async (req, res) => {
     res.redirect(config.clientUrl);
   } catch (err) {
     console.error('[auth] callback error:', err);
-    redirectAuthError(res, err.message);
-  }
-});
-
-router.get('/google/callback', async (req, res) => {
-  const { code, state } = req.query;
-  const savedState = req.cookies?.google_oauth_state;
-
-  if (!savedState || savedState !== state) {
-    return redirectAuthError(res, 'Google OAuth state 验证失败');
-  }
-
-  try {
-    const accessToken = await authService.exchangeGoogleCode(code);
-    const googleUser = await authService.getGoogleUser(accessToken);
-    const user = authService.upsertGoogleUser(googleUser);
-    const token = authService.signJwt(user);
-
-    res.clearCookie('google_oauth_state');
-    res.cookie('token', token, {
-      httpOnly: true,
-      maxAge: 7 * 24 * 60 * 60 * 1000,
-      sameSite: 'lax',
-    });
-    res.redirect(config.clientUrl);
-  } catch (err) {
-    console.error('[auth] google callback error:', err);
-    redirectAuthError(res, err.message);
+    res.status(500).json({ ok: false, error: err.message });
   }
 });
 
 router.get('/me', authRequired, (req, res) => {
-  res.json({ ok: true, data: req.user });
+  const bound = db.prepare('SELECT 1 FROM user_feishu_tokens WHERE user_id = ?').get(req.user.id);
+  res.json({
+    ok: true,
+    data: {
+      ...req.user,
+      feishuBound: !!bound,
+      defaultTeamId: config.defaultTeamId || null,
+      devLoginEnabled: config.devLoginEnabled,
+    },
+  });
 });
 
 router.post('/logout', (req, res) => {
@@ -98,9 +69,11 @@ router.post('/logout', (req, res) => {
   res.json({ ok: true });
 });
 
-// Dev-only: bypass Feishu OAuth with a mock user
+// Dev-only: bypass Feishu OAuth with a mock user.
+// Only reachable when ENABLE_DEV_LOGIN=true (local development). In production
+// this flag is unset, so these routes are closed regardless of NODE_ENV.
 function devOnly(req, res, next) {
-  if (process.env.NODE_ENV === 'production') {
+  if (!config.devLoginEnabled) {
     return res.status(404).json({ ok: false, error: 'Not available in production' });
   }
   next();
@@ -135,7 +108,7 @@ router.delete('/users/:id', authRequired, devOnly, (req, res) => {
 
 // Dev-only: bypass Feishu OAuth with a mock user
 router.get('/dev-login', (req, res) => {
-  if (process.env.NODE_ENV === 'production') {
+  if (!config.devLoginEnabled) {
     return res.status(404).json({ ok: false, error: 'Not available in production' });
   }
   const openId = req.query.user || 'dev-user-001';
@@ -148,6 +121,7 @@ router.get('/dev-login', (req, res) => {
       .run(openId, names[openId] || 'Dev User', '', '');
     user = db.prepare('SELECT * FROM users WHERE id = ?').get(openId);
   }
+  authService.ensureDefaultTeamMembership(user.id);
   const token = authService.signJwt(user);
   res.cookie('token', token, {
     httpOnly: true,

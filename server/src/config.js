@@ -9,9 +9,10 @@ export const config = {
   jwtSecret: process.env.JWT_SECRET || 'dev-secret-change-in-production',
   feishuAppId: process.env.FEISHU_APP_ID || '',
   feishuAppSecret: process.env.FEISHU_APP_SECRET || '',
-  googleClientId: process.env.GOOGLE_CLIENT_ID || '',
-  googleClientSecret: process.env.GOOGLE_CLIENT_SECRET || '',
-  serverUrl: process.env.SERVER_URL || `http://localhost:${process.env.PORT || 3001}`,
+  defaultTeamId: process.env.DEFAULT_TEAM_ID || '',
+  // Dev-only login + user management. Off by default; enable explicitly for
+  // local development via ENABLE_DEV_LOGIN=true. Never set in production.
+  devLoginEnabled: process.env.ENABLE_DEV_LOGIN === 'true',
   clientUrl: process.env.CLIENT_URL || 'http://localhost:5173',
   databaseUrl: process.env.DATABASE_URL || 'sqlite:./data/pm-board.db',
   uploadsDir: process.env.UPLOADS_DIR || path.join(serverRoot, '../data/uploads'),
