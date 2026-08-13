@@ -17,7 +17,7 @@ export function Shell() {
 
   const nav = isInProject
     ? [
-        ['/projects', '项目列表', List],
+        ['/projects', '项目大厅', List],
         [`/projects/${projectId}/pool`, '公共任务池', Users],
         [`/projects/${projectId}/mine`, '个人面板', UserCheck],
         [`/projects/${projectId}/commander`, '项目总面板', LayoutDashboard],
@@ -25,7 +25,7 @@ export function Shell() {
         ...(activeProject?.pm_user_id === currentUser?.id ? [[`/projects/${projectId}/edit`, '项目设置', Settings]] : []),
       ]
     : [
-        ['/projects', '项目列表', List],
+        ['/projects', '项目大厅', List],
         ['/projects/create', '发起新项目', Plus],
       ];
 

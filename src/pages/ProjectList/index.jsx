@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import { get, del } from '../../lib/api';
 import { useStore } from '../../store';
-import { Plus, ArrowRight, Loader2, AlertTriangle, Trash2, Pencil } from 'lucide-react';
+import { Plus, ArrowRight, Loader2, AlertTriangle, Trash2, Pencil, Inbox, UserCheck, ShieldCheck, Users } from 'lucide-react';
 import { Progress } from '../../components/ui/Progress';
 
 export function ProjectList() {
@@ -31,6 +31,18 @@ export function ProjectList() {
   }
 
   function enterProject(project) {
+    setActiveProjectId(project.id);
+    navigate(`/projects/${project.id}/pool`);
+  }
+
+  function goMine(e, project) {
+    e.stopPropagation();
+    setActiveProjectId(project.id);
+    navigate(`/projects/${project.id}/mine`);
+  }
+
+  function goPool(e, project) {
+    e.stopPropagation();
     setActiveProjectId(project.id);
     navigate(`/projects/${project.id}/pool`);
   }
@@ -65,12 +77,20 @@ export function ProjectList() {
     </div>
   );
 
+  const totals = projects.reduce((acc, project) => ({
+    claimable: acc.claimable + (project.claimable_count || 0),
+    mine: acc.mine + (project.my_task_count || 0),
+    reviews: acc.reviews + (project.pending_review_count || 0),
+    activePeople: acc.activePeople + (project.active_people_count || 0),
+  }), { claimable: 0, mine: 0, reviews: 0, activePeople: 0 });
+
   return (
     <section className="space-y-6">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col gap-4 xl:flex-row xl:items-end xl:justify-between">
         <div>
-          <h2 className="text-3xl font-semibold tracking-normal text-white">项目列表</h2>
-          <p className="mt-2 text-sm text-slate-400">选择一个项目进入协作</p>
+          <p className="text-sm font-medium text-emerald-200">团队项目大厅</p>
+          <h2 className="mt-1 text-3xl font-semibold tracking-normal text-white">先看哪里缺人，再进去认领推进</h2>
+          <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-400">所有项目对团队成员可见。成员进入项目任务池自主认领，认领后在个人执行台拆步骤、写阶段交付、等待 PM 确认。</p>
         </div>
         <button
           onClick={() => navigate('/projects/create')}
@@ -78,6 +98,25 @@ export function ProjectList() {
         >
           <Plus size={16} /> 发起新项目
         </button>
+      </div>
+
+      <div className="grid gap-3 md:grid-cols-4">
+        <div className="rounded-lg border border-white/10 bg-white/[0.035] p-4">
+          <div className="flex items-center gap-2 text-emerald-200"><Inbox size={16} /><span className="text-sm">可认领任务</span></div>
+          <p className="mt-3 text-3xl font-semibold text-white">{totals.claimable}</p>
+        </div>
+        <div className="rounded-lg border border-white/10 bg-white/[0.035] p-4">
+          <div className="flex items-center gap-2 text-violet-200"><UserCheck size={16} /><span className="text-sm">我负责推进</span></div>
+          <p className="mt-3 text-3xl font-semibold text-white">{totals.mine}</p>
+        </div>
+        <div className="rounded-lg border border-white/10 bg-white/[0.035] p-4">
+          <div className="flex items-center gap-2 text-amber-200"><ShieldCheck size={16} /><span className="text-sm">待确认交付</span></div>
+          <p className="mt-3 text-3xl font-semibold text-white">{totals.reviews}</p>
+        </div>
+        <div className="rounded-lg border border-white/10 bg-white/[0.035] p-4">
+          <div className="flex items-center gap-2 text-slate-300"><Users size={16} /><span className="text-sm">已参与成员</span></div>
+          <p className="mt-3 text-3xl font-semibold text-white">{totals.activePeople}</p>
+        </div>
       </div>
 
       {projects.length === 0 ? (
@@ -94,7 +133,7 @@ export function ProjectList() {
           </div>
         </div>
       ) : (
-        <div className="grid gap-4 md:grid-cols-2 xl:grid-cols-3">
+        <div className="space-y-3">
           {projects.map((p) => {
             const progress = p.progress ?? 0;
             const statusLabel = p.status === 'draft' ? '草稿' : p.status === 'active' ? '进行中' : p.status === 'completed' ? '已完成' : p.status;
@@ -110,14 +149,45 @@ export function ProjectList() {
                 tabIndex={0}
                 onClick={() => enterProject(p)}
                 onKeyDown={(e) => { if (e.key === 'Enter') enterProject(p); }}
-                className="cursor-pointer rounded-lg border border-white/10 bg-[#151925] p-5 text-left transition hover:border-violet-400/40"
+                className="cursor-pointer rounded-lg border border-white/10 bg-[#151925] p-5 text-left transition hover:border-emerald-400/40"
               >
-                <div className="flex items-start justify-between">
+                <div className="grid gap-5 xl:grid-cols-[1.2fr_1fr_auto] xl:items-center">
                   <div className="min-w-0">
-                    <h3 className="text-lg font-semibold text-white truncate">{p.name}</h3>
-                    <p className="mt-1 text-sm text-slate-400 line-clamp-2">{p.description || '无描述'}</p>
+                    <div className="flex flex-wrap items-center gap-2">
+                      <h3 className="truncate text-xl font-semibold text-white">{p.name}</h3>
+                      <span className={`rounded px-2 py-0.5 text-xs ${statusStyle}`}>{statusLabel}</span>
+                    </div>
+                    <p className="mt-2 line-clamp-2 text-sm leading-6 text-slate-400">{p.description || '这个项目还没有描述，进入任务池后可以先看任务拆解。'}</p>
+                    <p className="mt-3 text-xs text-slate-500">总 PM: {p.pm_name}</p>
                   </div>
-                  <div className="ml-2 flex shrink-0 items-center gap-2">
+
+                  <div>
+                    <div className="mb-2 flex justify-between text-xs text-slate-500">
+                      <span>项目推进</span>
+                      <span>{progress}%</span>
+                    </div>
+                    <Progress value={progress} />
+                    <div className="mt-3 grid grid-cols-4 gap-2 text-center">
+                      <div className="rounded-md bg-white/[0.04] px-2 py-2">
+                        <p className="text-base font-semibold text-white">{p.task_count || 0}</p>
+                        <p className="text-[11px] text-slate-500">任务</p>
+                      </div>
+                      <div className="rounded-md bg-emerald-500/10 px-2 py-2">
+                        <p className="text-base font-semibold text-emerald-200">{p.claimable_count || 0}</p>
+                        <p className="text-[11px] text-slate-500">可认领</p>
+                      </div>
+                      <div className="rounded-md bg-violet-500/10 px-2 py-2">
+                        <p className="text-base font-semibold text-violet-200">{p.my_task_count || 0}</p>
+                        <p className="text-[11px] text-slate-500">我的</p>
+                      </div>
+                      <div className="rounded-md bg-amber-500/10 px-2 py-2">
+                        <p className="text-base font-semibold text-amber-200">{p.pending_review_count || 0}</p>
+                        <p className="text-[11px] text-slate-500">待确认</p>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="flex shrink-0 flex-wrap items-center gap-2 xl:justify-end">
                     {isPM && (
                       <>
                         <button
@@ -138,23 +208,21 @@ export function ProjectList() {
                         </button>
                       </>
                     )}
-                    <ArrowRight size={18} className="text-slate-500" />
+                    {p.my_task_count > 0 ? (
+                      <button
+                        onClick={(e) => goMine(e, p)}
+                        className="inline-flex items-center gap-2 rounded-md bg-white px-3 py-2 text-sm font-semibold text-[#0f1117] hover:bg-emerald-50"
+                      >
+                        我的执行台 <ArrowRight size={15} />
+                      </button>
+                    ) : null}
+                    <button
+                      onClick={(e) => goPool(e, p)}
+                      className="inline-flex items-center gap-2 rounded-md border border-emerald-400/30 bg-emerald-500/10 px-3 py-2 text-sm font-semibold text-emerald-100 hover:bg-emerald-500/20"
+                    >
+                      进入任务池 <ArrowRight size={15} />
+                    </button>
                   </div>
-                </div>
-
-                {p.plan_markdown && (
-                  <div className="mt-3">
-                    <div className="mb-2 flex justify-between text-xs text-slate-500">
-                      <span>进度</span>
-                      <span>{progress}%</span>
-                    </div>
-                    <Progress value={progress} />
-                  </div>
-                )}
-
-                <div className="mt-3 flex items-center justify-between text-xs">
-                  <span className="text-slate-500">PM: {p.pm_name}</span>
-                  <span className={`rounded px-2 py-0.5 ${statusStyle}`}>{statusLabel}</span>
                 </div>
               </div>
             );

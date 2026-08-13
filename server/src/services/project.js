@@ -15,7 +15,7 @@ export function create({ teamId, name, description, planMarkdown, pmUserId, time
   return getById(id);
 }
 
-export function listByTeam(teamId) {
+export function listByTeam(teamId, userId) {
   const projects = db.prepare(`
     SELECT p.*, u.name as pm_name, u.avatar_url as pm_avatar
     FROM projects p JOIN users u ON p.pm_user_id = u.id
@@ -25,8 +25,32 @@ export function listByTeam(teamId) {
   const progressStmt = db.prepare(
     'SELECT COALESCE(AVG(progress), 0) as p FROM tasks WHERE project_id = ? AND is_published = 1'
   );
+  const taskCountStmt = db.prepare(
+    'SELECT COUNT(*) as c FROM tasks WHERE project_id = ? AND is_published = 1'
+  );
+  const claimableStmt = db.prepare(
+    'SELECT COUNT(*) as c FROM tasks WHERE project_id = ? AND owner_id IS NULL AND is_published = 1'
+  );
+  const myTaskStmt = db.prepare(
+    'SELECT COUNT(*) as c FROM tasks WHERE project_id = ? AND owner_id = ? AND is_published = 1'
+  );
+  const pendingReviewStmt = db.prepare(`
+    SELECT
+      (SELECT COUNT(*) FROM tasks WHERE project_id = ? AND status = '审核中' AND is_published = 1)
+      +
+      (SELECT COUNT(*) FROM subtasks s JOIN tasks t ON s.task_id = t.id WHERE t.project_id = ? AND s.status = '已提交' AND t.is_published = 1)
+      as c
+  `);
+  const ownerCountStmt = db.prepare(
+    'SELECT COUNT(DISTINCT owner_id) as c FROM tasks WHERE project_id = ? AND owner_id IS NOT NULL AND is_published = 1'
+  );
   for (const project of projects) {
     project.progress = Math.round(progressStmt.get(project.id).p ?? 0);
+    project.task_count = taskCountStmt.get(project.id).c;
+    project.claimable_count = claimableStmt.get(project.id).c;
+    project.my_task_count = userId ? myTaskStmt.get(project.id, userId).c : 0;
+    project.pending_review_count = pendingReviewStmt.get(project.id, project.id).c;
+    project.active_people_count = ownerCountStmt.get(project.id).c;
   }
   return projects;
 }
