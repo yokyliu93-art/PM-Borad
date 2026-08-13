@@ -207,6 +207,12 @@ function HomeScreen({ onLogin, onDemoLogin, loadingProvider }) {
             进入演示空间
           </button>
         </div>
+        <div className="signal-strip" aria-label="PM Board 核心流程">
+          <span>组织授权</span>
+          <span>任务池</span>
+          <span>责任人</span>
+          <span>复盘记录</span>
+        </div>
       </div>
 
       <section className="product-panel">
@@ -266,7 +272,7 @@ function AuthScreen({ loadingProvider, authError, onLogin, onDemoLogin }) {
         </div>
         <button onClick={onDemoLogin} disabled={Boolean(loadingProvider)} className="demo-login-button">
           <span className="flex items-center gap-3">
-            <span className="icon-tile bg-white text-[var(--accent)]"><Sparkles size={20} /></span>
+            <span className="icon-tile"><Sparkles size={20} /></span>
             <span>
               <span className="block font-medium">使用演示账号进入</span>
               <span className="mt-1 block text-sm text-[var(--muted)]">没有 OAuth 密钥时先体验流程</span>

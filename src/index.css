@@ -3,19 +3,19 @@
 @tailwind utilities;
 
 :root {
-  color-scheme: light;
-  --page: #f6f7f4;
-  --paper: #ffffff;
-  --paper-soft: #f0f3ef;
-  --ink: #161a17;
-  --muted: #687168;
-  --muted-soft: #9aa39a;
-  --line: rgb(22 26 23 / 0.12);
-  --line-strong: rgb(22 26 23 / 0.2);
-  --accent: #256f58;
-  --accent-soft: #e4f1eb;
-  --accent-line: rgb(37 111 88 / 0.28);
-  --shadow: 0 22px 70px rgb(22 26 23 / 0.08);
+  color-scheme: dark;
+  --page: #070a09;
+  --paper: #101614;
+  --paper-soft: #0c1110;
+  --ink: #f4fbf7;
+  --muted: #9ba9a2;
+  --muted-soft: #66756d;
+  --line: rgb(244 251 247 / 0.11);
+  --line-strong: rgb(244 251 247 / 0.2);
+  --accent: #5ee0b5;
+  --accent-soft: rgb(94 224 181 / 0.12);
+  --accent-line: rgb(94 224 181 / 0.34);
+  --shadow: 0 28px 90px rgb(0 0 0 / 0.38);
   font-family:
     ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI",
     "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", sans-serif;
@@ -55,7 +55,7 @@ button:disabled {
 }
 
 ::selection {
-  background: rgb(37 111 88 / 0.2);
+  background: rgb(94 224 181 / 0.22);
   color: var(--ink);
 }
 
@@ -65,11 +65,22 @@ button:disabled {
   inset: 0;
   z-index: 0;
   background:
-    linear-gradient(90deg, rgb(22 26 23 / 0.04) 1px, transparent 1px),
-    linear-gradient(rgb(22 26 23 / 0.04) 1px, transparent 1px),
-    radial-gradient(circle at 82% 8%, rgb(37 111 88 / 0.12), transparent 30%);
-  background-size: 44px 44px, 44px 44px, auto;
-  mask-image: linear-gradient(180deg, black 0%, black 58%, transparent 100%);
+    linear-gradient(118deg, transparent 0 28%, rgb(94 224 181 / 0.14) 29%, transparent 45%),
+    linear-gradient(28deg, transparent 0 62%, rgb(56 189 248 / 0.08) 63%, transparent 78%),
+    linear-gradient(90deg, rgb(244 251 247 / 0.055) 1px, transparent 1px),
+    linear-gradient(rgb(244 251 247 / 0.055) 1px, transparent 1px);
+  background-size: auto, auto, 44px 44px, 44px 44px;
+  mask-image: linear-gradient(180deg, black 0%, black 72%, transparent 100%);
+}
+
+.page-field::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  background:
+    linear-gradient(115deg, transparent 0%, transparent 42%, rgb(94 224 181 / 0.08) 43%, transparent 56%),
+    repeating-linear-gradient(0deg, transparent 0 11px, rgb(244 251 247 / 0.035) 12px);
+  opacity: 0.72;
 }
 
 .stage-shell {
@@ -106,7 +117,7 @@ button:disabled {
   border-radius: 10px;
   background: var(--paper);
   color: var(--accent);
-  box-shadow: 0 1px 0 rgb(255 255 255 / 0.9) inset;
+  box-shadow: 0 1px 0 rgb(244 251 247 / 0.12) inset;
 }
 
 .step-nav {
@@ -115,9 +126,9 @@ button:disabled {
   gap: 2px;
   border: 1px solid var(--line);
   border-radius: 999px;
-  background: rgb(255 255 255 / 0.72);
+  background: rgb(16 22 20 / 0.72);
   padding: 4px;
-  box-shadow: 0 10px 28px rgb(22 26 23 / 0.05);
+  box-shadow: 0 10px 28px rgb(0 0 0 / 0.24);
   backdrop-filter: blur(16px);
 }
 
@@ -134,7 +145,7 @@ button:disabled {
 
 .step-pill-active {
   background: var(--ink);
-  color: white;
+  color: #070a09;
 }
 
 .ghost-link,
@@ -142,7 +153,7 @@ button:disabled {
   display: none;
   border: 1px solid var(--line);
   border-radius: 999px;
-  background: rgb(255 255 255 / 0.72);
+  background: rgb(16 22 20 / 0.72);
   padding: 9px 13px;
   color: var(--muted);
   font-size: 14px;
@@ -162,7 +173,7 @@ button:disabled {
   gap: 8px;
   border: 1px solid var(--accent-line);
   border-radius: 999px;
-  background: rgb(255 255 255 / 0.76);
+  background: rgb(16 22 20 / 0.72);
   padding: 6px 12px;
   color: var(--accent);
   font-size: 14px;
@@ -215,6 +226,8 @@ button:disabled {
   font-weight: 700;
   line-height: 0.98;
   letter-spacing: 0;
+  text-wrap: balance;
+  text-shadow: 0 20px 80px rgb(94 224 181 / 0.16);
 }
 
 .hero-text {
@@ -225,6 +238,31 @@ button:disabled {
   line-height: 1.75;
 }
 
+.signal-strip {
+  display: flex;
+  width: min(100%, 560px);
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 28px;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background:
+    linear-gradient(90deg, rgb(94 224 181 / 0.12), transparent 52%),
+    rgb(16 22 20 / 0.68);
+  padding: 8px;
+  box-shadow: 0 18px 44px rgb(0 0 0 / 0.22);
+  backdrop-filter: blur(18px);
+}
+
+.signal-strip span {
+  border: 1px solid rgb(244 251 247 / 0.1);
+  border-radius: 10px;
+  background: rgb(7 10 9 / 0.34);
+  padding: 8px 11px;
+  color: var(--muted);
+  font-size: 13px;
+}
+
 .product-panel,
 .auth-panel,
 .info-panel,
@@ -232,13 +270,31 @@ button:disabled {
 .work-panel {
   border: 1px solid var(--line);
   border-radius: 18px;
-  background: rgb(255 255 255 / 0.86);
+  background:
+    linear-gradient(180deg, rgb(244 251 247 / 0.08), rgb(244 251 247 / 0.035)),
+    rgb(16 22 20 / 0.78);
   box-shadow: var(--shadow);
-  backdrop-filter: blur(18px);
+  backdrop-filter: blur(22px);
 }
 
 .product-panel {
+  position: relative;
+  overflow: hidden;
   padding: 18px;
+}
+
+.product-panel::before {
+  content: "";
+  pointer-events: none;
+  position: absolute;
+  inset: 0;
+  background:
+    linear-gradient(135deg, transparent 0%, transparent 34%, rgb(94 224 181 / 0.1) 35%, transparent 54%),
+    repeating-linear-gradient(90deg, transparent 0 22px, rgb(244 251 247 / 0.03) 23px);
+}
+
+.product-panel > * {
+  position: relative;
 }
 
 .auth-panel,
@@ -282,7 +338,7 @@ button:disabled {
 
 .flow-row:hover {
   border-color: var(--accent-line);
-  background: #f8fbf8;
+  background: rgb(16 22 20 / 0.92);
   transform: translateY(-1px);
 }
 
@@ -341,20 +397,21 @@ button:disabled {
 .primary-button {
   background: var(--ink);
   padding: 13px 18px;
-  color: white;
+  color: #070a09;
   font-size: 15px;
-  box-shadow: 0 16px 34px rgb(22 26 23 / 0.14);
+  box-shadow: 0 18px 42px rgb(94 224 181 / 0.14);
 }
 
 .primary-button:hover,
 .small-primary:hover {
   background: var(--accent);
+  color: #07110d;
   transform: translateY(-1px);
 }
 
 .secondary-button {
   border: 1px solid var(--line);
-  background: rgb(255 255 255 / 0.72);
+  background: rgb(16 22 20 / 0.72);
   padding: 13px 16px;
   color: var(--ink);
   font-size: 15px;
@@ -382,7 +439,7 @@ button:disabled {
 .group-card,
 .task-card {
   border: 1px solid var(--line);
-  background: rgb(255 255 255 / 0.78);
+  background: rgb(16 22 20 / 0.74);
   text-align: left;
 }
 
@@ -400,14 +457,14 @@ button:disabled {
 .group-card:hover,
 .task-card:hover {
   border-color: var(--accent-line);
-  background: white;
-  box-shadow: 0 14px 30px rgb(22 26 23 / 0.08);
+  background: rgb(20 29 26 / 0.96);
+  box-shadow: 0 18px 36px rgb(0 0 0 / 0.28);
   transform: translateY(-1px);
 }
 
 .provider-icon {
   background: var(--ink);
-  color: white;
+  color: #070a09;
 }
 
 .demo-login-button {
@@ -419,9 +476,9 @@ button:disabled {
   margin-bottom: 16px;
   border: 1px solid rgb(217 119 6 / 0.24);
   border-radius: 14px;
-  background: rgb(254 243 199 / 0.72);
+  background: rgb(120 53 15 / 0.24);
   padding: 12px 14px;
-  color: #92400e;
+  color: #f8d48a;
   font-size: 14px;
   line-height: 1.6;
 }
@@ -455,13 +512,13 @@ button:disabled {
 .small-primary {
   background: var(--ink);
   padding: 9px 13px;
-  color: white;
+  color: #070a09;
   font-size: 14px;
 }
 
 .small-secondary {
   border: 1px solid var(--line);
-  background: rgb(255 255 255 / 0.72);
+  background: rgb(16 22 20 / 0.72);
   padding: 9px 12px;
   color: var(--ink);
   font-size: 14px;
@@ -475,7 +532,7 @@ button:disabled {
 
 .member-chip {
   border: 1px solid var(--accent-line);
-  background: rgb(255 255 255 / 0.72);
+  background: rgb(16 22 20 / 0.72);
   padding: 7px 12px;
   color: var(--ink);
   font-size: 14px;
@@ -507,8 +564,8 @@ button:disabled {
 
 .status-invited {
   border-color: rgb(217 119 6 / 0.28);
-  background: rgb(254 243 199 / 0.72);
-  color: #92400e;
+  background: rgb(120 53 15 / 0.24);
+  color: #f8d48a;
 }
 
 .process-icon {
@@ -519,19 +576,19 @@ button:disabled {
 
 .process-icon-done {
   background: var(--accent);
-  color: white;
+  color: #070a09;
 }
 
 .process-icon-active {
   background: var(--ink);
-  color: white;
+  color: #070a09;
 }
 
 .input {
   width: 100%;
   border: 1px solid var(--line-strong);
   border-radius: 12px;
-  background: rgb(255 255 255 / 0.78);
+  background: rgb(16 22 20 / 0.78);
   padding: 13px 14px;
   color: var(--ink);
   outline: none;
@@ -542,13 +599,13 @@ button:disabled {
 }
 
 .input::placeholder {
-  color: #879087;
+  color: #738078;
 }
 
 .input:focus {
   border-color: var(--accent);
-  background: white;
-  box-shadow: 0 0 0 4px rgb(37 111 88 / 0.13);
+  background: rgb(20 29 26 / 0.96);
+  box-shadow: 0 0 0 4px rgb(94 224 181 / 0.14);
 }
 
 .icon-button {
@@ -558,7 +615,7 @@ button:disabled {
   place-items: center;
   border: 1px solid var(--line);
   border-radius: 12px;
-  background: rgb(255 255 255 / 0.72);
+  background: rgb(16 22 20 / 0.72);
   color: var(--muted);
   transition:
     border-color 180ms ease,
@@ -570,14 +627,14 @@ button:disabled {
 .icon-button:hover {
   border-color: var(--accent-line);
   color: var(--accent);
-  box-shadow: 0 10px 22px rgb(22 26 23 / 0.08);
+  box-shadow: 0 10px 22px rgb(0 0 0 / 0.22);
   transform: translateY(-1px);
 }
 
 .loader-dot {
   width: 17px;
   height: 17px;
-  border: 2px solid rgb(37 111 88 / 0.26);
+  border: 2px solid rgb(94 224 181 / 0.26);
   border-top-color: var(--accent);
   border-radius: 999px;
   animation: spin 720ms linear infinite;
