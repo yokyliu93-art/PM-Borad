@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Routes, Route, Navigate, useParams, Outlet } from 'react-router-dom';
-import { get, post } from './lib/api';
+import { get, getOptional, post } from './lib/api';
 import { useStore } from './store';
 import { Shell } from './components/layout/Shell';
 import { ErrorBoundary } from './components/ui/ErrorBoundary';
@@ -198,7 +198,7 @@ function AuthGate() {
   const [checking, setChecking] = useState(true);
 
   useEffect(() => {
-    get('/api/auth/me').then(async (r) => {
+    getOptional('/api/auth/me').then(async (r) => {
       if (r.ok) {
         setCurrentUser(r.data);
         const defaultTeamId = r.data.defaultTeamId;
