@@ -20,6 +20,10 @@ export function TaskCard({ task, onClaim, onUnclaim, onOpen, onDelete, currentUs
           </div>
           <h3 className="text-lg font-semibold text-white">{task.title}</h3>
           <p className="mt-2 text-sm leading-6 text-slate-400">{task.summary}</p>
+          <div className="mt-3 flex flex-wrap gap-2 text-xs text-slate-500">
+            <span className="rounded-md bg-white/[0.04] px-2 py-1">{(task.subtasks || []).length} 个子任务</span>
+            <span className="rounded-md bg-white/[0.04] px-2 py-1">{(task.subtasks || []).filter((s) => s.agent_api_key_prefix).length} 个 Agent 工作包</span>
+          </div>
         </div>
         {owner ? (
           <div className="shrink-0 text-center">
@@ -51,11 +55,11 @@ export function TaskCard({ task, onClaim, onUnclaim, onOpen, onDelete, currentUs
               {onUnclaim ? (
                 <button onClick={onUnclaim} className="rounded-md border border-red-400/40 bg-red-500/10 px-3 py-2 text-sm text-red-200 transition hover:bg-red-500/20">取消认领</button>
               ) : null}
-              <button onClick={() => onOpen?.(task.id)} className="rounded-md border border-white/10 px-3 py-2 text-sm text-slate-200 transition hover:bg-white/8">进入子项目</button>
+              <button onClick={() => onOpen?.(task.id)} className="rounded-md border border-white/10 px-3 py-2 text-sm text-slate-200 transition hover:bg-white/8">进入任务</button>
             </>
           ) : (
             <button onClick={() => onClaim?.(task.id)} className="rounded-md bg-violet-500 px-3 py-2 text-sm font-semibold text-white transition hover:bg-violet-400">
-              认领
+              认领成为子 PM
             </button>
           )}
           {onDelete ? (

@@ -35,6 +35,7 @@ export function Subproject() {
   const { projectId, taskId } = useParams();
   const { currentUser } = useStore();
   const [task, setTask] = useState(null);
+  const [project, setProject] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [newSubtask, setNewSubtask] = useState({ title: '' });
@@ -102,6 +103,20 @@ export function Subproject() {
     setLoading(false);
   }
 
+  async function loadProject() {
+    try {
+      const res = await get(`/api/projects/${projectId}`);
+      if (res.ok) setProject(res.data);
+    } catch {
+      // The task page can still render; member assignment will stay limited.
+    }
+  }
+
+  useEffect(() => {
+    if (!projectId) return;
+    loadProject();
+  }, [projectId]);
+
   async function handleProgress(pct) {
     const val = Number(pct);
     await put(`/api/projects/${projectId}/tasks/${taskId}`, { progress: val });
@@ -115,15 +130,34 @@ export function Subproject() {
 
   async function handleAddSubtask() {
     if (!newSubtask.title.trim()) return;
-    await post(`/api/projects/${projectId}/tasks/${taskId}/subtasks`, { title: newSubtask.title });
-    setNewSubtask({ title: '' });
+    await post(`/api/projects/${projectId}/tasks/${taskId}/subtasks`, newSubtask);
+    setNewSubtask({ title: '', assigneeId: '', note: '' });
+    loadTask();
+  }
+
+  async function updateSubtask(subtaskId, patch) {
+    const subtasks = task.subtasks.map((s) => {
+      const next = s.id === subtaskId ? { ...s, ...patch } : s;
+      return {
+        id: next.id,
+        title: next.title,
+        assigneeId: next.assigneeId ?? next.assignee_id ?? null,
+        status: next.status,
+        note: next.note || '',
+        sortOrder: next.sortOrder ?? next.sort_order ?? 0,
+      };
+    });
+    await put(`/api/projects/${projectId}/tasks/${taskId}/subtasks`, { subtasks });
     loadTask();
   }
 
   async function handleSubtaskStatus(subtaskId, status) {
-    const subtasks = task.subtasks.map((s) => (s.id === subtaskId ? { ...s, status } : s));
-    await put(`/api/projects/${projectId}/tasks/${taskId}/subtasks`, { subtasks });
-    loadTask();
+    await updateSubtask(subtaskId, { status });
+  }
+
+  async function handleAssignSubtask(subtaskId, assigneeId) {
+    await updateSubtask(subtaskId, { assigneeId: assigneeId || null });
+    toast.success(assigneeId ? '子任务已分配' : '已取消分配');
   }
 
   function toggleExpanded(subId) {
@@ -353,6 +387,7 @@ export function Subproject() {
   const isReviewer = task.isProjectPM;
   const canManage = task.owner_id === currentUser?.id || isReviewer;
   const isLocked = task.status === '审核中' || task.status === '已完成';
+  const assignmentMembers = project?.teamMembers || project?.members || [];
 
   // Deliverable file list — visible to everyone; delete only for owner when not locked.
   function renderFiles() {
@@ -623,7 +658,7 @@ export function Subproject() {
         <div className="rounded-lg border border-white/10 bg-[#151925] p-5">
           <div className="flex flex-col gap-4 md:flex-row md:items-start md:justify-between">
             <div>
-              <p className="text-sm font-medium text-violet-200">Step 3 · 子项目管理</p>
+              <p className="text-sm font-medium text-violet-200">子PM工作台</p>
               <div className="mt-2 flex items-center gap-3">
                 <h2 className="text-3xl font-semibold tracking-normal text-white">{task.title}</h2>
                 <StatusPill status={task.status} />
@@ -636,12 +671,12 @@ export function Subproject() {
           <div className="mt-6 grid gap-4 md:grid-cols-3">
             <InfoField label="子PM" value={owner?.name || '未认领'} />
             <InfoField label="交付方式" value="飞书文档" />
-            <InfoField label="协作权限" value={canManage ? '可管理' : '仅查看'} />
+            <InfoField label="协作权限" value={canManage ? '管理自己这一块' : '查看进展'} />
           </div>
 
           <div className="mt-6">
             <div className="mb-3 flex items-center justify-between">
-              <span className="text-sm font-medium text-slate-300">任务进度</span>
+              <span className="text-sm font-medium text-slate-300">这块任务进度</span>
               <span className="text-sm text-white">{task.progress}%</span>
             </div>
             <input aria-label="任务进度" type="range" min="0" max="100" value={task.progress} onChange={(e) => handleProgress(e.target.value)} className="w-full accent-violet-500" disabled={!canManage || isLocked} />
@@ -657,7 +692,8 @@ export function Subproject() {
         </div>
 
         <div className="rounded-lg border border-white/10 bg-white/[0.03] p-5">
-          <PanelTitle icon={ClipboardList} title="子任务" />
+          <PanelTitle icon={ClipboardList} title="子PM分配的子任务" />
+          <p className="mt-2 text-sm text-slate-500">子PM只负责自己认领的这一块，可以把下面的执行子任务分配给项目组成员。</p>
           <div className="mt-4 space-y-3">
             {(task.subtasks || []).map((sub) => {
               const assignee = sub.assignee_name ? { name: sub.assignee_name, color: 'from-slate-500 to-slate-400' } : { name: '未分配', color: 'from-slate-500 to-slate-400' };
@@ -665,15 +701,26 @@ export function Subproject() {
               const panelOpen = expanded[sub.id] || sub.status === '已提交' || sub.status === '已完成';
               return (
                 <div key={sub.id} className="rounded-md border border-white/10 bg-[#11141d] p-3">
-                  <div className="grid gap-3 md:grid-cols-[1fr_150px_150px_auto] md:items-center">
+                  <div className="grid gap-3 md:grid-cols-[1fr_190px_150px_auto] md:items-center">
                     <div>
                       <p className="font-medium text-white">{sub.title}</p>
                       <p className="mt-1 text-xs text-slate-500">{sub.note || ''}</p>
                     </div>
-                    <div className="flex items-center gap-2">
-                      <Avatar member={assignee} size="xs" />
-                      <span className="text-sm text-slate-300">{assignee.name}</span>
-                    </div>
+                    {canManage && !isLocked ? (
+                      <select
+                        value={sub.assignee_id || ''}
+                        onChange={(e) => handleAssignSubtask(sub.id, e.target.value)}
+                        className="rounded-md border border-white/10 bg-[#0c0f16] px-3 py-2 text-sm text-slate-200 outline-none"
+                      >
+                        <option value="">未分配</option>
+                        {assignmentMembers.map((member) => <option key={member.id} value={member.id}>{member.name}</option>)}
+                      </select>
+                    ) : (
+                      <div className="flex items-center gap-2">
+                        <Avatar member={assignee} size="xs" />
+                        <span className="text-sm text-slate-300">{assignee.name}</span>
+                      </div>
+                    )}
                     <select disabled={!canManage || isLocked} value={sub.status} onChange={(e) => handleSubtaskStatus(sub.id, e.target.value)} className="rounded-md border border-white/10 bg-[#0c0f16] px-3 py-2 text-sm text-slate-200 outline-none disabled:opacity-50">
                       {SUBTASK_STATUSES.map((s) => <option key={s}>{s}</option>)}
                     </select>
@@ -741,8 +788,13 @@ export function Subproject() {
           </div>
 
           {canManage && !isLocked && (
-            <div className="mt-4 grid gap-2 md:grid-cols-[1fr_auto]">
+            <div className="mt-4 grid gap-2 md:grid-cols-[1fr_180px_1fr_auto]">
               <input value={newSubtask.title} onChange={(e) => setNewSubtask({ ...newSubtask, title: e.target.value })} placeholder="新增子任务" className="rounded-md border border-white/10 bg-[#0c0f16] px-3 py-2 text-sm text-slate-200 outline-none focus:border-violet-400/60" />
+              <select value={newSubtask.assigneeId || ''} onChange={(e) => setNewSubtask({ ...newSubtask, assigneeId: e.target.value })} className="rounded-md border border-white/10 bg-[#0c0f16] px-3 py-2 text-sm text-slate-200 outline-none focus:border-violet-400/60">
+                <option value="">先不分配</option>
+                {assignmentMembers.map((member) => <option key={member.id} value={member.id}>{member.name}</option>)}
+              </select>
+              <input value={newSubtask.note || ''} onChange={(e) => setNewSubtask({ ...newSubtask, note: e.target.value })} placeholder="给执行人的备注" className="rounded-md border border-white/10 bg-[#0c0f16] px-3 py-2 text-sm text-slate-200 outline-none focus:border-violet-400/60" />
               <button onClick={handleAddSubtask} className="inline-flex items-center gap-2 rounded-md bg-violet-500 px-3 py-2 text-sm font-semibold text-white"><Plus size={15} />添加</button>
             </div>
           )}
@@ -751,7 +803,7 @@ export function Subproject() {
         {/* Submission module */}
         <div className="rounded-lg border border-white/10 bg-white/[0.03] p-5">
           <div className="flex items-center justify-between">
-            <PanelTitle icon={PackageCheck} title="项目提交" />
+            <PanelTitle icon={PackageCheck} title="这块任务提交" />
             <StatusPill status={task.status} />
           </div>
 

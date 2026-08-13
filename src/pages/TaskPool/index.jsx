@@ -70,7 +70,7 @@ export function TaskPool() {
     try {
       const res = await post(`/api/projects/${projectId}/tasks/${taskId}/unclaim`);
       if (res.ok) {
-        toast.success('已取消认领，任务回到任务池');
+        toast.success('已取消认领，任务块回到大厅');
         loadTasks();
       } else {
         toast.error(res.error || '取消认领失败');
@@ -94,7 +94,7 @@ export function TaskPool() {
         publishNow: true,
       });
       if (res.ok) {
-        toast.success('任务已发布到任务池');
+        toast.success('任务块已发布');
         setNewTask({ title: '', summary: '', cycle: '' });
         setShowAddForm(false);
         loadTasks();
@@ -162,8 +162,9 @@ export function TaskPool() {
   return (
     <section className="space-y-5">
       <div>
-        <p className="text-sm font-medium text-violet-200">公共任务池</p>
-        <h2 className="mt-2 text-3xl font-semibold tracking-normal text-white">成员自主认领，角色动态切换</h2>
+        <p className="text-sm font-medium text-violet-200">任务大厅</p>
+        <h2 className="mt-2 text-3xl font-semibold tracking-normal text-white">项目PM拆出任务块，成员认领成为子PM</h2>
+        <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-400">每个任务块只归一个子PM负责。进入后，子PM可以继续拆子任务并分配给组内成员执行。</p>
       </div>
 
       {isProjectPM && (
@@ -174,7 +175,7 @@ export function TaskPool() {
                 onClick={() => setShowAddForm(true)}
                 className="inline-flex items-center gap-2 rounded-md bg-violet-500 px-3 py-2 text-sm font-semibold text-white transition hover:bg-violet-400"
               >
-                <Plus size={16} /> 添加任务
+                <Plus size={16} /> 添加任务块
               </button>
               <button
                 onClick={handleReSplit}
@@ -188,7 +189,7 @@ export function TaskPool() {
           ) : (
             <form onSubmit={handleAddTask} className="space-y-3">
               <div className="flex items-center justify-between">
-                <label className="text-sm font-medium text-slate-300">发布新任务到任务池</label>
+                <label className="text-sm font-medium text-slate-300">发布新的任务块</label>
                 <button
                   type="button"
                   onClick={() => { setShowAddForm(false); setNewTask({ title: '', summary: '', cycle: '' }); }}
@@ -200,7 +201,7 @@ export function TaskPool() {
               <input
                 value={newTask.title}
                 onChange={(e) => setNewTask({ ...newTask, title: e.target.value })}
-                placeholder="任务标题（必填）"
+                placeholder="任务块标题（必填）"
                 className="w-full rounded-md border border-white/10 bg-[#0c0f16] px-3 py-2 text-sm text-slate-200 outline-none focus:border-violet-400/60"
               />
               <input
@@ -220,7 +221,7 @@ export function TaskPool() {
                 disabled={adding}
                 className="inline-flex items-center gap-2 rounded-md bg-white px-3 py-2 text-sm font-semibold text-[#0f1117] transition hover:bg-violet-100 disabled:opacity-70"
               >
-                {adding ? '发布中...' : '发布到任务池'}
+                {adding ? '发布中...' : '发布任务块'}
               </button>
             </form>
           )}
@@ -229,8 +230,8 @@ export function TaskPool() {
 
       {tasks.length === 0 ? (
         <EmptyState
-          title="任务池还没有任务"
-          detail="等待项目PM创建并发布任务。如果是空白模板创建的项目，需要在项目内手动添加任务。"
+          title="任务大厅还没有任务块"
+          detail="等待项目PM创建并发布任务块。如果是空白模板创建的项目，需要在项目内手动添加。"
           action="返回项目列表"
           onClick={() => navigate('/projects')}
         />

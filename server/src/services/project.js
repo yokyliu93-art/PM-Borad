@@ -67,6 +67,12 @@ export function getById(id) {
       FROM project_members pm JOIN users u ON u.id = pm.user_id
       WHERE pm.project_id = ?
     `).all(id);
+    project.teamMembers = db.prepare(`
+      SELECT u.id, u.name, u.avatar_url, tm.role
+      FROM team_members tm JOIN users u ON u.id = tm.user_id
+      WHERE tm.team_id = ?
+      ORDER BY u.name
+    `).all(project.team_id);
   }
   return project;
 }
@@ -120,6 +126,8 @@ export function remove(id) {
     `).all(id);
     db.prepare('DELETE FROM progress_updates WHERE task_id IN (SELECT id FROM tasks WHERE project_id = ?)').run(id);
     db.prepare('DELETE FROM subtask_steps WHERE task_id IN (SELECT id FROM tasks WHERE project_id = ?)').run(id);
+    db.prepare('DELETE FROM subtask_schedule_items WHERE task_id IN (SELECT id FROM tasks WHERE project_id = ?)').run(id);
+    db.prepare('DELETE FROM agent_events WHERE task_id IN (SELECT id FROM tasks WHERE project_id = ?)').run(id);
     db.prepare('DELETE FROM task_attachments WHERE task_id IN (SELECT id FROM tasks WHERE project_id = ?)').run(id);
     db.prepare('DELETE FROM subtask_attachments WHERE task_id IN (SELECT id FROM tasks WHERE project_id = ?)').run(id);
     db.prepare('DELETE FROM subtasks WHERE task_id IN (SELECT id FROM tasks WHERE project_id = ?)').run(id);

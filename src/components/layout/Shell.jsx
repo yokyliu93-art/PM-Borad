@@ -15,12 +15,12 @@ export function Shell() {
   const projectId = match ? match[1] : null;
   const isInProject = !!projectId && projectId !== 'create';
 
-  const nav = isInProject
+      const nav = isInProject
     ? [
         ['/projects', '项目大厅', List],
-        [`/projects/${projectId}/pool`, '公共任务池', Users],
-        [`/projects/${projectId}/mine`, '个人面板', UserCheck],
-        [`/projects/${projectId}/commander`, '项目总面板', LayoutDashboard],
+        [`/projects/${projectId}/pool`, '任务大厅', Users],
+        [`/projects/${projectId}/mine`, '我的任务', UserCheck],
+        [`/projects/${projectId}/commander`, '项目PM面板', LayoutDashboard],
         [`/projects/${projectId}/boss`, '部门大盘', BarChart3],
         ...(activeProject?.pm_user_id === currentUser?.id ? [[`/projects/${projectId}/edit`, '项目设置', Settings]] : []),
       ]
@@ -83,7 +83,7 @@ export function Shell() {
             <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
               <div>
                 <p className="text-xs text-slate-500">{projectId ? `项目 #${projectId.slice(0, 8)}` : 'PM board'}</p>
-                <h1 className="mt-1 text-2xl font-semibold tracking-normal text-white md:text-3xl">每个认领人，都是这一块的 PM</h1>
+                <h1 className="mt-1 text-2xl font-semibold tracking-normal text-white md:text-3xl">项目PM拆任务，子PM认领自己这一块</h1>
               </div>
               <UserSwitcher />
             </div>
