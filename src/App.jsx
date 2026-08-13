@@ -14,20 +14,22 @@ import {
   Mail,
   Send,
   Search,
+  ShieldCheck,
   Sparkles,
   UsersRound,
 } from 'lucide-react'
 
-const roles = [
-  { id: 'lead', name: '发起项目', title: '我是总 PM', text: '上传计划，拆出公共任务池，让成员认领责任。' },
-  { id: 'member', name: '加入协作', title: '我是成员', text: '选择项目组，认领任务，成为自己模块的子 PM。' },
-  { id: 'viewer', name: '查看进展', title: '我是观察者', text: '不用打扰团队，也能看到项目节奏和风险变化。' },
-]
-
 const providers = {
-  feishu: { name: '飞书账号', hint: '适合公司内部统一登录', icon: Building2, authPath: '/api/auth/login' },
-  google: { name: 'Google 登录', hint: '适合外部成员和开源用户', icon: Mail, authPath: '/api/auth/google/login' },
+  feishu: { name: '飞书授权登录', hint: '公司成员使用，登录后进入组织空间', icon: Building2, authPath: '/api/auth/login' },
+  google: { name: 'Google 登录', hint: '外部协作者或开源部署使用', icon: Mail, authPath: '/api/auth/google/login' },
 }
+
+const productFlow = [
+  { title: '项目计划', detail: '总 PM 上传计划和时间线' },
+  { title: '公共任务池', detail: '系统拆出可认领的责任模块' },
+  { title: '成员认领', detail: '每个任务都有明确负责人' },
+  { title: '提交确认', detail: '交付物进入审核和复盘' },
+]
 
 const groups = [
   { id: 'demo', name: 'PM Board Demo', members: 18, tasks: 32, summary: '开源演示项目，包含任务认领、实名责任人和项目复盘。' },
@@ -55,17 +57,15 @@ function cx(...classes) {
 }
 
 function App() {
-  const [stage, setStage] = useState('intro')
-  const [role, setRole] = useState('member')
+  const [stage, setStage] = useState('home')
   const [provider, setProvider] = useState('')
   const [loadingProvider, setLoadingProvider] = useState('')
   const [authError, setAuthError] = useState('')
-  const [verified, setVerified] = useState({ realName: '', org: '', roleName: '项目成员' })
+  const [verified, setVerified] = useState({ realName: '', org: '' })
   const [selectedGroup, setSelectedGroup] = useState('demo')
   const [taskItems, setTaskItems] = useState(starterTasks)
   const [activityItems, setActivityItems] = useState(starterUpdates)
 
-  const selectedRole = roles.find((item) => item.id === role) ?? roles[1]
   const selected = groups.find((item) => item.id === selectedGroup) ?? groups[0]
   const progress = useMemo(() => Math.round(taskItems.reduce((sum, task) => sum + task.progress, 0) / taskItems.length), [taskItems])
 
@@ -87,7 +87,7 @@ function App() {
           realName: body.data?.name || current.realName,
           org: body.data?.department || current.org,
         }))
-        setStage('groups')
+        setStage('verify')
       })
       .catch(() => {})
   }, [])
@@ -114,11 +114,11 @@ function App() {
 
   function reset() {
     fetch('/api/auth/logout', { method: 'POST', credentials: 'include' }).catch(() => {})
-    setStage('intro')
+    setStage('home')
     setProvider('')
     setLoadingProvider('')
     setAuthError('')
-    setVerified({ realName: '', org: '', roleName: '项目成员' })
+    setVerified({ realName: '', org: '' })
     setSelectedGroup('demo')
     setTaskItems(starterTasks)
     setActivityItems(starterUpdates)
@@ -141,12 +141,12 @@ function App() {
 
   return (
     <main className="min-h-[100dvh] overflow-hidden bg-[var(--page)] text-[var(--ink)]">
-      <div className="ambient-grid" />
+      <div className="page-field" />
       <div className="relative mx-auto flex min-h-[100dvh] w-full max-w-7xl flex-col px-4 py-5 sm:px-6 lg:px-8">
-        <Header stage={stage} onReset={reset} />
+        <Header stage={stage} onReset={reset} onLogin={() => setStage('auth')} />
         <div className="stage-shell">
-          {stage === 'intro' ? <IntroScreen selectedRole={selectedRole} role={role} setRole={setRole} onContinue={() => setStage('auth')} /> : null}
-          {stage === 'auth' ? <AuthScreen selectedRole={selectedRole} loadingProvider={loadingProvider} authError={authError} onLogin={startLogin} onDemoLogin={startDemoLogin} /> : null}
+          {stage === 'home' ? <HomeScreen onLogin={() => setStage('auth')} onDemoLogin={startDemoLogin} loadingProvider={loadingProvider} /> : null}
+          {stage === 'auth' ? <AuthScreen loadingProvider={loadingProvider} authError={authError} onLogin={startLogin} onDemoLogin={startDemoLogin} /> : null}
           {stage === 'verify' ? <VerifyScreen provider={provider} verified={verified} setVerified={setVerified} onSubmit={submitVerify} /> : null}
           {stage === 'groups' ? <GroupScreen selectedGroup={selectedGroup} setSelectedGroup={setSelectedGroup} onEnter={() => setStage('board')} /> : null}
           {stage === 'board' ? <BoardScreen group={selected} progress={progress} tasks={taskItems} updates={activityItems} onInvite={inviteMember} onReset={reset} /> : null}
@@ -156,17 +156,17 @@ function App() {
   )
 }
 
-function Header({ stage, onReset }) {
-  const steps = ['选择', '登录', '实名', '项目组', '工作台']
-  const active = { intro: 0, auth: 1, verify: 2, groups: 3, board: 4 }[stage]
+function Header({ stage, onReset, onLogin }) {
+  const steps = ['介绍', '授权', '实名', '项目组', '工作台']
+  const active = { home: 0, auth: 1, verify: 2, groups: 3, board: 4 }[stage]
 
   return (
-    <header className="flex h-16 items-center justify-between">
+    <header className="topbar">
       <button onClick={onReset} className="brand-button">
         <span className="brand-mark"><Sparkles size={17} /></span>
         <span>
           <span className="block text-sm font-semibold">PM Board</span>
-          <span className="block text-xs text-[var(--muted)]">open collaboration workspace</span>
+          <span className="block text-xs text-[var(--muted)]">人人都是 PM 的协作空间</span>
         </span>
       </button>
 
@@ -178,83 +178,83 @@ function Header({ stage, onReset }) {
         ))}
       </nav>
 
-      <a className="ghost-link" href="https://github.com/yokyliu93-art/PM-Borad" target="_blank" rel="noreferrer">
-        <Globe2 size={16} />
-        Open source
-      </a>
+      {stage === 'home' ? (
+        <button className="nav-login" onClick={onLogin}>登录</button>
+      ) : (
+        <a className="ghost-link" href="https://github.com/yokyliu93-art/PM-Borad" target="_blank" rel="noreferrer">
+          <Globe2 size={16} />
+          Open source
+        </a>
+      )}
     </header>
   )
 }
 
-function IntroScreen({ selectedRole, role, setRole, onContinue }) {
+function HomeScreen({ onLogin, onDemoLogin, loadingProvider }) {
   return (
-    <section className="grid flex-1 items-center gap-8 py-8 lg:grid-cols-[0.9fr_1.1fr]">
-      <div className="max-w-2xl">
-        <p className="quiet-badge"><Globe2 size={15} />给任何团队自部署的 PM 协作入口</p>
-        <h1 className="mt-6 text-5xl font-semibold leading-[1.02] tracking-normal text-[var(--ink)] md:text-7xl">
-          先选角色，
-          <span className="block text-[var(--muted-strong)]">再进入项目。</span>
-        </h1>
-        <p className="mt-6 max-w-xl text-base leading-7 text-[var(--muted)]">
-          登录、实名、入组、认领任务。开源也能保持清楚的责任流转。
-        </p>
+    <section className="home-layout">
+      <div className="hero-copy">
+        <p className="quiet-badge"><ShieldCheck size={15} />组织授权后进入项目空间</p>
+        <h1 className="hero-title">让项目计划变成可认领的责任网络</h1>
+        <p className="hero-text">PM Board 把计划拆成公共任务池。成员登录组织后，认领任务、提交进展、接受确认。</p>
+        <div className="mt-7 flex flex-col gap-3 sm:flex-row">
+          <button onClick={onLogin} className="primary-button">
+            使用组织账号登录
+            <ArrowRight size={17} />
+          </button>
+          <button onClick={onDemoLogin} disabled={Boolean(loadingProvider)} className="secondary-button">
+            {loadingProvider === 'demo' ? <span className="loader-dot" /> : <Sparkles size={16} />}
+            进入演示空间
+          </button>
+        </div>
       </div>
 
-      <GlassPanel className="p-3">
-        <div className="grid gap-2 sm:grid-cols-3">
-          {roles.map((item) => (
-            <button key={item.id} onClick={() => setRole(item.id)} className={cx('choice-card', role === item.id && 'choice-card-active')}>
-              <span className="text-xs font-medium text-[var(--accent)]">{item.name}</span>
-              <span className="mt-2 block font-semibold">{item.title}</span>
-              <span className="mt-2 block text-sm leading-6 text-[var(--muted)]">{item.text}</span>
-            </button>
+      <section className="product-panel">
+        <div className="panel-head">
+          <span className="icon-tile"><LayoutDashboard size={19} /></span>
+          <div>
+            <p className="text-sm font-semibold">PM Board</p>
+            <p className="text-xs text-[var(--muted)]">从计划到责任人的项目入口</p>
+          </div>
+        </div>
+
+        <div className="flow-list">
+          {productFlow.map((item, index) => (
+            <div key={item.title} className="flow-row">
+              <span className="flow-index">{index + 1}</span>
+              <div>
+                <p className="font-medium">{item.title}</p>
+                <p className="mt-1 text-sm text-[var(--muted)]">{item.detail}</p>
+              </div>
+            </div>
           ))}
         </div>
 
-        <div className="preview-panel mt-3">
-          <div className="flex items-start justify-between gap-4">
-            <div>
-              <p className="text-sm text-[var(--muted)]">当前选择</p>
-              <h2 className="mt-1 text-2xl font-semibold">{selectedRole.title}</h2>
-              <p className="mt-2 max-w-md text-sm leading-6 text-[var(--muted)]">{selectedRole.text}</p>
-            </div>
-            <span className="icon-tile"><LayoutDashboard size={20} /></span>
-          </div>
-
-          <div className="mt-6 grid gap-2">
-            {starterTasks.slice(0, 3).map((task) => (
-              <TaskStrip key={task.title} task={task} compact />
-            ))}
-          </div>
-
-          <button onClick={onContinue} className="primary-button mt-6 w-full">
-            继续登录
-            <ArrowRight size={17} />
-          </button>
+        <div className="product-note">
+          <p className="font-medium">角色不是登录前选择的</p>
+          <p className="mt-2 text-sm leading-6 text-[var(--muted)]">飞书登录会先确认你属于哪个组织。你在项目里的权限，来自项目组和任务认领关系。</p>
         </div>
-      </GlassPanel>
+      </section>
     </section>
   )
 }
 
-function AuthScreen({ selectedRole, loadingProvider, authError, onLogin, onDemoLogin }) {
+function AuthScreen({ loadingProvider, authError, onLogin, onDemoLogin }) {
   return (
-    <section className="grid flex-1 items-center gap-8 py-8 lg:grid-cols-[0.86fr_440px]">
+    <section className="auth-layout">
       <div className="max-w-2xl">
-        <p className="text-sm font-medium text-[var(--accent)]">你将以「{selectedRole.title}」进入</p>
-        <h1 className="mt-4 text-4xl font-semibold tracking-normal md:text-6xl">登录后保存你的责任边界</h1>
-        <p className="mt-5 max-w-xl text-base leading-7 text-[var(--muted)]">
-          飞书面向公司内部，Google 面向外部协作和开源部署。
-        </p>
+        <p className="quiet-badge"><LockKeyhole size={15} />组织身份验证</p>
+        <h1 className="mt-5 text-4xl font-semibold tracking-normal md:text-6xl">先登录，再进入你的项目组</h1>
+        <p className="mt-5 max-w-xl text-base leading-7 text-[var(--muted)]">公司使用飞书授权。开源部署可以启用 Google 或其他账号系统。</p>
       </div>
 
-      <GlassPanel className="p-6">
+      <section className="auth-panel">
         <div className="mb-6">
-          <p className="text-sm text-[var(--muted)]">账号登录</p>
-          <h2 className="mt-1 text-2xl font-semibold">选择登录方式</h2>
+          <p className="text-sm text-[var(--muted)]">选择账号系统</p>
+          <h2 className="mt-1 text-2xl font-semibold">登录到组织空间</h2>
         </div>
         {authError ? (
-          <div className="mb-4 rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm leading-6 text-amber-900">
+          <div className="error-box">
             <span className="block font-semibold">登录暂时没有配置好</span>
             <span className="mt-1 block">{authError}</span>
           </div>
@@ -269,16 +269,16 @@ function AuthScreen({ selectedRole, loadingProvider, authError, onLogin, onDemoL
             <span className="icon-tile bg-white text-[var(--accent)]"><Sparkles size={20} /></span>
             <span>
               <span className="block font-medium">使用演示账号进入</span>
-              <span className="mt-1 block text-sm text-[var(--muted)]">先体验入组、认领和邀请流程</span>
+              <span className="mt-1 block text-sm text-[var(--muted)]">没有 OAuth 密钥时先体验流程</span>
             </span>
           </span>
           {loadingProvider === 'demo' ? <span className="loader-dot" /> : <ChevronRight size={19} />}
         </button>
         <div className="notice-box mt-5">
           <LockKeyhole className="text-[var(--accent)]" size={18} />
-          <span>正式登录需要 OAuth 密钥。没有密钥时，可以先用演示账号。</span>
+          <span>登录只确认组织身份。是否是总 PM 或成员，要进入项目后由权限决定。</span>
         </div>
-      </GlassPanel>
+      </section>
     </section>
   )
 }
@@ -304,37 +304,29 @@ function VerifyScreen({ provider, verified, setVerified, onSubmit }) {
   const providerName = providers[provider]?.name || '演示账号'
 
   return (
-    <section className="grid flex-1 items-center gap-8 py-8 lg:grid-cols-[0.85fr_1fr]">
-      <GlassPanel className="p-6">
+    <section className="auth-layout">
+      <section className="info-panel">
         <p className="text-sm text-[var(--muted)]">已通过 {providerName}</p>
-        <h1 className="mt-3 text-4xl font-semibold tracking-normal">实名让任务可追踪</h1>
-        <p className="mt-4 text-sm leading-6 text-[var(--muted)]">开源版本可以改成组织成员资料，也可以关闭实名要求。</p>
+        <h1 className="mt-3 text-4xl font-semibold tracking-normal">确认你的组织资料</h1>
+        <p className="mt-4 text-sm leading-6 text-[var(--muted)]">真实姓名用于任务认领和复盘。项目身份会在加入项目组后确定。</p>
         <div className="mt-7 space-y-4">
-          <ProcessItem icon={BadgeCheck} title="账号已绑定" detail="登录来源已记录。" done />
-          <ProcessItem icon={CircleUserRound} title="补充实名" detail="填写真实姓名和组织。" active />
-          <ProcessItem icon={UsersRound} title="选择项目组" detail="加入对应工作空间。" />
+          <ProcessItem icon={BadgeCheck} title="组织账号已验证" detail="登录来源已记录。" done />
+          <ProcessItem icon={CircleUserRound} title="确认成员资料" detail="补齐展示名和组织信息。" active />
+          <ProcessItem icon={UsersRound} title="进入项目组" detail="按权限查看和认领任务。" />
         </div>
-      </GlassPanel>
+      </section>
 
-      <form onSubmit={onSubmit} className="glass-panel p-6">
+      <form onSubmit={onSubmit} className="auth-panel">
         <div className="grid gap-5">
           <Field label="真实姓名" helper="用于任务认领和复盘归档">
             <input value={verified.realName} onChange={(event) => setVerified({ ...verified, realName: event.target.value })} className="input" placeholder="输入你的姓名" />
           </Field>
           <Field label="组织名称" helper="公司、社群、学校或开源团队">
-            <input value={verified.org} onChange={(event) => setVerified({ ...verified, org: event.target.value })} className="input" placeholder="例如 PM Board Community" />
-          </Field>
-          <Field label="默认角色" helper="进入项目组后仍可调整">
-            <select value={verified.roleName} onChange={(event) => setVerified({ ...verified, roleName: event.target.value })} className="input">
-              <option>项目成员</option>
-              <option>总 PM</option>
-              <option>子 PM</option>
-              <option>观察者</option>
-            </select>
+            <input value={verified.org} onChange={(event) => setVerified({ ...verified, org: event.target.value })} className="input" placeholder="例如北京品西互动科技有限公司" />
           </Field>
         </div>
         <button className="primary-button mt-6 w-full" disabled={!verified.realName.trim()}>
-          完成实名
+          继续选择项目组
           <ArrowRight size={17} />
         </button>
       </form>
@@ -344,11 +336,11 @@ function VerifyScreen({ provider, verified, setVerified, onSubmit }) {
 
 function GroupScreen({ selectedGroup, setSelectedGroup, onEnter }) {
   return (
-    <section className="flex flex-1 flex-col justify-center py-8">
+    <section className="group-layout">
       <div className="max-w-2xl">
         <p className="text-sm font-medium text-[var(--accent)]">项目组</p>
         <h1 className="mt-3 text-4xl font-semibold tracking-normal md:text-6xl">选择一个工作空间</h1>
-        <p className="mt-4 max-w-xl text-base leading-7 text-[var(--muted)]">每个项目组都有独立的任务池、成员、权限和复盘记录。</p>
+        <p className="mt-4 max-w-xl text-base leading-7 text-[var(--muted)]">进入项目后，权限和责任会按项目组规则生效。</p>
       </div>
 
       <div className="mt-8 grid gap-3 lg:grid-cols-3">
@@ -377,8 +369,8 @@ function BoardScreen({ group, progress, tasks, updates, onInvite, onReset }) {
   const [inviteTask, setInviteTask] = useState('')
 
   return (
-    <section className="grid flex-1 gap-4 py-5 lg:grid-cols-[280px_1fr]">
-      <aside className="glass-panel p-5">
+    <section className="board-layout">
+      <aside className="side-panel">
         <div className="flex items-center gap-3">
           <span className="icon-tile"><LayoutDashboard size={20} /></span>
           <div>
@@ -397,7 +389,7 @@ function BoardScreen({ group, progress, tasks, updates, onInvite, onReset }) {
         </button>
       </aside>
 
-      <div className="glass-panel p-5">
+      <div className="work-panel">
         <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
           <div>
             <p className="text-sm font-medium text-[var(--accent)]">公共任务池</p>
@@ -457,22 +449,6 @@ function BoardScreen({ group, progress, tasks, updates, onInvite, onReset }) {
         </div>
       </div>
     </section>
-  )
-}
-
-function GlassPanel({ children, className = '' }) {
-  return <div className={cx('glass-panel', className)}>{children}</div>
-}
-
-function TaskStrip({ task }) {
-  return (
-    <div className="task-strip">
-      <div>
-        <p className="text-sm font-medium">{task.title}</p>
-        <p className="mt-1 text-xs text-[var(--muted)]">{task.owner || '暂无认领'} / {task.due}</p>
-      </div>
-      <StatusBadge status={task.status} />
-    </div>
   )
 }
 
