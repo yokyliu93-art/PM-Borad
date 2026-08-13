@@ -31,6 +31,25 @@ const productFlow = [
   { title: '提交复盘', detail: '交付物、进展和确认记录都沉淀下来' },
 ]
 
+const productTour = [
+  { title: '项目负责人发起项目', detail: '创建项目组、导入计划书，把目标拆成公共任务池。', icon: FileText },
+  { title: '成员主动认领', detail: '每个任务都有负责人、状态、截止时间和邀请记录。', icon: UsersRound },
+  { title: '过程透明推进', detail: '进展更新、任务确认和复盘材料留在同一个工作台。', icon: LayoutDashboard },
+]
+
+const scenarioCards = [
+  { title: '公司项目', detail: '飞书授权后自动进入组织空间，适合跨部门项目协同。' },
+  { title: '活动筹备', detail: '把嘉宾、赞助、物料、宣发拆成公开任务，成员自己认领。' },
+  { title: '开源团队', detail: '用 Google 登录或自部署账号系统，让外部贡献者进入项目组。' },
+]
+
+const openSourceNotes = [
+  '可替换登录方式',
+  '可配置组织和项目组',
+  '可连接你自己的数据库',
+  '适合二次开发成内部工具',
+]
+
 const groups = [
   { id: 'demo', name: 'PM Board Demo', members: 18, tasks: 32, summary: '开源演示项目，包含任务认领、实名责任人和项目复盘。' },
   { id: 'agentank', name: 'AgenTank World Cup', members: 12, tasks: 24, summary: '赛事筹备项目，覆盖赞助、宣发、产品、直播和赛后内容。' },
@@ -192,56 +211,152 @@ function Header({ stage, onReset, onLogin }) {
 
 function HomeScreen({ onLogin, onDemoLogin, loadingProvider }) {
   return (
-    <section className="home-layout">
-      <div className="hero-copy">
-        <p className="quiet-badge"><ShieldCheck size={15} />组织授权后进入项目空间</p>
-        <h1 className="hero-title">让项目计划变成可认领的责任网络</h1>
-        <p className="hero-text">PM Board 把计划拆成公共任务池。成员登录组织后，认领任务、提交进展、接受确认。</p>
-        <div className="mt-7 flex flex-col gap-3 sm:flex-row">
+    <div className="home-page">
+      <section className="home-layout">
+        <div className="hero-copy">
+          <p className="quiet-badge"><ShieldCheck size={15} />组织授权后进入项目空间</p>
+          <h1 className="hero-title">让项目计划变成可认领的责任网络</h1>
+          <p className="hero-text">PM Board 把计划拆成公共任务池。成员登录组织后，认领任务、提交进展、接受确认。</p>
+          <div className="mt-7 flex flex-col gap-3 sm:flex-row">
+            <button onClick={onLogin} className="primary-button">
+              使用组织账号登录
+              <ArrowRight size={17} />
+            </button>
+            <button onClick={onDemoLogin} disabled={Boolean(loadingProvider)} className="secondary-button">
+              {loadingProvider === 'demo' ? <span className="loader-dot" /> : <Sparkles size={16} />}
+              进入演示空间
+            </button>
+          </div>
+          <div className="signal-strip" aria-label="PM Board 核心流程">
+            <span>组织授权</span>
+            <span>任务池</span>
+            <span>责任人</span>
+            <span>复盘记录</span>
+          </div>
+        </div>
+
+        <section className="product-panel">
+          <div className="panel-head">
+            <span className="icon-tile"><LayoutDashboard size={19} /></span>
+            <div>
+              <p className="text-sm font-semibold">PM Board</p>
+              <p className="text-xs text-[var(--muted)]">从计划到责任人的项目入口</p>
+            </div>
+          </div>
+
+          <div className="flow-list">
+            {productFlow.map((item, index) => (
+              <div key={item.title} className="flow-row">
+                <span className="flow-index">{index + 1}</span>
+                <div>
+                  <p className="font-medium">{item.title}</p>
+                  <p className="mt-1 text-sm text-[var(--muted)]">{item.detail}</p>
+                </div>
+              </div>
+            ))}
+          </div>
+
+          <div className="product-note">
+            <p className="font-medium">登录后进入你的组织项目</p>
+            <p className="mt-2 text-sm leading-6 text-[var(--muted)]">你会看到可加入的项目组、待认领任务和自己负责的交付进展。</p>
+          </div>
+        </section>
+      </section>
+
+      <section className="demo-section">
+        <div className="section-copy">
+          <h2>它不是再做一个任务列表</h2>
+          <p>它把项目计划、责任人和交付记录放在一条线上，让每个人都知道自己能认领什么、需要推进什么。</p>
+        </div>
+        <div className="tour-grid">
+          {productTour.map((item) => {
+            const Icon = item.icon
+            return (
+              <article key={item.title} className="tour-card">
+                <span className="icon-tile"><Icon size={19} /></span>
+                <h3>{item.title}</h3>
+                <p>{item.detail}</p>
+              </article>
+            )
+          })}
+        </div>
+      </section>
+
+      <section className="showcase-section">
+        <div className="showcase-board">
+          <div className="showcase-header">
+            <div>
+              <p className="text-sm text-[var(--muted)]">PM Board Demo</p>
+              <h2>一个项目如何跑起来</h2>
+            </div>
+            <span className="status-badge status-active">进行中</span>
+          </div>
+          <div className="showcase-lanes">
+            <div className="showcase-lane">
+              <span>计划书</span>
+              <strong>赛事筹备总计划</strong>
+              <p>目标、预算、关键时间点</p>
+            </div>
+            <div className="showcase-lane">
+              <span>公共任务池</span>
+              <strong>24 个可认领任务</strong>
+              <p>宣发、赞助、嘉宾、直播</p>
+            </div>
+            <div className="showcase-lane showcase-lane-active">
+              <span>责任人</span>
+              <strong>12 位成员推进中</strong>
+              <p>状态、进度、邀请记录同步</p>
+            </div>
+          </div>
+        </div>
+        <div className="section-copy">
+          <h2>给大家演示的不是页面，而是一套协作动作</h2>
+          <p>发起项目的人负责把任务拆清楚；成员进入项目组后主动认领；每次更新都会进入项目复盘记录。</p>
+        </div>
+      </section>
+
+      <section className="demo-section">
+        <div className="section-copy">
+          <h2>适合这些项目组先用起来</h2>
+          <p>PM Board 更适合任务边界还在变化、但必须有人负责推进的项目。</p>
+        </div>
+        <div className="scenario-grid">
+          {scenarioCards.map((item) => (
+            <article key={item.title} className="scenario-card">
+              <h3>{item.title}</h3>
+              <p>{item.detail}</p>
+            </article>
+          ))}
+        </div>
+      </section>
+
+      <section className="open-section">
+        <div>
+          <h2>以后开源给别人用，也说得通</h2>
+          <p>登录方式、组织权限和项目组模型都可以替换。公司可以接飞书，外部团队可以接 Google，开源部署可以继续扩展。</p>
+        </div>
+        <div className="open-list">
+          {openSourceNotes.map((item) => (
+            <span key={item}><Check size={16} />{item}</span>
+          ))}
+        </div>
+      </section>
+
+      <section className="final-cta">
+        <h2>先进入演示空间，看一遍完整流程</h2>
+        <p>等飞书权限开好，再把组织登录接成正式入口。</p>
+        <div className="mt-6 flex flex-col justify-center gap-3 sm:flex-row">
           <button onClick={onLogin} className="primary-button">
-            使用组织账号登录
+            去登录
             <ArrowRight size={17} />
           </button>
           <button onClick={onDemoLogin} disabled={Boolean(loadingProvider)} className="secondary-button">
             {loadingProvider === 'demo' ? <span className="loader-dot" /> : <Sparkles size={16} />}
-            进入演示空间
+            进入演示
           </button>
         </div>
-        <div className="signal-strip" aria-label="PM Board 核心流程">
-          <span>组织授权</span>
-          <span>任务池</span>
-          <span>责任人</span>
-          <span>复盘记录</span>
-        </div>
-      </div>
-
-      <section className="product-panel">
-        <div className="panel-head">
-          <span className="icon-tile"><LayoutDashboard size={19} /></span>
-          <div>
-            <p className="text-sm font-semibold">PM Board</p>
-            <p className="text-xs text-[var(--muted)]">从计划到责任人的项目入口</p>
-          </div>
-        </div>
-
-        <div className="flow-list">
-          {productFlow.map((item, index) => (
-            <div key={item.title} className="flow-row">
-              <span className="flow-index">{index + 1}</span>
-              <div>
-                <p className="font-medium">{item.title}</p>
-                <p className="mt-1 text-sm text-[var(--muted)]">{item.detail}</p>
-              </div>
-            </div>
-          ))}
-        </div>
-
-        <div className="product-note">
-          <p className="font-medium">登录后进入你的组织项目</p>
-          <p className="mt-2 text-sm leading-6 text-[var(--muted)]">你会看到可加入的项目组、待认领任务和自己负责的交付进展。</p>
-        </div>
       </section>
-    </section>
+    </div>
   )
 }
 
