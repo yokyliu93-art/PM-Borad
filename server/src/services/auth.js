@@ -100,6 +100,22 @@ export function listUsers() {
   `).all();
 }
 
+export function getUserById(id) {
+  return db.prepare('SELECT id, name, avatar_url, email, created_at FROM users WHERE id = ?').get(id);
+}
+
+export function updateProfile(id, { name, avatarUrl }) {
+  const cleanName = String(name || '').trim();
+  const cleanAvatarUrl = String(avatarUrl || '').trim();
+  if (!cleanName) throw new Error('昵称不能为空');
+  if (cleanAvatarUrl && !/^https?:\/\/.+/i.test(cleanAvatarUrl)) {
+    throw new Error('头像链接需要以 http:// 或 https:// 开头');
+  }
+  db.prepare('UPDATE users SET name = ?, avatar_url = ? WHERE id = ?')
+    .run(cleanName, cleanAvatarUrl, id);
+  return getUserById(id);
+}
+
 export function createUser({ name }) {
   const cleanName = String(name || '').trim();
   if (!cleanName) throw new Error('用户名不能为空');

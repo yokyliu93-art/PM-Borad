@@ -1,15 +1,18 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import toast from 'react-hot-toast';
-import { ChevronDown, LogOut, Plus, Trash2, UserRound } from 'lucide-react';
+import { ChevronDown, LogOut, Pencil, Plus, Save, Trash2, UserRound } from 'lucide-react';
 import { useStore } from '../store';
-import { get, post, del } from '../lib/api';
+import { get, post, put, del } from '../lib/api';
 import { Avatar } from './ui/Avatar';
 
 export function UserSwitcher({ variant = 'header' }) {
-  const { currentUser } = useStore();
+  const { currentUser, setCurrentUser } = useStore();
   const [open, setOpen] = useState(false);
   const [users, setUsers] = useState([]);
   const [loading, setLoading] = useState(false);
+  const [editingProfile, setEditingProfile] = useState(false);
+  const [profileDraft, setProfileDraft] = useState({ name: '', avatarUrl: '' });
+  const [savingProfile, setSavingProfile] = useState(false);
   const ref = useRef(null);
 
   useEffect(() => {
@@ -33,6 +36,14 @@ export function UserSwitcher({ variant = 'header' }) {
   useEffect(() => {
     if (open && currentUser?.devLoginEnabled) loadUsers();
   }, [open, loadUsers, currentUser]);
+
+  useEffect(() => {
+    if (!open || !currentUser) return;
+    setProfileDraft({
+      name: currentUser.name || '',
+      avatarUrl: currentUser.avatar_url || currentUser.avatar || '',
+    });
+  }, [open, currentUser]);
 
   function switchTo(id) {
     setOpen(false);
@@ -76,6 +87,31 @@ export function UserSwitcher({ variant = 'header' }) {
     }
   }
 
+  async function handleSaveProfile() {
+    if (!profileDraft.name.trim()) {
+      toast.error('昵称不能为空');
+      return;
+    }
+    setSavingProfile(true);
+    try {
+      const res = await put('/api/auth/me', {
+        name: profileDraft.name.trim(),
+        avatarUrl: profileDraft.avatarUrl.trim(),
+      });
+      if (res.ok) {
+        setCurrentUser(res.data);
+        setEditingProfile(false);
+        toast.success('个人资料已保存');
+      } else {
+        toast.error(res.error || '保存失败');
+      }
+    } catch {
+      toast.error('保存失败，请确认后端已启动');
+    } finally {
+      setSavingProfile(false);
+    }
+  }
+
   const list = users.some((u) => u.id === currentUser?.id)
     ? users
     : [currentUser, ...users].filter(Boolean);
@@ -101,7 +137,62 @@ export function UserSwitcher({ variant = 'header' }) {
       </button>
 
       {open && (
-        <div className="absolute right-0 top-full z-30 mt-2 w-60 rounded-lg border border-white/10 bg-[#151925] p-2 shadow-2xl">
+        <div className="absolute right-0 top-full z-30 mt-2 w-72 rounded-lg border border-white/10 bg-[#151925] p-2 shadow-2xl">
+          {currentUser && (
+            <div className="mb-1 rounded-md border border-white/10 bg-white/[0.03] p-3">
+              {editingProfile ? (
+                <div className="space-y-2">
+                  <div className="flex items-center gap-3">
+                    <Avatar member={{ name: profileDraft.name, avatar_url: profileDraft.avatarUrl, color: 'from-violet-500 to-fuchsia-500' }} size="sm" />
+                    <div className="min-w-0 flex-1">
+                      <input
+                        value={profileDraft.name}
+                        onChange={(e) => setProfileDraft((d) => ({ ...d, name: e.target.value }))}
+                        placeholder="昵称"
+                        className="w-full rounded-md border border-white/10 bg-[#0c0f16] px-2 py-1.5 text-sm text-slate-100 outline-none focus:border-violet-400/60"
+                      />
+                    </div>
+                  </div>
+                  <input
+                    value={profileDraft.avatarUrl}
+                    onChange={(e) => setProfileDraft((d) => ({ ...d, avatarUrl: e.target.value }))}
+                    placeholder="头像图片链接"
+                    className="w-full rounded-md border border-white/10 bg-[#0c0f16] px-2 py-1.5 text-xs text-slate-200 outline-none focus:border-violet-400/60"
+                  />
+                  <div className="flex gap-2">
+                    <button
+                      onClick={handleSaveProfile}
+                      disabled={savingProfile}
+                      className="inline-flex flex-1 items-center justify-center gap-1.5 rounded-md bg-white px-2 py-1.5 text-xs font-semibold text-[#0f1117] disabled:opacity-60"
+                    >
+                      <Save size={13} /> {savingProfile ? '保存中' : '保存'}
+                    </button>
+                    <button
+                      onClick={() => setEditingProfile(false)}
+                      className="rounded-md border border-white/10 px-2 py-1.5 text-xs text-slate-300 hover:bg-white/8"
+                    >
+                      取消
+                    </button>
+                  </div>
+                </div>
+              ) : (
+                <div className="flex items-center gap-3">
+                  <Avatar member={{ name: currentUser.name, avatar_url: currentUser.avatar_url, color: 'from-violet-500 to-fuchsia-500' }} size="sm" />
+                  <div className="min-w-0 flex-1">
+                    <p className="truncate text-sm font-medium text-white">{currentUser.name}</p>
+                    <p className="truncate text-xs text-slate-500">{currentUser.email || '个人资料'}</p>
+                  </div>
+                  <button
+                    onClick={() => setEditingProfile(true)}
+                    title="编辑资料"
+                    className="grid h-8 w-8 shrink-0 place-items-center rounded-md border border-white/10 text-slate-400 hover:bg-white/8 hover:text-white"
+                  >
+                    <Pencil size={14} />
+                  </button>
+                </div>
+              )}
+            </div>
+          )}
           {currentUser?.devLoginEnabled && (
             <>
               <p className="px-2 pb-1 pt-1 text-xs text-slate-500">切换PM账号</p>

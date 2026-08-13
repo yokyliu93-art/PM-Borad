@@ -52,16 +52,48 @@ router.get('/callback', async (req, res) => {
 });
 
 router.get('/me', authRequired, (req, res) => {
+  const user = authService.getUserById(req.user.id);
+  if (!user) return res.status(404).json({ ok: false, error: '用户不存在' });
   const bound = db.prepare('SELECT 1 FROM user_feishu_tokens WHERE user_id = ?').get(req.user.id);
   res.json({
     ok: true,
     data: {
-      ...req.user,
+      id: user.id,
+      name: user.name,
+      avatar_url: user.avatar_url,
+      email: user.email,
       feishuBound: !!bound,
       defaultTeamId: config.defaultTeamId || null,
       devLoginEnabled: config.devLoginEnabled,
     },
   });
+});
+
+router.put('/me', authRequired, (req, res) => {
+  try {
+    const user = authService.updateProfile(req.user.id, {
+      name: req.body?.name,
+      avatarUrl: req.body?.avatarUrl ?? req.body?.avatar_url,
+    });
+    const token = authService.signJwt(user);
+    res.cookie('token', token, {
+      httpOnly: true,
+      maxAge: 7 * 24 * 60 * 60 * 1000,
+      sameSite: 'lax',
+    });
+    const bound = db.prepare('SELECT 1 FROM user_feishu_tokens WHERE user_id = ?').get(user.id);
+    res.json({
+      ok: true,
+      data: {
+        ...user,
+        feishuBound: !!bound,
+        defaultTeamId: config.defaultTeamId || null,
+        devLoginEnabled: config.devLoginEnabled,
+      },
+    });
+  } catch (err) {
+    res.status(400).json({ ok: false, error: err.message });
+  }
 });
 
 router.post('/logout', (req, res) => {
