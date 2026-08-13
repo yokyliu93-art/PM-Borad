@@ -25,10 +25,10 @@ const providers = {
 }
 
 const productFlow = [
-  { title: '项目计划', detail: '总 PM 上传计划和时间线' },
-  { title: '公共任务池', detail: '系统拆出可认领的责任模块' },
-  { title: '成员认领', detail: '每个任务都有明确负责人' },
-  { title: '提交确认', detail: '交付物进入审核和复盘' },
+  { title: '看清项目', detail: '把目标、时间线和关键事项放在同一个入口' },
+  { title: '拆出任务', detail: '把计划变成可认领、可追踪的责任模块' },
+  { title: '认领推进', detail: '成员进入项目后选择自己负责的部分' },
+  { title: '提交复盘', detail: '交付物、进展和确认记录都沉淀下来' },
 ]
 
 const groups = [
@@ -231,8 +231,8 @@ function HomeScreen({ onLogin, onDemoLogin, loadingProvider }) {
         </div>
 
         <div className="product-note">
-          <p className="font-medium">角色不是登录前选择的</p>
-          <p className="mt-2 text-sm leading-6 text-[var(--muted)]">飞书登录会先确认你属于哪个组织。你在项目里的权限，来自项目组和任务认领关系。</p>
+          <p className="font-medium">登录后进入你的组织项目</p>
+          <p className="mt-2 text-sm leading-6 text-[var(--muted)]">你会看到可加入的项目组、待认领任务和自己负责的交付进展。</p>
         </div>
       </section>
     </section>
@@ -276,7 +276,7 @@ function AuthScreen({ loadingProvider, authError, onLogin, onDemoLogin }) {
         </button>
         <div className="notice-box mt-5">
           <LockKeyhole className="text-[var(--accent)]" size={18} />
-          <span>登录只确认组织身份。是否是总 PM 或成员，要进入项目后由权限决定。</span>
+          <span>通过公司账号后，你会进入所属组织，再选择可访问的项目组。</span>
         </div>
       </section>
     </section>
