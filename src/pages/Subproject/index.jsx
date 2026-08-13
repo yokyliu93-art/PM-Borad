@@ -49,6 +49,7 @@ export function Subproject() {
         title: step.title || '',
         status: step.status || '待开始',
         dueText: step.due_text || '',
+        deliveryDocUrl: step.delivery_doc_url || '',
         reminderFrequency: step.reminder_frequency || 'none',
         reminderEnabled: !!step.reminder_enabled,
         sortOrder: step.sort_order ?? 0,
@@ -127,7 +128,7 @@ export function Subproject() {
       ...all,
       [subtaskId]: [
         ...(all[subtaskId] || []),
-        { title: '', status: '待开始', dueText: '', reminderFrequency: 'none', reminderEnabled: false },
+        { title: '', status: '待开始', dueText: '', deliveryDocUrl: '', reminderFrequency: 'none', reminderEnabled: false },
       ],
     }));
   }
@@ -314,7 +315,7 @@ export function Subproject() {
         ) : (
           <div className="space-y-2">
             {steps.map((step, index) => (
-              <div key={step.id || index} className="grid gap-2 rounded-md border border-white/10 bg-[#11141d] p-2 md:grid-cols-[1fr_104px_112px_126px_28px] md:items-center">
+              <div key={step.id || index} className="grid gap-2 rounded-md border border-white/10 bg-[#11141d] p-2 md:grid-cols-[1fr_104px_112px_1fr_126px_28px] md:items-center">
                 <input
                   value={step.title}
                   onChange={(e) => updateStepDraft(sub.id, index, { title: e.target.value })}
@@ -337,6 +338,16 @@ export function Subproject() {
                   placeholder="如 周五前"
                   className="rounded-md border border-white/10 bg-[#0c0f16] px-2 py-1.5 text-xs text-slate-200 outline-none disabled:border-transparent disabled:bg-transparent"
                 />
+                <div className="flex min-w-0 items-center gap-1.5 rounded-md border border-white/10 bg-[#0c0f16] px-2 py-1.5 focus-within:border-violet-400/60">
+                  <Link2 size={12} className="shrink-0 text-slate-500" />
+                  <input
+                    value={step.deliveryDocUrl}
+                    onChange={(e) => updateStepDraft(sub.id, index, { deliveryDocUrl: e.target.value })}
+                    disabled={!editable}
+                    placeholder="阶段飞书文档"
+                    className="min-w-0 flex-1 bg-transparent text-xs text-slate-200 outline-none placeholder:text-slate-600 disabled:bg-transparent"
+                  />
+                </div>
                 <select
                   value={step.reminderFrequency}
                   onChange={(e) => updateStepDraft(sub.id, index, {

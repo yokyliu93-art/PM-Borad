@@ -26,15 +26,15 @@ export function canAccessProject(projectId, userId) {
   const project = db.prepare('SELECT team_id, pm_user_id FROM projects WHERE id = ?').get(projectId);
   if (!project) return { ok: false, status: 404, error: '项目不存在' };
   const isPM = project.pm_user_id === userId;
-  const member = db.prepare('SELECT 1 FROM project_members WHERE project_id = ? AND user_id = ?').get(projectId, userId);
-  if (!isPM && !member) {
-    return { ok: false, status: 403, error: '你不是该项目成员' };
+  const teamMember = db.prepare('SELECT 1 FROM team_members WHERE team_id = ? AND user_id = ?').get(project.team_id, userId);
+  if (!isPM && !teamMember) {
+    return { ok: false, status: 403, error: '你不是该项目所属团队成员' };
   }
   return { ok: true, project };
 }
 
-// Project-scoped route guard: user must be a member of this project.
-// Project PM passes even if older data did not put them in project_members.
+// Project-scoped route guard: every member of the owning team can view and
+// claim work in the project. Project PM passes even if not listed in the team.
 // Must run after a route has a :projectId param; skips when there is none.
 export function requireProjectMember(req, res, next) {
   if (!resolveUser(req)) {

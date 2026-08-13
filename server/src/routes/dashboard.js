@@ -106,15 +106,8 @@ router.get('/boss', authRequired, (req, res) => {
     SELECT p.*, u.name as pm_name, u.avatar_url as pm_avatar
     FROM projects p JOIN users u ON p.pm_user_id = u.id
     WHERE p.team_id = ?
-      AND (
-        p.pm_user_id = ?
-        OR EXISTS (
-          SELECT 1 FROM project_members pm
-          WHERE pm.project_id = p.id AND pm.user_id = ?
-        )
-      )
     ORDER BY p.created_at DESC
-  `).all(teamId, req.user.id, req.user.id);
+  `).all(teamId);
 
   for (const project of projects) {
     project.tasks = db.prepare(`

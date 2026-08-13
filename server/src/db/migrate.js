@@ -138,6 +138,7 @@ export function migrate() {
       title TEXT NOT NULL,
       status TEXT DEFAULT '待开始',
       due_text TEXT DEFAULT '',
+      delivery_doc_url TEXT DEFAULT '',
       reminder_frequency TEXT DEFAULT 'none',
       reminder_enabled INTEGER DEFAULT 0,
       sort_order INTEGER DEFAULT 0,
@@ -160,6 +161,11 @@ export function migrate() {
   }
   if (!subCols.includes('delivery_doc_url')) {
     db.exec("ALTER TABLE subtasks ADD COLUMN delivery_doc_url TEXT DEFAULT ''");
+  }
+
+  const stepCols = db.prepare('PRAGMA table_info(subtask_steps)').all().map((c) => c.name);
+  if (!stepCols.includes('delivery_doc_url')) {
+    db.exec("ALTER TABLE subtask_steps ADD COLUMN delivery_doc_url TEXT DEFAULT ''");
   }
 
   // Normalize task/subtask statuses to the Chinese values used by the UI

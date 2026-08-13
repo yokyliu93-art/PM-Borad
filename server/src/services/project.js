@@ -15,20 +15,13 @@ export function create({ teamId, name, description, planMarkdown, pmUserId, time
   return getById(id);
 }
 
-export function listByTeam(teamId, userId) {
+export function listByTeam(teamId) {
   const projects = db.prepare(`
     SELECT p.*, u.name as pm_name, u.avatar_url as pm_avatar
     FROM projects p JOIN users u ON p.pm_user_id = u.id
     WHERE p.team_id = ?
-      AND (
-        p.pm_user_id = ?
-        OR EXISTS (
-          SELECT 1 FROM project_members pm
-          WHERE pm.project_id = p.id AND pm.user_id = ?
-        )
-      )
     ORDER BY p.created_at DESC
-  `).all(teamId, userId, userId);
+  `).all(teamId);
   const progressStmt = db.prepare(
     'SELECT COALESCE(AVG(progress), 0) as p FROM tasks WHERE project_id = ? AND is_published = 1'
   );

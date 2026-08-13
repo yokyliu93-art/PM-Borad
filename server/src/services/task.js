@@ -29,8 +29,8 @@ export function createTasksFromDefs(projectId, taskDefs) {
     'INSERT INTO subtasks (id, task_id, title, note, sort_order) VALUES (?, ?, ?, ?, ?)'
   );
   const insertStep = db.prepare(`
-    INSERT INTO subtask_steps (id, subtask_id, task_id, title, due_text, reminder_frequency, reminder_enabled, sort_order)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+    INSERT INTO subtask_steps (id, subtask_id, task_id, title, due_text, delivery_doc_url, reminder_frequency, reminder_enabled, sort_order)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
   `);
   for (let i = 0; i < taskDefs.length; i++) {
     const def = taskDefs[i];
@@ -60,6 +60,7 @@ export function createTasksFromDefs(projectId, taskDefs) {
             task.id,
             step.title || '',
             step.dueText || step.due_text || '',
+            step.deliveryDocUrl || step.delivery_doc_url || '',
             step.reminderFrequency || step.reminder_frequency || 'none',
             step.reminderEnabled || step.reminder_enabled ? 1 : 0,
             k
@@ -212,8 +213,8 @@ export function replaceSubtaskSteps(taskId, subtaskId, steps) {
   const tx = db.transaction(() => {
     db.prepare('DELETE FROM subtask_steps WHERE subtask_id = ?').run(subtaskId);
     const insert = db.prepare(`
-      INSERT INTO subtask_steps (id, subtask_id, task_id, title, status, due_text, reminder_frequency, reminder_enabled, sort_order)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+      INSERT INTO subtask_steps (id, subtask_id, task_id, title, status, due_text, delivery_doc_url, reminder_frequency, reminder_enabled, sort_order)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
     `);
     steps.forEach((step, index) => {
       const title = String(step.title || '').trim();
@@ -225,6 +226,7 @@ export function replaceSubtaskSteps(taskId, subtaskId, steps) {
         title,
         step.status || '待开始',
         step.dueText || step.due_text || '',
+        step.deliveryDocUrl || step.delivery_doc_url || '',
         step.reminderFrequency || step.reminder_frequency || 'none',
         step.reminderEnabled || step.reminder_enabled ? 1 : 0,
         step.sortOrder ?? step.sort_order ?? index

@@ -437,10 +437,10 @@ export function ProjectCreate() {
 
       {/* Right: Members + Timeline */}
       <div className="space-y-5">
-        {/* Project Members — selectable */}
+        {/* Project collaborators — selectable */}
         <div className="rounded-lg border border-white/10 bg-white/[0.03] p-5">
-          <PanelTitle icon={Users} title="项目成员（点击选择）" />
-          <p className="mt-1 text-xs text-slate-500">已选 {form.selectedMembers.length} / {allTeamMembers.length} 人</p>
+          <PanelTitle icon={Users} title="协作成员（点击选择）" />
+          <p className="mt-1 text-xs text-slate-500">用于预设协作对象，不限制项目可见范围。已选 {form.selectedMembers.length} / {allTeamMembers.length} 人</p>
           <div className="mt-4 grid gap-2 sm:grid-cols-2 xl:grid-cols-1">
             {allTeamMembers.length === 0 ? (
               <p className="text-sm text-slate-500">暂无成员</p>
