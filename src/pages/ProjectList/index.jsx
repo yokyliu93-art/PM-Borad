@@ -89,7 +89,7 @@ export function ProjectList() {
       <div className="flex flex-col gap-4 xl:flex-row xl:items-end xl:justify-between">
         <div>
           <p className="text-sm font-medium text-emerald-200">团队项目大厅</p>
-          <h2 className="mt-1 text-3xl font-semibold tracking-normal text-white">先看哪里缺人，再进去认领推进</h2>
+          <h2 className="mt-1 text-3xl font-semibold tracking-normal text-white">所有项目都在这里</h2>
           <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-400">所有项目对团队成员可见。成员进入项目任务池自主认领，认领后在个人执行台拆步骤、写阶段交付、等待 PM 确认。</p>
         </div>
         <button
@@ -119,6 +119,14 @@ export function ProjectList() {
         </div>
       </div>
 
+      <div className="flex flex-col gap-2 border-t border-white/10 pt-5 md:flex-row md:items-end md:justify-between">
+        <div>
+          <h3 className="text-2xl font-semibold text-white">所有项目</h3>
+          <p className="mt-1 text-sm text-slate-500">先选项目，再进入该项目的任务池认领具体任务。</p>
+        </div>
+        <span className="text-sm text-slate-500">共 {projects.length} 个项目</span>
+      </div>
+
       {projects.length === 0 ? (
         <div className="grid min-h-60 place-items-center rounded-lg border border-dashed border-white/15 bg-white/[0.025] p-8 text-center">
           <div>
@@ -133,7 +141,7 @@ export function ProjectList() {
           </div>
         </div>
       ) : (
-        <div className="space-y-3">
+        <div className="grid gap-4 xl:grid-cols-2">
           {projects.map((p) => {
             const progress = p.progress ?? 0;
             const statusLabel = p.status === 'draft' ? '草稿' : p.status === 'active' ? '进行中' : p.status === 'completed' ? '已完成' : p.status;
@@ -151,14 +159,14 @@ export function ProjectList() {
                 onKeyDown={(e) => { if (e.key === 'Enter') enterProject(p); }}
                 className="cursor-pointer rounded-lg border border-white/10 bg-[#151925] p-5 text-left transition hover:border-emerald-400/40"
               >
-                <div className="grid gap-5 xl:grid-cols-[1.2fr_1fr_auto] xl:items-center">
+                <div className="grid gap-5">
                   <div className="min-w-0">
                     <div className="flex flex-wrap items-center gap-2">
-                      <h3 className="truncate text-xl font-semibold text-white">{p.name}</h3>
+                      <h3 className="truncate text-2xl font-semibold text-white">{p.name}</h3>
                       <span className={`rounded px-2 py-0.5 text-xs ${statusStyle}`}>{statusLabel}</span>
                     </div>
                     <p className="mt-2 line-clamp-2 text-sm leading-6 text-slate-400">{p.description || '这个项目还没有描述，进入任务池后可以先看任务拆解。'}</p>
-                    <p className="mt-3 text-xs text-slate-500">总 PM: {p.pm_name}</p>
+                    <p className="mt-3 text-xs text-slate-500">总 PM: {p.pm_name} · {p.active_people_count || 0} 人已参与推进</p>
                   </div>
 
                   <div>
@@ -187,7 +195,7 @@ export function ProjectList() {
                     </div>
                   </div>
 
-                  <div className="flex shrink-0 flex-wrap items-center gap-2 xl:justify-end">
+                  <div className="flex shrink-0 flex-wrap items-center gap-2">
                     {isPM && (
                       <>
                         <button
