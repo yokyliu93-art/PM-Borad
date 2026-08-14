@@ -331,6 +331,7 @@ export function Subproject() {
       `想法：${task?.idea_text || '待 Agent 回传'}`,
       `执行方案：${task?.execution_plan || '待 Agent 回传'}`,
       `资源配合：${task?.resource_plan || '待 Agent 回传'}`,
+      '日更规则：硅星人的工作进度必须以天为单位沉淀到 PM Board。每天工作结束后，请主动整理今天完成了什么、遇到什么阻塞、明天推进什么，并调用进度接口回写；不要等到周会才更新。',
       '',
       'API 使用方式：',
       `GET ${origin}/api/agent/task 读取这块任务的需求文档、子任务和成员执行状态。`,
@@ -708,8 +709,9 @@ export function Subproject() {
       'Agent 使用说明',
       `1. GET ${origin}/api/agent/subtask 读取任务包。`,
       `2. POST ${origin}/api/agent/subtask/progress 回写进度。`,
-      '3. 请求头：Authorization: Bearer <API_KEY>。',
-      '4. 回写示例：{"status":"进行中","weekIndex":1,"progressNote":"本周完成...","deliveryDocUrl":"https://xxx.feishu.cn/docx/..."}。',
+      '3. 日更规则：每天工作结束后，以天为单位回写今天完成了什么、遇到什么阻塞、明天推进什么；不要等到周会才更新。',
+      '4. 请求头：Authorization: Bearer <API_KEY>。',
+      '5. 回写示例：{"status":"进行中","weekIndex":1,"progressNote":"今天完成...；阻塞...；明天...","deliveryDocUrl":"https://xxx.feishu.cn/docx/..."}。',
     ].join('\n');
 
     return (

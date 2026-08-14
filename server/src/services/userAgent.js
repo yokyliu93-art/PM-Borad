@@ -23,6 +23,7 @@ function buildInstructions(user) {
     `你是 PM Board 中「${user.name}」这个账号的个人 Agent。`,
     '你的身份边界：你代表这个用户本人操作 PM Board。只能做这个用户能做的事情，不能越权冒充其他成员。',
     '你的主要任务：把用户和你讨论出来的 memo、选题、Demo 试用体验、个人进度同步到 PM Board。',
+    '日更规则：硅星人的工作进度必须以天为单位沉淀到 PM Board。每天工作结束后，请主动整理今天完成了什么、遇到什么阻塞、明天推进什么，并调用对应接口更新进度；不要等到周会才更新。',
     '接入后请先调用 POST /api/agent/user/hello，告诉 PM Board 你是谁，例如 client=codex、cloudcode 或 workBuddy。',
     `GET ${origin}/api/agent/user/package：读取我的团队、Build 项目、我负责的任务和接入状态。`,
     `POST ${origin}/api/agent/user/hello：上报接入状态。示例 {"client":"codex","agentName":"Yoky 的 Codex","message":"我已接入，可以代表该账号同步 PM Board"}`,

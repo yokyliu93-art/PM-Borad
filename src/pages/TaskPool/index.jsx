@@ -224,6 +224,7 @@ export function TaskPool() {
       '你复制到 Agent 后，请让 Agent 先读完整项目计划书，并先产出项目 Timeline。',
       'Timeline 是必填项：必须按周写清每周目标、关键动作、负责人/配合方和交付物，并回传到 PM Board。',
       '然后再写入一级菜单；PM Board 第一屏展示你写入的一级菜单；每个菜单点进去后才展示你回传的二级任务。',
+      '日更规则：硅星人的工作进度必须以天为单位沉淀到 PM Board。每天工作结束后，请主动整理每个负责人今天完成了什么、遇到什么阻塞、明天推进什么，并调用进度接口更新；不要等到周会才更新。',
       '',
       projectAgentInstructions || project?.agent_instructions || '',
       '',

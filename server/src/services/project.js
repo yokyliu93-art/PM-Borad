@@ -151,6 +151,8 @@ function keyPrefix(apiKey) {
   return `${apiKey.slice(0, 18)}...`;
 }
 
+const DAILY_PROGRESS_INSTRUCTION = '日更规则：硅星人的工作进度必须以天为单位沉淀到 PM Board。每天工作结束后，请主动整理每个负责人今天完成了什么、遇到什么阻塞、明天推进什么，并调用 POST /api/agent/project/progress 更新项目、一级菜单或二级任务进度；不要等到周会才更新。';
+
 export function buildDefaultProjectAgentInstructions(project) {
   return [
     `你是 PM Board 中「${project.name}」这个项目的总 PM Agent。`,
@@ -164,8 +166,14 @@ export function buildDefaultProjectAgentInstructions(project) {
     '当总 PM 说“传到 PM Board”时，请调用项目 Agent API 回传一级菜单、Timeline 和二级任务。PM Board 会以你回传的内容为主视图。',
     '一级菜单和二级任务的负责人也可以由你操作。总 PM 说“认领/指派给谁”时，请调用 POST /api/agent/project/assignments。',
     '项目开始、项目整体进度、任务块状态和任务块进度也由你回传。总 PM 说“开始项目”“这块做完了”“更新进度到 PM Board”时，请调用 POST /api/agent/project/progress。',
+    DAILY_PROGRESS_INSTRUCTION,
     '推荐回传顺序：1）先 POST /api/agent/project/timeline 写入项目周计划；2）再 POST /api/agent/project/modules 写入一级菜单；3）POST /api/agent/project/tasks 写入一级菜单下的二级任务；4）POST /api/agent/project/progress 持续同步状态和进度。',
   ].filter(Boolean).join('\n');
+}
+
+function appendDailyProgressInstruction(instructions = '') {
+  if (!instructions || instructions.includes('日更规则：硅星人的工作进度必须以天为单位')) return instructions;
+  return `${instructions}\n\n${DAILY_PROGRESS_INSTRUCTION}`;
 }
 
 export function ensureDefaultProjectAgentSetup(projectId) {
@@ -187,6 +195,11 @@ export function ensureDefaultProjectAgentSetup(projectId) {
   if (withProgressDoc.agent_instructions && !withProgressDoc.agent_instructions.includes('/api/agent/project/assignments')) {
     db.prepare('UPDATE projects SET agent_instructions = ? WHERE id = ?')
       .run(`${withProgressDoc.agent_instructions}\n\n负责人回传：当总 PM 说“认领这个模块”“指派给某个人”“这个二级任务归谁负责”时，请调用 POST /api/agent/project/assignments。你可以按 ownerId、ownerName 或 ownerEmail 在项目团队成员中匹配负责人。`, projectId);
+  }
+  const withAssignmentsDoc = getById(projectId);
+  const dailyInstructions = appendDailyProgressInstruction(withAssignmentsDoc.agent_instructions);
+  if (dailyInstructions !== withAssignmentsDoc.agent_instructions) {
+    db.prepare('UPDATE projects SET agent_instructions = ? WHERE id = ?').run(dailyInstructions, projectId);
   }
   if (!project.agent_api_key_hash) {
     const apiKey = createProjectAgentKey(projectId);

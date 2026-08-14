@@ -354,6 +354,8 @@ function normalizeReminderTime(time) {
   return /^\d{2}:\d{2}$/.test(value) ? value : '10:00';
 }
 
+const DAILY_TASK_PROGRESS_INSTRUCTION = '日更规则：硅星人的工作进度必须以天为单位沉淀到 PM Board。每天工作结束后，请主动整理今天完成了什么、遇到什么阻塞、明天推进什么，并调用进度接口回写；不要等到周会才更新。';
+
 export function buildDefaultAgentInstructions({ task, subtask }) {
   return [
     `你是 PM Board 中「${subtask.title}」这个子任务的执行 Agent。`,
@@ -365,6 +367,7 @@ export function buildDefaultAgentInstructions({ task, subtask }) {
     subtask.resource_plan ? `资源配合：${subtask.resource_plan}` : '',
     '你需要按周计划推进工作，定期回写进度；如果有阶段性交付，请提交飞书文档链接。',
     '回写进度时请说明：本周完成了什么、遇到什么阻塞、下一步做什么、交付文档在哪里。',
+    DAILY_TASK_PROGRESS_INSTRUCTION,
   ].filter(Boolean).join('\n');
 }
 
@@ -380,7 +383,13 @@ export function buildDefaultTaskAgentInstructions({ project, task }) {
     '你的权限边界：只能管理这块任务，不能改整个项目，也不能改其他子 PM 的任务块。',
     '你需要把这块任务继续拆成可执行子任务，给每个子任务生成说明书、周计划和交付要求。',
     '当负责人说“传到 PM Board”时，请调用任务块 Agent API 创建或更新子任务，并回写当前进度。',
+    DAILY_TASK_PROGRESS_INSTRUCTION,
   ].filter(Boolean).join('\n');
+}
+
+function appendDailyTaskProgressInstruction(instructions = '') {
+  if (!instructions || instructions.includes('日更规则：硅星人的工作进度必须以天为单位')) return instructions;
+  return `${instructions}\n\n${DAILY_TASK_PROGRESS_INSTRUCTION}`;
 }
 
 export function ensureDefaultTaskAgentSetup(taskId) {
@@ -390,6 +399,11 @@ export function ensureDefaultTaskAgentSetup(taskId) {
   if (!task.agent_instructions) {
     db.prepare('UPDATE tasks SET agent_instructions = ? WHERE id = ?')
       .run(buildDefaultTaskAgentInstructions({ project, task }), taskId);
+  }
+  const refreshedTask = getById(taskId);
+  const taskInstructions = appendDailyTaskProgressInstruction(refreshedTask.agent_instructions);
+  if (taskInstructions !== refreshedTask.agent_instructions) {
+    db.prepare('UPDATE tasks SET agent_instructions = ? WHERE id = ?').run(taskInstructions, taskId);
   }
   if (!task.agent_api_key_hash) {
     const apiKey = createTaskAgentKey(taskId);
@@ -532,6 +546,11 @@ export function ensureDefaultAgentSetup(taskId, subtaskId) {
   if (!subtask.agent_instructions) {
     db.prepare('UPDATE subtasks SET agent_instructions = ? WHERE id = ?')
       .run(buildDefaultAgentInstructions({ task, subtask }), subtaskId);
+  }
+  const refreshedSubtask = db.prepare('SELECT * FROM subtasks WHERE id = ?').get(subtaskId);
+  const subtaskInstructions = appendDailyTaskProgressInstruction(refreshedSubtask.agent_instructions);
+  if (subtaskInstructions !== refreshedSubtask.agent_instructions) {
+    db.prepare('UPDATE subtasks SET agent_instructions = ? WHERE id = ?').run(subtaskInstructions, subtaskId);
   }
   const scheduleCount = db.prepare('SELECT COUNT(*) as count FROM subtask_schedule_items WHERE subtask_id = ?').get(subtaskId)?.count || 0;
   if (scheduleCount === 0) {
