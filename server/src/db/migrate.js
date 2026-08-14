@@ -80,6 +80,9 @@ export function migrate() {
       module_key TEXT NOT NULL,
       module_name TEXT NOT NULL,
       detail TEXT DEFAULT '',
+      owner_id TEXT REFERENCES users(id),
+      owner_assigned_by TEXT REFERENCES users(id),
+      owner_assigned_at TEXT,
       sort_order INTEGER DEFAULT 0,
       created_at TEXT DEFAULT (datetime('now')),
       updated_at TEXT DEFAULT (datetime('now')),
@@ -285,6 +288,17 @@ export function migrate() {
   }
   if (!projectCols.includes('feishu_boss_last_sent_at')) {
     db.exec('ALTER TABLE projects ADD COLUMN feishu_boss_last_sent_at TEXT');
+  }
+
+  const moduleCols = db.prepare('PRAGMA table_info(project_modules)').all().map((c) => c.name);
+  if (!moduleCols.includes('owner_id')) {
+    db.exec('ALTER TABLE project_modules ADD COLUMN owner_id TEXT');
+  }
+  if (!moduleCols.includes('owner_assigned_by')) {
+    db.exec('ALTER TABLE project_modules ADD COLUMN owner_assigned_by TEXT');
+  }
+  if (!moduleCols.includes('owner_assigned_at')) {
+    db.exec('ALTER TABLE project_modules ADD COLUMN owner_assigned_at TEXT');
   }
 
   const taskCols = db.prepare('PRAGMA table_info(tasks)').all().map((c) => c.name);

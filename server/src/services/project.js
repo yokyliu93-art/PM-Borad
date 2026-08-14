@@ -5,6 +5,7 @@ import crypto from 'crypto';
 import db from '../db/connection.js';
 import { config } from '../config.js';
 import * as taskService from './task.js';
+import * as feishuPushService from './feishuPush.js';
 
 export function create({ teamId, name, description, planMarkdown, pmUserId, timelineJson, memberIds }) {
   const id = uuid();
@@ -272,13 +273,30 @@ export function updateModulesFromAgent(apiKey, payload = {}) {
     uniqueModules.push(module);
   }
   const tx = db.transaction(() => {
+    const existing = db.prepare('SELECT module_key, owner_id, owner_assigned_by, owner_assigned_at FROM project_modules WHERE project_id = ?')
+      .all(pkg.project.id)
+      .reduce((acc, row) => {
+        acc[row.module_key] = row;
+        return acc;
+      }, {});
     db.prepare('DELETE FROM project_modules WHERE project_id = ?').run(pkg.project.id);
     const insert = db.prepare(`
-      INSERT INTO project_modules (id, project_id, module_key, module_name, detail, sort_order)
-      VALUES (?, ?, ?, ?, ?, ?)
+      INSERT INTO project_modules (id, project_id, module_key, module_name, detail, owner_id, owner_assigned_by, owner_assigned_at, sort_order)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
     `);
     uniqueModules.forEach((item, index) => {
-      insert.run(uuid(), pkg.project.id, item.moduleKey, item.moduleName, item.detail, item.sortOrder ?? index);
+      const old = existing[item.moduleKey] || {};
+      insert.run(
+        uuid(),
+        pkg.project.id,
+        item.moduleKey,
+        item.moduleName,
+        item.detail,
+        old.owner_id || null,
+        old.owner_assigned_by || null,
+        old.owner_assigned_at || null,
+        item.sortOrder ?? index
+      );
     });
     db.prepare(`
       UPDATE projects
@@ -296,11 +314,107 @@ export function updateModulesFromAgent(apiKey, payload = {}) {
 
 export function listModules(projectId) {
   return db.prepare(`
-    SELECT module_key, module_name, detail, sort_order
-    FROM project_modules
+    SELECT
+      pm.module_key,
+      pm.module_name,
+      pm.detail,
+      pm.owner_id,
+      pm.owner_assigned_by,
+      pm.owner_assigned_at,
+      pm.sort_order,
+      u.name as owner_name,
+      u.avatar_url as owner_avatar,
+      au.name as owner_assigned_by_name
+    FROM project_modules pm
+    LEFT JOIN users u ON u.id = pm.owner_id
+    LEFT JOIN users au ON au.id = pm.owner_assigned_by
     WHERE project_id = ?
-    ORDER BY sort_order, created_at
+    ORDER BY pm.sort_order, pm.created_at
   `).all(projectId);
+}
+
+function getModule(projectId, moduleKey) {
+  return db.prepare(`
+    SELECT
+      pm.*,
+      p.name as project_name,
+      p.pm_user_id,
+      u.name as owner_name,
+      u.avatar_url as owner_avatar
+    FROM project_modules pm
+    JOIN projects p ON p.id = pm.project_id
+    LEFT JOIN users u ON u.id = pm.owner_id
+    WHERE pm.project_id = ? AND pm.module_key = ?
+  `).get(projectId, moduleKey);
+}
+
+function ensureModuleRow(projectId, moduleKey) {
+  const existing = getModule(projectId, moduleKey);
+  if (existing) return existing;
+  const taskModule = db.prepare(`
+    SELECT module_key, module_name
+    FROM tasks
+    WHERE project_id = ? AND module_key = ?
+    ORDER BY sort_order, created_at
+    LIMIT 1
+  `).get(projectId, moduleKey);
+  if (!taskModule) return null;
+  const maxSort = db.prepare('SELECT COALESCE(MAX(sort_order), -1) as sort_order FROM project_modules WHERE project_id = ?')
+    .get(projectId);
+  db.prepare(`
+    INSERT INTO project_modules (id, project_id, module_key, module_name, detail, sort_order)
+    VALUES (?, ?, ?, ?, ?, ?)
+  `).run(uuid(), projectId, taskModule.module_key, taskModule.module_name || taskModule.module_key, '', Number(maxSort?.sort_order ?? -1) + 1);
+  return getModule(projectId, moduleKey);
+}
+
+async function notifyModuleOwner({ projectId, moduleKey, assignedById, actionText }) {
+  const module = getModule(projectId, moduleKey);
+  if (!module?.owner_id) return;
+  const assignedBy = assignedById
+    ? db.prepare('SELECT name FROM users WHERE id = ?').get(assignedById)
+    : null;
+  try {
+    await feishuPushService.sendModuleAssignmentCard({
+      openId: module.owner_id,
+      projectName: module.project_name,
+      moduleName: module.module_name,
+      moduleDetail: module.detail,
+      assignedByName: assignedBy?.name || '',
+      actionText,
+      boardUrl: `${config.clientUrl}/projects/${projectId}/pool`,
+    });
+  } catch (err) {
+    console.error('[project-module] Feishu owner notification failed:', err.userMessage || err.message);
+  }
+}
+
+export async function claimModule(projectId, moduleKey, userId) {
+  const module = ensureModuleRow(projectId, moduleKey);
+  if (!module) throw new Error('一级菜单不存在');
+  if (module.owner_id && module.owner_id !== userId) throw new Error(`该一级菜单已由 ${module.owner_name || '其他成员'} 负责`);
+  db.prepare(`
+    UPDATE project_modules
+    SET owner_id = ?, owner_assigned_by = ?, owner_assigned_at = datetime('now'), updated_at = datetime('now')
+    WHERE project_id = ? AND module_key = ?
+  `).run(userId, userId, projectId, moduleKey);
+  await notifyModuleOwner({ projectId, moduleKey, assignedById: userId, actionText: '你已认领一级菜单' });
+  return getById(projectId);
+}
+
+export async function assignModule(projectId, moduleKey, ownerId, assignedById) {
+  const module = ensureModuleRow(projectId, moduleKey);
+  if (!module) throw new Error('一级菜单不存在');
+  const project = db.prepare('SELECT team_id FROM projects WHERE id = ?').get(projectId);
+  const member = db.prepare('SELECT 1 FROM team_members WHERE team_id = ? AND user_id = ?').get(project.team_id, ownerId);
+  if (!member && ownerId !== module.pm_user_id) throw new Error('只能指派给当前团队成员');
+  db.prepare(`
+    UPDATE project_modules
+    SET owner_id = ?, owner_assigned_by = ?, owner_assigned_at = datetime('now'), updated_at = datetime('now')
+    WHERE project_id = ? AND module_key = ?
+  `).run(ownerId, assignedById, projectId, moduleKey);
+  await notifyModuleOwner({ projectId, moduleKey, assignedById, actionText: '你被指派为一级菜单 PM' });
+  return getById(projectId);
 }
 
 function normalizeTimelineItem(item, index) {

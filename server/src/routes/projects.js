@@ -46,6 +46,26 @@ router.put('/:projectId/agent-config', authRequired, requireProjectPM, (req, res
   }
 });
 
+router.post('/:projectId/modules/:moduleKey/claim', authRequired, requireProjectMember, async (req, res) => {
+  try {
+    const data = await projectService.claimModule(req.params.projectId, req.params.moduleKey, req.user.id);
+    res.json({ ok: true, data });
+  } catch (err) {
+    res.status(400).json({ ok: false, error: err.message });
+  }
+});
+
+router.put('/:projectId/modules/:moduleKey/owner', authRequired, requireProjectPM, async (req, res) => {
+  try {
+    const ownerId = req.body?.ownerId || req.body?.owner_id;
+    if (!ownerId) return res.status(400).json({ ok: false, error: '请选择负责人' });
+    const data = await projectService.assignModule(req.params.projectId, req.params.moduleKey, ownerId, req.user.id);
+    res.json({ ok: true, data });
+  } catch (err) {
+    res.status(400).json({ ok: false, error: err.message });
+  }
+});
+
 router.put('/:projectId', authRequired, requireProjectPM, (req, res) => {
   const updated = projectService.update(req.params.projectId, req.body);
   res.json({ ok: true, data: updated });

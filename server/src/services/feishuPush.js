@@ -57,3 +57,56 @@ export async function sendTextToChat(chatId, text) {
   }
   return data.data;
 }
+
+async function sendMessage(receiveId, receiveIdType, msgType, content) {
+  const cleanReceiveId = String(receiveId || '').trim();
+  if (!cleanReceiveId) throw new FeishuPushError('缺少飞书接收人 ID');
+  const token = await getTenantAccessToken();
+  const res = await fetch(`${BASE}/im/v1/messages?receive_id_type=${receiveIdType}`, {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${token}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      receive_id: cleanReceiveId,
+      msg_type: msgType,
+      content: JSON.stringify(content),
+    }),
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok || data.code !== 0) {
+    throw new FeishuPushError(data.msg || '飞书消息发送失败，请确认应用消息权限和可用范围');
+  }
+  return data.data;
+}
+
+export async function sendTextToUser(openId, text) {
+  return sendMessage(openId, 'open_id', 'text', { text });
+}
+
+export async function sendModuleAssignmentCard({ openId, projectName, moduleName, moduleDetail, assignedByName, actionText, boardUrl }) {
+  const card = {
+    config: { wide_screen_mode: true },
+    header: {
+      template: 'green',
+      title: { tag: 'plain_text', content: `PM Board：${actionText || '一级菜单负责人更新'}` },
+    },
+    elements: [
+      { tag: 'div', text: { tag: 'lark_md', content: `**项目**：${projectName || ''}` } },
+      { tag: 'div', text: { tag: 'lark_md', content: `**一级菜单**：${moduleName || ''}` } },
+      moduleDetail ? { tag: 'div', text: { tag: 'lark_md', content: `**说明**：${moduleDetail}` } } : null,
+      assignedByName ? { tag: 'div', text: { tag: 'lark_md', content: `**操作人**：${assignedByName}` } } : null,
+      boardUrl ? {
+        tag: 'action',
+        actions: [{
+          tag: 'button',
+          text: { tag: 'plain_text', content: '打开 PM Board' },
+          type: 'primary',
+          url: boardUrl,
+        }],
+      } : null,
+    ].filter(Boolean),
+  };
+  return sendMessage(openId, 'open_id', 'interactive', card);
+}

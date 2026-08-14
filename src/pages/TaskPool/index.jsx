@@ -6,7 +6,8 @@ import { useStore } from '../../store';
 import { useSocket } from '../../hooks/useSocket';
 import { TaskCard } from '../../components/ui/TaskCard';
 import { EmptyState } from '../../components/ui/EmptyState';
-import { AlertTriangle, ArrowLeft, BookOpen, Boxes, CalendarDays, Copy, KeyRound, Loader2, RefreshCw } from 'lucide-react';
+import { Avatar } from '../../components/ui/Avatar';
+import { AlertTriangle, ArrowLeft, BookOpen, Boxes, CalendarDays, Copy, KeyRound, Loader2, RefreshCw, UserPlus } from 'lucide-react';
 
 export function TaskPool() {
   const { projectId } = useParams();
@@ -31,14 +32,17 @@ export function TaskPool() {
 
   useEffect(() => {
     if (!projectId) return;
-    get(`/api/projects/${projectId}`).then((r) => {
+    loadProject();
+  }, [projectId, currentUser?.id]);
+
+  async function loadProject() {
+    const r = await get(`/api/projects/${projectId}`);
       if (r.ok) {
         setProject(r.data);
         setProjectAgentInstructions(r.data?.agent_instructions || '');
         setIsProjectPM(r.data?.pm_user_id === currentUser?.id);
       }
-    });
-  }, [projectId, currentUser?.id]);
+  }
 
   async function loadTasks() {
     setLoading(true);
@@ -98,6 +102,27 @@ export function TaskPool() {
       }
     } catch {
       toast.error('删除失败，请确认后端已启动');
+    }
+  }
+
+  async function handleClaimModule(module) {
+    const res = await post(`/api/projects/${projectId}/modules/${encodeURIComponent(module.key)}/claim`, {});
+    if (res.ok) {
+      toast.success(`已认领「${module.name}」`);
+      setProject(res.data);
+    } else {
+      toast.error(res.error || '认领失败');
+    }
+  }
+
+  async function handleAssignModule(module, ownerId) {
+    if (!ownerId) return;
+    const res = await put(`/api/projects/${projectId}/modules/${encodeURIComponent(module.key)}/owner`, { ownerId });
+    if (res.ok) {
+      toast.success(`已指派「${module.name}」`);
+      setProject(res.data);
+    } else {
+      toast.error(res.error || '指派失败');
     }
   }
 
@@ -176,6 +201,10 @@ export function TaskPool() {
         key,
         name,
         detail: module.detail || module.description || module.summary || '',
+        ownerId: module.owner_id || module.ownerId || '',
+        ownerName: module.owner_name || module.ownerName || '',
+        ownerAvatar: module.owner_avatar || module.ownerAvatar || '',
+        assignedByName: module.owner_assigned_by_name || module.ownerAssignedByName || '',
         sortOrder: module.sort_order ?? module.sortOrder ?? index,
       });
     });
@@ -187,6 +216,10 @@ export function TaskPool() {
         key,
         name: task.module_name || task.moduleName || task.module || '主模块',
         detail: '',
+        ownerId: '',
+        ownerName: '',
+        ownerAvatar: '',
+        assignedByName: '',
         sortOrder: byKey.size,
       });
     });
@@ -209,6 +242,19 @@ export function TaskPool() {
       .split(/\n|；|;/)
       .map((line) => line.replace(/^[-*]\s*/, '').trim())
       .filter(Boolean);
+  }
+
+  function getWeekPlanSections(detail = '') {
+    const lines = getWeekPlanLines(detail);
+    const labels = ['本周目标', '关键动作', '负责人/配合方', '交付物', '风险', '资源'];
+    const sections = [];
+    for (const label of labels) {
+      const found = lines.find((line) => line.startsWith(`${label}：`) || line.startsWith(`${label}:`));
+      if (found) sections.push({ label, value: found.replace(new RegExp(`^${label}[：:]\\s*`), '') });
+    }
+    const used = new Set(sections.map((section) => `${section.label}：${section.value}`));
+    const rest = lines.filter((line) => !labels.some((label) => line.startsWith(`${label}：`) || line.startsWith(`${label}:`)));
+    return sections.length ? [...sections, ...rest.map((line, index) => ({ label: `补充 ${index + 1}`, value: line }))] : lines.map((line, index) => ({ label: `计划 ${index + 1}`, value: line })).filter((section) => !used.has(section.value));
   }
 
   if (loading) return <div className="grid place-items-center h-64"><Loader2 className="animate-spin text-slate-400" size={32} /></div>;
@@ -279,12 +325,12 @@ export function TaskPool() {
             <div className="rounded-lg border border-white/10 bg-[#151925] p-5">
               <p className="flex items-center gap-2 text-sm font-medium text-violet-100"><CalendarDays size={15} />{currentTimeline[0] || `阶段 ${selectedTimelineIndex + 1}`}</p>
               <h3 className="mt-3 text-2xl font-semibold text-white">本周详细计划</h3>
-              {getWeekPlanLines(currentTimeline[1]).length ? (
-                <div className="mt-5 space-y-3">
-                  {getWeekPlanLines(currentTimeline[1]).map((line, index) => (
-                    <div key={`${line}-${index}`} className="rounded-md border border-white/10 bg-white/[0.03] p-3">
-                      <p className="text-xs text-slate-500">计划 {index + 1}</p>
-                      <p className="mt-1 text-sm leading-6 text-slate-200">{line}</p>
+              {getWeekPlanSections(currentTimeline[1]).length ? (
+                <div className="mt-5 grid gap-3 md:grid-cols-2">
+                  {getWeekPlanSections(currentTimeline[1]).map((section, index) => (
+                    <div key={`${section.label}-${index}`} className="rounded-md border border-white/10 bg-white/[0.03] p-3">
+                      <p className="text-xs text-emerald-200">{section.label}</p>
+                      <p className="mt-1 text-sm leading-6 text-slate-200">{section.value}</p>
                     </div>
                   ))}
                 </div>
@@ -344,9 +390,8 @@ export function TaskPool() {
               const progress = moduleProgress(moduleTasks);
               const claimed = moduleTasks.filter((task) => task.owner_id).length;
               return (
-                <button
+                <div
                   key={module.key}
-                  onClick={() => setSelectedModule(module.key)}
                   className="min-h-72 rounded-lg border border-white/10 bg-white/[0.025] p-5 text-left transition hover:border-emerald-400/40 hover:bg-white/[0.04]"
                 >
                   <div className="flex items-start justify-between gap-3">
@@ -355,6 +400,44 @@ export function TaskPool() {
                       <p className="mt-2 text-xs leading-5 text-slate-500">{module.detail}</p>
                     </div>
                     <span className="rounded bg-white/8 px-2 py-1 text-xs text-slate-400">{moduleTasks.length}</span>
+                  </div>
+                  <div className="mt-5 rounded-md border border-white/10 bg-[#0c0f16] p-3">
+                    {module.ownerId ? (
+                      <div className="flex items-center justify-between gap-3">
+                        <div className="flex min-w-0 items-center gap-2">
+                          <Avatar member={{ name: module.ownerName, avatar_url: module.ownerAvatar }} size="xs" pm />
+                          <div className="min-w-0">
+                            <p className="truncate text-sm font-medium text-white">{module.ownerName || '已分配 PM'}</p>
+                            <p className="text-xs text-slate-500">一级菜单 PM{module.assignedByName ? ` · ${module.assignedByName} 指派` : ''}</p>
+                          </div>
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="flex items-center justify-between gap-3">
+                        <div>
+                          <p className="text-sm font-medium text-white">待认领 / 待指派</p>
+                          <p className="mt-1 text-xs text-slate-500">认领后会推送到你的飞书私聊</p>
+                        </div>
+                        <button
+                          onClick={() => handleClaimModule(module)}
+                          className="inline-flex shrink-0 items-center gap-1 rounded-md bg-emerald-400 px-2.5 py-1.5 text-xs font-semibold text-[#08110f] hover:bg-emerald-300"
+                        >
+                          <UserPlus size={12} /> 认领
+                        </button>
+                      </div>
+                    )}
+                    {isProjectPM ? (
+                      <select
+                        value={module.ownerId || ''}
+                        onChange={(event) => handleAssignModule(module, event.target.value)}
+                        className="mt-3 w-full rounded-md border border-white/10 bg-[#11141d] px-2 py-2 text-xs text-slate-200 outline-none"
+                      >
+                        <option value="">指派给成员...</option>
+                        {(project?.teamMembers || []).map((member) => (
+                          <option key={member.id} value={member.id}>{member.name}</option>
+                        ))}
+                      </select>
+                    ) : null}
                   </div>
                   <div className="mt-8 grid grid-cols-2 gap-2">
                     <div className="rounded-md bg-[#0c0f16] p-3">
@@ -375,8 +458,13 @@ export function TaskPool() {
                       <div className="h-full rounded-full bg-gradient-to-r from-emerald-400 to-violet-400" style={{ width: `${progress}%` }} />
                     </div>
                   </div>
-                  <p className="mt-5 text-sm text-emerald-200">{moduleTasks.length ? '进入查看二级任务' : '等待 Agent 回传二级任务'}</p>
-                </button>
+                  <button
+                    onClick={() => setSelectedModule(module.key)}
+                    className="mt-5 rounded-md border border-emerald-400/30 px-3 py-2 text-sm text-emerald-200 transition hover:bg-emerald-400/10"
+                  >
+                    {moduleTasks.length ? '进入查看二级任务' : '查看一级菜单'}
+                  </button>
+                </div>
               );
             }) : (
               <div className="grid min-h-72 place-items-center rounded-lg border border-dashed border-white/15 bg-white/[0.025] p-6 text-center lg:col-span-3">
