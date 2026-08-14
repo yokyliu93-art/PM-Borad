@@ -22,14 +22,14 @@ const kindLabels = {
   topic: '选题',
 };
 
-export function ContentHub({ mode = 'all' }) {
+export function ContentHub({ mode = 'all', initialTopicType = 'daily' }) {
   const { projectId } = useParams();
   const { currentTeamId } = useStore();
   const [items, setItems] = useState([]);
   const [projects, setProjects] = useState([]);
   const [selectedProjectId, setSelectedProjectId] = useState(projectId || '');
   const [activeTab, setActiveTab] = useState(mode === 'topics' ? 'topic' : mode === 'demo' ? 'demo' : 'all');
-  const [topicType, setTopicType] = useState('daily');
+  const [topicType, setTopicType] = useState(initialTopicType);
   const [loading, setLoading] = useState(true);
   const [creating, setCreating] = useState(false);
   const [importing, setImporting] = useState(false);
@@ -47,6 +47,10 @@ export function ContentHub({ mode = 'all' }) {
   useEffect(() => {
     loadItems();
   }, [projectId, currentTeamId, mode, topicType]);
+
+  useEffect(() => {
+    setTopicType(initialTopicType);
+  }, [initialTopicType]);
 
   useEffect(() => {
     if (!selectedProjectId && projects[0]?.id) setSelectedProjectId(projects[0].id);
@@ -100,7 +104,7 @@ export function ContentHub({ mode = 'all' }) {
     setCreating(false);
     if (res.ok) {
       toast.success('已放进内容池');
-      setForm({ kind: form.kind, title: '', body: '', sourceUrl: '', timelineText: '' });
+      setForm({ kind: form.kind, subKind: form.subKind || '', title: '', body: '', sourceUrl: '', timelineText: '' });
       loadItems();
     } else {
       toast.error(res.error || '创建失败');
