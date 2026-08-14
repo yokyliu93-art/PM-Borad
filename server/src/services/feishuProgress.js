@@ -6,6 +6,14 @@ function pct(value) {
   return `${Math.round(Number(value || 0))}%`;
 }
 
+const BOSS_REPORT_PROMPT = `你是总 PM 办公室的项目管理顾问。请根据 PM Board 的部门大盘数据，写一份发给老板的飞书进度简报。
+要求：
+1. 用中文，语气专业、直接、少废话。
+2. 不要写成机械列表，要先给整体判断，再讲关键进展、风险/阻塞、需要老板拍板或协调的事项。
+3. 必须基于输入数据，不要编造不存在的人、金额、日期或结论。
+4. 控制在 500 字以内，适合直接发到飞书群。
+5. 最后给出 3 条以内的下一步建议。`;
+
 function todayKey() {
   return new Date().toISOString().slice(0, 10);
 }
@@ -122,6 +130,12 @@ export function buildProjectProgressReport(projectId) {
 }
 
 export function buildBossDashboardReport(chatId = '') {
+  const snapshot = getBossDashboardSnapshot(chatId);
+  if (!snapshot.projects.length) return '';
+  return formatBossDashboardFallback(snapshot);
+}
+
+function getBossDashboardSnapshot(chatId = '') {
   const targetChatId = String(chatId || config.feishuBossChatId || '').trim();
   const projects = db.prepare(`
     SELECT p.*, u.name as pm_name
@@ -130,29 +144,116 @@ export function buildBossDashboardReport(chatId = '') {
       AND COALESCE(NULLIF(p.feishu_boss_chat_id, ''), ?) = ?
     ORDER BY p.updated_at DESC
   `).all(config.feishuBossChatId, targetChatId);
-  if (!projects.length) return '';
 
   const taskStats = db.prepare(`
     SELECT
       COUNT(*) as total,
       COALESCE(AVG(progress), 0) as progress,
       SUM(CASE WHEN owner_id IS NULL THEN 1 ELSE 0 END) as unclaimed,
-      SUM(CASE WHEN status = '审核中' THEN 1 ELSE 0 END) as reviewing
+      SUM(CASE WHEN status = '审核中' THEN 1 ELSE 0 END) as reviewing,
+      SUM(CASE WHEN status = '已完成' OR progress >= 100 THEN 1 ELSE 0 END) as completed
     FROM tasks
     WHERE project_id = ? AND is_published = 1
   `);
-  const lines = projects.map((project) => {
+  const riskTasks = db.prepare(`
+    SELECT t.title, t.progress, t.status, u.name as owner_name
+    FROM tasks t LEFT JOIN users u ON u.id = t.owner_id
+    WHERE t.project_id = ? AND t.is_published = 1
+      AND (t.owner_id IS NULL OR t.progress < 30 OR t.status = '审核中')
+    ORDER BY t.owner_id IS NULL DESC, t.progress ASC, t.updated_at DESC
+    LIMIT 5
+  `);
+  const recentUpdates = db.prepare(`
+    SELECT pu.content, pu.created_at, u.name as user_name, t.title as task_title
+    FROM progress_updates pu
+    JOIN users u ON u.id = pu.user_id
+    JOIN tasks t ON t.id = pu.task_id
+    WHERE t.project_id = ?
+    ORDER BY pu.created_at DESC
+    LIMIT 5
+  `);
+
+  const enrichedProjects = projects.map((project) => {
     const stats = taskStats.get(project.id);
-    return `- ${project.name}｜PM：${project.pm_name || '未设置'}｜进度 ${pct(stats.progress)}｜任务 ${stats.total || 0}｜待认领 ${stats.unclaimed || 0}｜审核中 ${stats.reviewing || 0}`;
+    return {
+      id: project.id,
+      name: project.name,
+      status: project.status,
+      pmName: project.pm_name || '',
+      description: project.description || '',
+      progress: Math.round(Number(stats.progress || 0)),
+      taskTotal: Number(stats.total || 0),
+      taskCompleted: Number(stats.completed || 0),
+      unclaimed: Number(stats.unclaimed || 0),
+      reviewing: Number(stats.reviewing || 0),
+      riskTasks: riskTasks.all(project.id),
+      recentUpdates: recentUpdates.all(project.id),
+      boardUrl: `${config.clientUrl}/projects/${project.id}/boss`,
+    };
   });
+
+  return {
+    generatedAt: new Date().toLocaleString('zh-CN', { hour12: false }),
+    chatId: targetChatId,
+    projects: enrichedProjects,
+    boardUrl: enrichedProjects[0] ? `${config.clientUrl}/projects/${enrichedProjects[0].id}/boss` : '',
+  };
+}
+
+function formatBossDashboardFallback(snapshot) {
+  const lines = snapshot.projects.map((project) => (
+    `- ${project.name}｜PM：${project.pmName || '未设置'}｜进度 ${pct(project.progress)}｜任务 ${project.taskTotal}｜待认领 ${project.unclaimed}｜审核中 ${project.reviewing}`
+  ));
 
   return [
     'PM Board 老板看板',
-    `项目数：${projects.length}｜更新时间：${new Date().toLocaleString('zh-CN', { hour12: false })}`,
+    `项目数：${snapshot.projects.length}｜更新时间：${snapshot.generatedAt}`,
     '',
     ...lines,
     '',
-    `部门大盘：${config.clientUrl}/projects/${projects[0].id}/boss`,
+    `部门大盘：${snapshot.boardUrl}`,
+  ].join('\n');
+}
+
+async function callDeepSeekBossReport(snapshot) {
+  if (!config.deepseekApiKey) throw new Error('DeepSeek API Key 未配置');
+  const controller = new AbortController();
+  const timer = setTimeout(() => controller.abort(), config.aiTimeoutMs);
+  let res;
+  try {
+    res = await fetch(`${config.deepseekBaseUrl.replace(/\/$/, '')}/chat/completions`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${config.deepseekApiKey}`,
+      },
+      body: JSON.stringify({
+        model: config.deepseekModel,
+        messages: [
+          { role: 'system', content: BOSS_REPORT_PROMPT },
+          { role: 'user', content: JSON.stringify(snapshot, null, 2) },
+        ],
+        temperature: 0.35,
+        max_tokens: 1800,
+      }),
+      signal: controller.signal,
+    });
+  } catch {
+    throw new Error(controller.signal.aborted ? `DeepSeek 响应超时（${config.aiTimeoutMs / 1000}秒）` : '无法连接 DeepSeek 服务');
+  } finally {
+    clearTimeout(timer);
+  }
+  if (!res.ok) {
+    const text = await res.text().catch(() => '');
+    throw new Error(`DeepSeek 返回错误（${res.status}）：${text.slice(0, 200)}`);
+  }
+  const data = await res.json();
+  const content = String(data?.choices?.[0]?.message?.content || '').trim();
+  if (!content) throw new Error('DeepSeek 未返回老板总结');
+  return [
+    content.replace(/^```(?:markdown|text)?\s*/i, '').replace(/```\s*$/, '').trim(),
+    '',
+    `部门大盘：${snapshot.boardUrl}`,
   ].join('\n');
 }
 
@@ -166,7 +267,15 @@ export async function sendProjectProgress(projectId, chatId) {
 export async function sendBossDashboard(chatId) {
   const targetChatId = String(chatId || config.feishuBossChatId || '').trim();
   if (!targetChatId) throw new Error('缺少老板看板飞书群 chat_id');
-  const text = buildBossDashboardReport(targetChatId);
+  const snapshot = getBossDashboardSnapshot(targetChatId);
+  if (!snapshot.projects.length) return '';
+  let text;
+  try {
+    text = await callDeepSeekBossReport(snapshot);
+  } catch (err) {
+    console.error('[feishu-progress] DeepSeek boss report failed, using fallback:', err.message);
+    text = formatBossDashboardFallback(snapshot);
+  }
   if (!text) return '';
   await feishuPushService.sendTextToChat(targetChatId, text);
   db.prepare(`
