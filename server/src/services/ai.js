@@ -16,6 +16,10 @@ const TOPIC_PARSE_PROMPT = `你是硅星人内容编辑部的选题统筹助手�
 只输出 JSON 对象，不要输出解释或 Markdown。格式：
 {"dailyTopics":[{"title":"日常选题标题","owner":"负责人姓名","firstDraftAt":"初稿时间，如 8月16日/下周三/待定","summary":"当前进展和需要做什么"}],"deepTopics":[{"title":"深度选题标题","owner":"负责人姓名","firstDraftAt":"首稿或阶段稿时间","summary":"选题背景和当前阶段","timeline":[{"week":"W1","detail":"目标、动作、负责人和交付物"}],"resources":"需要谁配合、需要什么资料"}]}`;
 
+const EVAL_PARSE_PROMPT = `你是硅星人 Eval 测试集整理助手。请根据飞书文档内容，整理成 PM Board 里的共享测试集模块。
+只输出 JSON 对象，不要输出解释或 Markdown。格式：
+{"title":"测试集名称","owner":"负责人姓名或待分配","progress":0,"summary":"测试目标、覆盖范围、使用方式和当前状态","timeline":[{"phase":"阶段或时间","detail":"要做什么、负责人、交付物或验收标准"}]}`;
+
 export async function splitTasks({ name, description, planMarkdown }) {
   const provider = getAIProvider();
   if (!provider.apiKey || !provider.baseUrl) {
@@ -108,6 +112,26 @@ export async function parseWeeklyTopics({ meetingDoc, meetingMinutes }) {
   return {
     dailyTopics: Array.isArray(parsed.dailyTopics) ? parsed.dailyTopics : [],
     deepTopics: Array.isArray(parsed.deepTopics) ? parsed.deepTopics : [],
+  };
+}
+
+export async function parseEvalDoc({ doc }) {
+  const userContent = [
+    `测试集文档链接：${doc?.url || ''}`,
+    doc?.title ? `文档标题：${doc.title}` : '',
+    doc?.content ? `文档内容：\n${doc.content}` : '',
+  ].filter(Boolean).join('\n\n').slice(0, 60000);
+  const parsed = await callAIJson({
+    systemPrompt: EVAL_PARSE_PROMPT,
+    userContent,
+    fallbackError: 'DeepSeek 解析 Eval 测试集失败',
+  });
+  return {
+    title: String(parsed.title || doc?.title || '未命名测试集').trim(),
+    owner: String(parsed.owner || '待分配').trim(),
+    progress: Math.min(100, Math.max(0, Math.round(Number(parsed.progress || 0)))),
+    summary: String(parsed.summary || doc?.content || '').trim(),
+    timeline: Array.isArray(parsed.timeline) ? parsed.timeline : [],
   };
 }
 

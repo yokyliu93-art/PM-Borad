@@ -235,6 +235,39 @@ function topicTimelineText(topic, deep = false) {
   return topic.firstDraftAt ? `初稿时间：${topic.firstDraftAt}` : '初稿时间：待定';
 }
 
+function evalTimelineText(evalSet) {
+  if (Array.isArray(evalSet.timeline) && evalSet.timeline.length) {
+    return evalSet.timeline
+      .map((item, index) => {
+        if (Array.isArray(item)) return `${item[0] || `阶段${index + 1}`}：${item[1] || ''}`.trim();
+        return `${item.phase || item.week || item.time || `阶段${index + 1}`}：${item.detail || item.plan || item.summary || ''}`.trim();
+      })
+      .filter(Boolean)
+      .join('\n');
+  }
+  return '待补充：评测范围、样本集、执行方式和验收标准。';
+}
+
+export async function importEvalDoc(projectId, userId, fields = {}) {
+  const docUrl = String(fields.docUrl || fields.doc_url || fields.sourceUrl || fields.source_url || '').trim();
+  if (!docUrl) throw new Error('请提供测试集飞书文档链接');
+  const doc = await feishuService.fetchDocContent(userId, docUrl);
+  const parsed = await aiService.parseEvalDoc({ doc });
+  const memo = create(projectId, userId, {
+    kind: 'eval',
+    title: parsed.title || doc.title || '未命名测试集',
+    body: parsed.summary || '已从飞书文档生成测试集，等待补充评测说明。',
+    sourceUrl: docUrl,
+    ownerText: fields.ownerText || fields.owner_text || parsed.owner || '待分配',
+    progress: fields.progress ?? parsed.progress ?? 0,
+    timelineText: evalTimelineText(parsed),
+  });
+  return {
+    evalSet: memo,
+    source: { title: doc.title, url: docUrl },
+  };
+}
+
 function findUserByName(name = '', projectId = '') {
   const clean = String(name || '').trim();
   if (!clean || clean === '待定' || clean === '待分配') return null;

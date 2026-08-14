@@ -42,6 +42,15 @@ router.post('/parse-weekly-topics', async (req, res) => {
   }
 });
 
+router.post('/import-eval-doc', async (req, res) => {
+  try {
+    const data = await contentService.importEvalDoc(req.params.projectId, req.user.id, req.body || {});
+    res.status(201).json({ ok: true, data });
+  } catch (err) {
+    res.status(400).json({ ok: false, error: err.userMessage || err.message });
+  }
+});
+
 router.post('/:memoId/vote-demo', (req, res) => {
   try {
     const data = contentService.voteDemo(req.params.projectId, req.params.memoId, req.user.id);

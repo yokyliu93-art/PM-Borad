@@ -34,6 +34,7 @@ export function ContentHub({ mode = 'all', initialTopicType = 'daily' }) {
   const [loading, setLoading] = useState(true);
   const [creating, setCreating] = useState(false);
   const [importing, setImporting] = useState(false);
+  const [importingEval, setImportingEval] = useState(false);
   const [parsingTopics, setParsingTopics] = useState(false);
   const [topicParseError, setTopicParseError] = useState('');
   const [form, setForm] = useState({ kind: mode === 'topics' ? 'topic' : mode === 'demo' ? 'demo' : mode === 'eval' ? 'eval' : 'memo', subKind: mode === 'topics' ? 'daily' : '', title: '', body: '', sourceUrl: '', timelineText: '', ownerText: '', progress: 0, meetingDocUrl: '', meetingMinutesUrl: '' });
@@ -162,6 +163,38 @@ export function ContentHub({ mode = 'all', initialTopicType = 'daily' }) {
     }
   }
 
+  async function importEvalDoc(event) {
+    event.preventDefault();
+    const targetProjectId = projectId || selectedProjectId;
+    if (!targetProjectId) {
+      toast.error('请先在 Build 里创建一个项目，用来承载这个测试集');
+      return;
+    }
+    if (!form.sourceUrl) {
+      toast.error('请填写测试集飞书文档链接');
+      return;
+    }
+    setImportingEval(true);
+    let res;
+    try {
+      res = await post(`/api/projects/${targetProjectId}/content/import-eval-doc`, {
+        sourceUrl: form.sourceUrl,
+        ownerText: form.ownerText,
+      });
+    } catch (err) {
+      res = { ok: false, error: err.message || '请求失败，请重试' };
+    } finally {
+      setImportingEval(false);
+    }
+    if (res.ok) {
+      toast.success('已解析并加入 Eval');
+      setForm({ kind: 'eval', subKind: '', title: '', body: '', sourceUrl: '', timelineText: '', ownerText: '', progress: 0, meetingDocUrl: '', meetingMinutesUrl: '' });
+      loadItems();
+    } else {
+      toast.error(res.error || '解析失败');
+    }
+  }
+
   async function toggleVote(item) {
     const targetProjectId = item.project_id || projectId;
     const res = item.my_vote
@@ -259,6 +292,24 @@ export function ContentHub({ mode = 'all', initialTopicType = 'daily' }) {
         </div>
         {!isTopics ? <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm shadow-slate-950/5">
           <p className="flex items-center gap-2 text-sm font-semibold text-slate-950"><FilePlus2 size={16} />{isTopics ? '新增一个选题' : isEval ? '新增测试集' : '扔一个 memo 进来'}</p>
+          {isEval ? (
+            <form onSubmit={importEvalDoc} className="mt-4 space-y-3">
+              {isGlobal ? (
+                <select value={selectedProjectId} onChange={(event) => setSelectedProjectId(event.target.value)} className="w-full rounded-md border border-slate-200 bg-white px-3 py-2 text-sm outline-none focus:border-emerald-400">
+                  <option value="">选择归属 Build 项目...</option>
+                  {projects.map((project) => <option key={project.id} value={project.id}>{project.name}</option>)}
+                </select>
+              ) : null}
+              <input value={form.sourceUrl} onChange={(event) => setForm({ ...form, sourceUrl: event.target.value })} placeholder="测试集飞书文档链接" className="w-full rounded-md border border-slate-200 px-3 py-2 text-sm outline-none focus:border-emerald-400" />
+              <input value={form.ownerText} onChange={(event) => setForm({ ...form, ownerText: event.target.value })} placeholder="负责人，可选，比如 评测负责人 / 待分配" className="w-full rounded-md border border-slate-200 px-3 py-2 text-sm outline-none focus:border-emerald-400" />
+              <p className="text-xs leading-5 text-slate-500">
+                PM Board 会读取飞书文档，用 DeepSeek 整理测试目标、覆盖范围、负责人、当前状态和 Eval 计划，并生成共享测试集卡片。
+              </p>
+              <button disabled={importingEval} className="w-full rounded-md bg-emerald-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-emerald-500 disabled:opacity-60">
+                {importingEval ? '解析中...' : '解析并加入 Eval'}
+              </button>
+            </form>
+          ) : (
           <form onSubmit={createMemo} className="mt-4 space-y-3">
             {isGlobal ? (
               <select value={selectedProjectId} onChange={(event) => setSelectedProjectId(event.target.value)} className="w-full rounded-md border border-slate-200 bg-white px-3 py-2 text-sm outline-none focus:border-emerald-400">
@@ -303,6 +354,7 @@ export function ContentHub({ mode = 'all', initialTopicType = 'daily' }) {
               {creating ? '正在保存...' : isTopics ? '放进选题池' : isEval ? '加入 Eval' : '放进内容池'}
             </button>
           </form>
+          )}
         </div> : null}
       </div>
 
