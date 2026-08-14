@@ -6,8 +6,8 @@ import { useStore } from '../../store';
 import { Avatar } from '../../components/ui/Avatar';
 import { PanelTitle } from '../../components/ui/PanelTitle';
 import {
-  Sparkles, Users, CalendarDays, Check, Loader2,
-  FileText, Plus, Trash2, Layers, PenLine, Download, ExternalLink,
+  Users, CalendarDays, Check, Loader2,
+  FileText, Plus, Trash2, Download, ExternalLink,
 } from 'lucide-react';
 
 const defaultPlan = `# 项目计划书
@@ -27,7 +27,6 @@ export function ProjectCreate() {
   const { projectId } = useParams();
   const isEditing = !!projectId;
   const { currentTeamId, setActiveProjectId, currentUser } = useStore();
-  const [templates, setTemplates] = useState([]);
   const [allTeamMembers, setAllTeamMembers] = useState([]);
   const [loadingProject, setLoadingProject] = useState(isEditing);
   const [form, setForm] = useState({
@@ -36,8 +35,6 @@ export function ProjectCreate() {
     duration: '4周',
     teamSize: '',
     planMarkdown: defaultPlan,
-    templateId: '__ai__',
-    publishNow: true,
     selectedMembers: [],
     timeline: [
       ['W1', ''],
@@ -56,7 +53,6 @@ export function ProjectCreate() {
 
   useEffect(() => {
     if (!currentTeamId) return;
-    get('/api/templates').then((r) => setTemplates(r.data || []));
     get(`/api/teams/${currentTeamId}`).then((r) => {
       if (r.ok) {
         const members = r.data.members || [];
@@ -178,24 +174,7 @@ export function ProjectCreate() {
 
       const project = res.data;
 
-      if (form.templateId === '__ai__') {
-        const ai = await post(`/api/projects/${project.id}/tasks/ai-split`, {});
-        if (!ai.ok) {
-          toast.error(ai.error || 'AI 拆分失败');
-          setCreating(false);
-          return;
-        }
-        if (form.publishNow) {
-          await post(`/api/projects/${project.id}/tasks/publish`);
-        }
-      } else if (form.templateId && form.templateId !== 'template-blank-001') {
-        await post(`/api/projects/${project.id}/tasks/split`, { templateId: form.templateId });
-        if (form.publishNow) {
-          await post(`/api/projects/${project.id}/tasks/publish`);
-        }
-      }
-
-      toast.success('项目已创建，任务池已生成');
+      toast.success('项目已创建，请在任务大厅复制总PM Agent 包');
       setActiveProjectId(project.id);
       setCreating(false);
       navigate(`/projects/${project.id}/pool`);
@@ -247,7 +226,7 @@ export function ProjectCreate() {
       <div className="space-y-5">
         <div className="rounded-lg border border-white/10 bg-white/[0.035] p-5 shadow-2xl shadow-black/20">
           <div className="flex items-center gap-2 text-violet-200">
-            <Sparkles size={18} />
+            <FileText size={18} />
             <span className="text-sm font-medium">{isEditing ? '项目设置' : 'Step 1 · 项目发起'}</span>
           </div>
 
@@ -285,81 +264,10 @@ export function ProjectCreate() {
           </div>
 
           {!isEditing && (
-          <div className="mt-5">
-            <label className="mb-2 block text-sm font-medium text-slate-300">任务拆解方式</label>
-            <div className="grid gap-2 md:grid-cols-3">
-              <button
-                type="button"
-                onClick={() => setForm({ ...form, templateId: '__ai__' })}
-                className={`rounded-md border p-3 text-left transition ${
-                  form.templateId === '__ai__'
-                    ? 'border-violet-400/60 bg-violet-500/15'
-                    : 'border-white/10 bg-white/[0.03] hover:bg-white/[0.06]'
-                }`}
-              >
-                <span className="flex items-center gap-2 text-sm font-medium text-white">
-                  <Sparkles size={15} className="text-violet-300" /> AI 智能拆分
-                </span>
-                <span className="mt-1 block text-xs text-slate-500">根据项目计划书自动拆解任务</span>
-              </button>
-              <button
-                type="button"
-                onClick={() => setForm({
-                  ...form,
-                  templateId: (templates.find((t) => t.id !== 'template-blank-001') || {}).id || 'template-hackathon-001',
-                })}
-                className={`rounded-md border p-3 text-left transition ${
-                  form.templateId !== '__ai__' && form.templateId !== 'template-blank-001'
-                    ? 'border-violet-400/60 bg-violet-500/15'
-                    : 'border-white/10 bg-white/[0.03] hover:bg-white/[0.06]'
-                }`}
-              >
-                <span className="flex items-center gap-2 text-sm font-medium text-white">
-                  <Layers size={15} className="text-violet-300" /> 模板拆解
-                </span>
-                <span className="mt-1 block text-xs text-slate-500">从预设模板生成任务</span>
-              </button>
-              <button
-                type="button"
-                onClick={() => setForm({ ...form, templateId: 'template-blank-001' })}
-                className={`rounded-md border p-3 text-left transition ${
-                  form.templateId === 'template-blank-001'
-                    ? 'border-violet-400/60 bg-violet-500/15'
-                    : 'border-white/10 bg-white/[0.03] hover:bg-white/[0.06]'
-                }`}
-              >
-                <span className="flex items-center gap-2 text-sm font-medium text-white">
-                  <PenLine size={15} className="text-violet-300" /> 空白模板
-                </span>
-                <span className="mt-1 block text-xs text-slate-500">手动创建任务</span>
-              </button>
+            <div className="mt-5 rounded-md border border-emerald-400/20 bg-emerald-500/[0.06] p-4">
+              <p className="text-sm font-medium text-emerald-100">创建后进入任务大厅</p>
+              <p className="mt-1 text-sm leading-6 text-slate-500">PM Board 不在平台内自动拆任务。总PM会拿到 API Key 和说明书，交给自己的 Agent 拆出模块，再由 Agent 回传到任务大厅。</p>
             </div>
-
-            {form.templateId !== '__ai__' && form.templateId !== 'template-blank-001' && (
-              <div className="mt-3">
-                <label className="mb-2 block text-sm font-medium text-slate-300">选择模板</label>
-                <select
-                  value={form.templateId}
-                  onChange={(e) => setForm({ ...form, templateId: e.target.value })}
-                  className="w-full rounded-md border border-white/10 bg-[#0c0f16] px-3 py-2 text-sm text-slate-200 outline-none focus:border-violet-400/60"
-                >
-                  {templates.filter((t) => t.id !== 'template-blank-001').map((t) => (
-                    <option key={t.id} value={t.id}>{t.name}</option>
-                  ))}
-                </select>
-              </div>
-            )}
-
-            <label className="mt-3 flex items-center gap-2 text-sm text-slate-400">
-              <input
-                type="checkbox"
-                checked={form.publishNow}
-                onChange={(e) => setForm({ ...form, publishNow: e.target.checked })}
-                className="accent-violet-500"
-              />
-              创建后立即发布到任务池
-            </label>
-          </div>
           )}
         </div>
 
@@ -382,7 +290,7 @@ export function ProjectCreate() {
             )}
           </div>
           <p className="mt-1 text-xs text-slate-500">
-            粘贴飞书文档链接，内容会导入项目计划书，随后 AI 智能拆分直接基于它拆解任务
+            粘贴飞书文档链接，内容会导入项目计划书。创建后可复制总PM Agent 包，让 Agent 基于计划书拆分并回传任务块。
           </p>
           <div className="mt-3 flex gap-2">
             <input
@@ -431,7 +339,7 @@ export function ProjectCreate() {
           <Loader2 size={16} className={creating ? 'animate-spin' : 'hidden'} />
           {isEditing
             ? (creating ? '正在保存项目详情...' : '保存项目详情')
-            : (creating ? (form.templateId === '__ai__' ? 'AI 正在拆解任务池...' : '正在发起并拆分任务池...') : '发起项目，生成公共任务池')}
+            : (creating ? '正在发起项目...' : '发起项目，进入任务大厅')}
         </button>
       </div>
 

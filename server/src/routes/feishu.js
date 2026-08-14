@@ -1,8 +1,6 @@
 import { Router } from 'express';
 import { authRequired, requireProjectMember } from '../middleware/auth.js';
 import * as feishuService from '../services/feishu.js';
-import * as aiService from '../services/ai.js';
-import * as taskService from '../services/task.js';
 
 function sendError(res, err) {
   res.status(400).json({ ok: false, error: err.userMessage || err.message });
@@ -57,21 +55,13 @@ projectFeishuRouter.delete('/docs/:docId', authRequired, (req, res) => {
   res.json({ ok: true });
 });
 
-// Split an already-imported doc's content into a task pool via AI.
 projectFeishuRouter.post('/docs/:docId/ai-split', authRequired, async (req, res) => {
   const doc = feishuService.getDoc(req.params.docId);
   if (!doc || doc.project_id !== req.params.projectId) {
     return res.status(404).json({ ok: false, error: '文档不存在' });
   }
-  try {
-    const taskDefs = await aiService.splitTasks({
-      name: doc.title,
-      description: '',
-      planMarkdown: doc.content_markdown,
-    });
-    const tasks = taskService.createTasksFromDefs(req.params.projectId, taskDefs);
-    res.status(201).json({ ok: true, data: tasks });
-  } catch (err) {
-    sendError(res, err);
-  }
+  res.status(410).json({
+    ok: false,
+    error: 'PM Board 不再根据飞书文档做平台内 AI 拆分。请把文档放进总PM Agent 包，由 Agent 拆分后回传。',
+  });
 });

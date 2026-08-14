@@ -6,7 +6,7 @@ import { useStore } from '../../store';
 import { useSocket } from '../../hooks/useSocket';
 import { TaskCard } from '../../components/ui/TaskCard';
 import { EmptyState } from '../../components/ui/EmptyState';
-import { AlertTriangle, BookOpen, Copy, KeyRound, Loader2, Plus, RefreshCw, X, Sparkles } from 'lucide-react';
+import { AlertTriangle, BookOpen, Copy, KeyRound, Loader2, Plus, RefreshCw, X } from 'lucide-react';
 
 export function TaskPool() {
   const { projectId } = useParams();
@@ -20,7 +20,6 @@ export function TaskPool() {
   const [isProjectPM, setIsProjectPM] = useState(false);
   const [showAddForm, setShowAddForm] = useState(false);
   const [adding, setAdding] = useState(false);
-  const [resplitting, setResplitting] = useState(false);
   const [newTask, setNewTask] = useState({ title: '', summary: '', cycle: '' });
   const navigate = useNavigate();
 
@@ -112,30 +111,6 @@ export function TaskPool() {
       toast.error('添加任务失败，请确认后端已启动');
     }
     setAdding(false);
-  }
-
-  async function handleReSplit() {
-    if (!window.confirm('将删除当前所有任务，并按项目计划书重新用 AI 拆分。已认领的任务、子任务和进度都会丢失，确定继续吗？')) return;
-    setResplitting(true);
-    try {
-      const existingRes = await get(`/api/projects/${projectId}/tasks`);
-      const existingIds = (existingRes.data || []).map((t) => t.id);
-      const ai = await post(`/api/projects/${projectId}/tasks/ai-split`, {});
-      if (!ai.ok) {
-        toast.error(ai.error || 'AI 拆分失败，现有任务保持不变');
-        return;
-      }
-      for (const id of existingIds) {
-        await del(`/api/projects/${projectId}/tasks/${id}`);
-      }
-      await post(`/api/projects/${projectId}/tasks/publish`);
-      toast.success('已按项目计划书重新拆分并发布');
-      loadTasks();
-    } catch {
-      toast.error('重新拆分失败，请确认后端已启动');
-    } finally {
-      setResplitting(false);
-    }
   }
 
   async function handleDeleteTask(task) {
@@ -239,14 +214,6 @@ export function TaskPool() {
               >
                 <Plus size={16} /> 添加任务块
               </button>
-              <button
-                onClick={handleReSplit}
-                disabled={resplitting}
-                className="inline-flex items-center gap-2 rounded-md border border-violet-400/40 bg-violet-500/10 px-3 py-2 text-sm font-semibold text-violet-200 transition hover:bg-violet-500/20 disabled:opacity-60"
-              >
-                <Sparkles size={16} />
-                {resplitting ? 'AI 拆分中...' : '重新 AI 拆分'}
-              </button>
             </div>
           ) : (
             <form onSubmit={handleAddTask} className="space-y-3">
@@ -293,7 +260,7 @@ export function TaskPool() {
       {tasks.length === 0 ? (
         <EmptyState
           title="任务大厅还没有任务块"
-          detail="等待项目PM创建并发布任务块。如果是空白模板创建的项目，需要在项目内手动添加。"
+          detail="总PM可以复制 Agent 包给自己的 Agent，由 Agent 拆出任务块并回传到 PM Board。也可以先手动添加任务块。"
           action="返回项目列表"
           onClick={() => navigate('/projects')}
         />
