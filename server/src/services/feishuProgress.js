@@ -116,7 +116,8 @@ export function buildProjectProgressReport(projectId) {
       ? topRisks.map((task) => `- ${task.title}｜${task.owner_name || '未认领'}｜${pct(task.progress)}`)
       : ['- 暂无明显风险']),
     '',
-    `${config.clientUrl}/projects/${projectId}/pool`,
+    `项目进度看板：${config.clientUrl}/projects/${projectId}/commander`,
+    `部门大盘：${config.clientUrl}/projects/${projectId}/boss`,
   ].join('\n');
 }
 
@@ -151,7 +152,7 @@ export function buildBossDashboardReport(chatId = '') {
     '',
     ...lines,
     '',
-    `${config.clientUrl}/projects`,
+    `部门大盘：${config.clientUrl}/projects/${projects[0].id}/boss`,
   ].join('\n');
 }
 
