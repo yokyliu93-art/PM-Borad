@@ -131,18 +131,21 @@ export function TaskPool() {
       `项目：${project?.name || ''}`,
       '',
       '项目一级菜单由你根据项目说明书自行设计，不是固定模板。',
-      '你需要先写入一级菜单；PM Board 第一屏展示你写入的一级菜单；每个菜单点进去后才展示你回传的二级任务。',
+      '你复制到 Agent 后，请让 Agent 先读完整项目计划书，并先产出项目 Timeline。',
+      'Timeline 是必填项：必须按周写清每周目标、关键动作、负责人/配合方和交付物，并回传到 PM Board。',
+      '然后再写入一级菜单；PM Board 第一屏展示你写入的一级菜单；每个菜单点进去后才展示你回传的二级任务。',
       '',
       projectAgentInstructions || project?.agent_instructions || '',
       '',
       'API 使用方式：',
       `GET ${origin}/api/agent/project 读取项目需求文档和已有任务块。`,
-      `POST ${origin}/api/agent/project/modules 回传项目一级菜单。`,
       `POST ${origin}/api/agent/project/timeline 回传按周拆好的项目 Timeline。`,
+      `POST ${origin}/api/agent/project/modules 回传项目一级菜单。`,
       `POST ${origin}/api/agent/project/tasks 回传你拆好的模块，PM Board 会把它们显示为项目模块。`,
       '请求头：Authorization: Bearer <API_KEY>',
+      '推荐顺序：先回传 Timeline，再回传一级菜单，最后回传二级任务。',
       '一级菜单示例：{"modules":[{"name":"技术地基","detail":"域名、HTTPS、OAuth、基础前端能力"},{"name":"增长启动","detail":"冷启动、拉新、传播动作"}]}',
-      'Timeline 示例：{"timeline":[{"week":"W1","detail":"第一周目标；关键动作；负责人/配合方；交付物"}]}',
+      'Timeline 示例：{"timeline":[{"week":"W1","detail":"本周目标：...；关键动作：...；负责人/配合方：...；交付物：..."},{"week":"W2","detail":"本周目标：...；关键动作：...；负责人/配合方：...；交付物：..."}]}',
       '二级任务示例：{"tasks":[{"module":"技术地基","title":"任务块标题","summary":"目标","cycle":"第1周","idea":"核心想法","executionPlan":"执行方案","resourcePlan":"资源配合","subtasks":[{"title":"子任务","note":"说明"}]}],"publishNow":true}',
     ].join('\n');
   }
@@ -249,7 +252,7 @@ export function TaskPool() {
             <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
               <div>
                 <p className="flex items-center gap-1.5 text-sm font-medium text-emerald-100"><KeyRound size={15} />总PM Agent 包</p>
-                <p className="mt-1 text-sm text-slate-500">复制需求说明书和 API Key 给你的 Agent。请让 Agent 先写入适合这个项目的一级菜单，再把二级任务回传到对应菜单下。</p>
+                <p className="mt-1 text-sm text-slate-500">复制需求说明书和 API Key 给你的 Agent。请让 Agent 先根据需求文档回传项目 Timeline，再写入一级菜单和二级任务。</p>
                 <p className="mt-2 text-xs text-slate-500">当前 Key：{projectAgentKey || project?.agent_api_key_prefix || '还没有生成'}</p>
               </div>
               <div className="flex flex-wrap gap-2">

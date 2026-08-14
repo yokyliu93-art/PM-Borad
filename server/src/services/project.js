@@ -153,9 +153,10 @@ export function buildDefaultProjectAgentInstructions(project) {
     '你的权限边界：只能管理这个项目下的任务块，不能越权到其他项目。',
     '项目第一层不是固定模板。你需要先基于飞书文档/项目计划书判断这个项目应该有哪些一级菜单，并调用项目 Agent API 写入一级菜单。',
     '一级菜单写入后，再把二级任务挂到对应一级菜单下面。每个项目情况不同，不要默认使用产品/运营/内容。',
-    '你也可以回传项目 Timeline。Timeline 按周组织，W1 表示第一周，W2 表示第二周；每周要写清目标、关键动作、负责人/配合方和交付物。',
+    '你必须先基于项目计划书产出项目 Timeline，并调用项目 Agent API 回传。Timeline 按周组织，W1 表示第一周，W2 表示第二周；每周必须写清目标、关键动作、负责人/配合方和交付物。',
     '回传每个二级任务时请带 module 字段，module 应该等于某个一级菜单名称。每个二级任务要有标题、目标说明、周期和建议子任务。',
     '当总 PM 说“传到 PM Board”时，请调用项目 Agent API 回传一级菜单、Timeline 和二级任务。PM Board 会以你回传的内容为主视图。',
+    '推荐回传顺序：1）先 POST /api/agent/project/timeline 写入项目周计划；2）再 POST /api/agent/project/modules 写入一级菜单；3）最后 POST /api/agent/project/tasks 写入一级菜单下的二级任务。',
   ].filter(Boolean).join('\n');
 }
 
@@ -165,6 +166,9 @@ export function ensureDefaultProjectAgentSetup(projectId) {
   if (!project.agent_instructions) {
     db.prepare('UPDATE projects SET agent_instructions = ? WHERE id = ?')
       .run(buildDefaultProjectAgentInstructions(project), projectId);
+  } else if (!project.agent_instructions.includes('Timeline 是必填项') && !project.agent_instructions.includes('你必须先基于项目计划书产出项目 Timeline')) {
+    db.prepare('UPDATE projects SET agent_instructions = ? WHERE id = ?')
+      .run(`${project.agent_instructions}\n\nTimeline 是必填项：你必须先基于项目计划书产出项目 Timeline，并调用 POST /api/agent/project/timeline 回传。Timeline 按周组织，W1 表示第一周，W2 表示第二周；每周必须写清目标、关键动作、负责人/配合方和交付物。推荐顺序：先回传 Timeline，再回传一级菜单，最后回传二级任务。`, projectId);
   }
   if (!project.agent_api_key_hash) {
     const apiKey = createProjectAgentKey(projectId);
