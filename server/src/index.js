@@ -36,7 +36,7 @@ app.use(cors({
   credentials: true,
 }));
 app.use(cookieParser());
-app.use(express.json());
+app.use(express.json({ limit: '5mb' }));
 app.use('/uploads', express.static(config.uploadsDir));
 
 // Attach io to req so routes can emit events
@@ -77,7 +77,11 @@ if (fs.existsSync(clientDist)) {
 
 app.use((err, req, res, next) => {
   console.error('[server] Error:', err);
-  res.status(500).json({ ok: false, error: err.message || 'Internal server error' });
+  const status = err.status || err.statusCode || 500;
+  const error = err.type === 'entity.too.large'
+    ? '提交内容太大，请缩短输入内容或拆分后再试'
+    : err.message || 'Internal server error';
+  res.status(status).json({ ok: false, error });
 });
 
 migrate();
