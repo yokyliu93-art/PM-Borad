@@ -189,13 +189,13 @@ export function ContentHub({ mode = 'all', initialTopicType = 'daily' }) {
 
   const topicParserPanel = isTopics ? (
     <div className="rounded-xl border border-emerald-100 bg-white p-6 shadow-sm shadow-emerald-950/5">
-      <div className="grid gap-5 xl:grid-cols-[360px_1fr] xl:items-start">
+      <div className="grid gap-5 xl:grid-cols-[minmax(420px,0.9fr)_1.1fr] xl:items-start">
         <div className="min-w-0">
           <p className="flex items-center gap-2 text-sm font-semibold text-emerald-700">
             <CalendarDays size={16} />周会选题解析台
           </p>
-          <h2 className="mt-2 max-w-sm text-2xl font-semibold leading-tight tracking-normal text-slate-950">
-            连接周会文档和妙记，自动生成选题板块
+          <h2 className="mt-2 max-w-2xl text-2xl font-semibold leading-tight tracking-normal text-slate-950">
+            连接周会文档和妙记文字，自动生成选题板块
           </h2>
           <p className="mt-3 max-w-md text-sm leading-7 text-slate-600">
             系统会读取周会文档，并结合你粘贴的妙记转写文本调用 DeepSeek 解析日常选题、负责人和初稿时间。深度选题会生成长 timeline，后续像 Build 项目一样推进。
