@@ -18,6 +18,7 @@ const tabs = [
 const kindLabels = {
   memo: 'Memo',
   demo: 'Demo',
+  eval: 'Eval',
   meeting: '例会',
   topic: '选题',
 };
@@ -28,17 +29,18 @@ export function ContentHub({ mode = 'all', initialTopicType = 'daily' }) {
   const [items, setItems] = useState([]);
   const [projects, setProjects] = useState([]);
   const [selectedProjectId, setSelectedProjectId] = useState(projectId || '');
-  const [activeTab, setActiveTab] = useState(mode === 'topics' ? 'topic' : mode === 'demo' ? 'demo' : 'all');
+  const [activeTab, setActiveTab] = useState(mode === 'topics' ? 'topic' : mode === 'demo' ? 'demo' : mode === 'eval' ? 'eval' : 'all');
   const [topicType, setTopicType] = useState(initialTopicType);
   const [loading, setLoading] = useState(true);
   const [creating, setCreating] = useState(false);
   const [importing, setImporting] = useState(false);
-  const [form, setForm] = useState({ kind: mode === 'topics' ? 'topic' : mode === 'demo' ? 'demo' : 'memo', subKind: mode === 'topics' ? 'daily' : '', title: '', body: '', sourceUrl: '', timelineText: '', ownerText: '', progress: 0, meetingDocUrl: '', meetingMinutesUrl: '' });
+  const [form, setForm] = useState({ kind: mode === 'topics' ? 'topic' : mode === 'demo' ? 'demo' : mode === 'eval' ? 'eval' : 'memo', subKind: mode === 'topics' ? 'daily' : '', title: '', body: '', sourceUrl: '', timelineText: '', ownerText: '', progress: 0, meetingDocUrl: '', meetingMinutesUrl: '' });
   const [minutes, setMinutes] = useState({ title: '', meetingDocUrl: '', meetingMinutesUrl: '', transcript: '' });
   const [experienceDrafts, setExperienceDrafts] = useState({});
   const isGlobal = !projectId;
   const isTopics = mode === 'topics';
   const isDemo = mode === 'demo';
+  const isEval = mode === 'eval';
 
   useEffect(() => {
     if (currentTeamId) loadProjects();
@@ -73,6 +75,8 @@ export function ContentHub({ mode = 'all', initialTopicType = 'daily' }) {
         params.set('subKind', topicType);
       } else if (isDemo) {
         params.set('kind', 'demo');
+      } else if (isEval) {
+        params.set('kind', 'eval');
       }
       path = `/api/content?${params.toString()}`;
     }
@@ -104,7 +108,7 @@ export function ContentHub({ mode = 'all', initialTopicType = 'daily' }) {
     setCreating(false);
     if (res.ok) {
       toast.success('已放进内容池');
-      setForm({ kind: form.kind, subKind: form.subKind || '', title: '', body: '', sourceUrl: '', timelineText: '' });
+      setForm({ kind: form.kind, subKind: form.subKind || '', title: '', body: '', sourceUrl: '', timelineText: '', ownerText: '', progress: 0, meetingDocUrl: '', meetingMinutesUrl: '' });
       loadItems();
     } else {
       toast.error(res.error || '创建失败');
@@ -159,10 +163,10 @@ export function ContentHub({ mode = 'all', initialTopicType = 'daily' }) {
     <section className="space-y-6">
       <div className="grid gap-4 xl:grid-cols-[1fr_380px]">
         <div className="rounded-xl border border-emerald-100 bg-white p-5 shadow-sm shadow-emerald-950/5">
-          <p className="text-sm font-medium text-emerald-700">{isTopics ? '硅星人选题' : isDemo ? '硅星人 Demo 模块' : '硅星人内容池'}</p>
-          <h2 className="mt-2 text-3xl font-semibold tracking-normal text-slate-950">{isTopics ? '从周会进入选题推进' : isDemo ? '从 memo 到 Demo 决策' : '把零散 memo 变成可协作的板块'}</h2>
+          <p className="text-sm font-medium text-emerald-700">{isTopics ? '硅星人选题' : isDemo ? '硅星人 Demo 模块' : isEval ? '硅星人 Eval' : '硅星人内容池'}</p>
+          <h2 className="mt-2 text-3xl font-semibold tracking-normal text-slate-950">{isTopics ? '从周会进入选题推进' : isDemo ? '从 memo 到 Demo 决策' : isEval ? '测试集和评测进度' : '把零散 memo 变成可协作的板块'}</h2>
           <p className="mt-3 max-w-3xl text-sm leading-6 text-slate-600">
-            {isTopics ? '把周会文档和周会妙记放进来，拆成日常选题和深度选题。日常选题看负责人和执行进度；深度选题按更长 timeline 协作推进。' : isDemo ? '这里都是大家扔上来的 Demo memo。试用后写体验，半数通过就进入 Demo。' : 'Demo、每周例会和选题先放在这里。大家写试用体验、投 Demo 票，够半数通过后就可以进入 Demo 或沉淀成项目任务。'}
+            {isTopics ? '把周会文档和周会妙记放进来，拆成日常选题和深度选题。日常选题看负责人和执行进度；深度选题按更长 timeline 协作推进。' : isDemo ? '这里都是大家扔上来的 Demo memo。试用后写体验，半数通过就进入 Demo。' : isEval ? '把测试集以飞书链接的方式放进来，记录负责人、评测进度和当前说明，部门大盘会同步显示 Eval 进度。' : 'Demo、每周例会和选题先放在这里。大家写试用体验、投 Demo 票，够半数通过后就可以进入 Demo 或沉淀成项目任务。'}
           </p>
           {isTopics ? (
             <div className="mt-4 inline-flex items-center gap-2 rounded-full border border-emerald-100 bg-emerald-50 px-3 py-1.5 text-sm font-medium text-emerald-800">
@@ -177,7 +181,7 @@ export function ContentHub({ mode = 'all', initialTopicType = 'daily' }) {
           </div>
         </div>
         <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm shadow-slate-950/5">
-          <p className="flex items-center gap-2 text-sm font-semibold text-slate-950"><FilePlus2 size={16} />{isTopics ? '新增一个选题' : '扔一个 memo 进来'}</p>
+          <p className="flex items-center gap-2 text-sm font-semibold text-slate-950"><FilePlus2 size={16} />{isTopics ? '新增一个选题' : isEval ? '新增测试集' : '扔一个 memo 进来'}</p>
           <form onSubmit={createMemo} className="mt-4 space-y-3">
             {isGlobal ? (
               <select value={selectedProjectId} onChange={(event) => setSelectedProjectId(event.target.value)} className="w-full rounded-md border border-slate-200 bg-white px-3 py-2 text-sm outline-none focus:border-emerald-400">
@@ -185,10 +189,11 @@ export function ContentHub({ mode = 'all', initialTopicType = 'daily' }) {
                 {projects.map((project) => <option key={project.id} value={project.id}>{project.name}</option>)}
               </select>
             ) : null}
-            {!isTopics && !isDemo ? (
+            {!isTopics && !isDemo && !isEval ? (
               <select value={form.kind} onChange={(event) => setForm({ ...form, kind: event.target.value })} className="w-full rounded-md border border-slate-200 bg-white px-3 py-2 text-sm outline-none focus:border-emerald-400">
                 <option value="memo">普通 Memo</option>
                 <option value="demo">Demo 候选</option>
+                <option value="eval">Eval 测试集</option>
                 <option value="meeting">每周例会</option>
                 <option value="topic">选题</option>
               </select>
@@ -199,15 +204,15 @@ export function ContentHub({ mode = 'all', initialTopicType = 'daily' }) {
                 <option value="deep">深度选题</option>
               </select>
             ) : null}
-            <input value={form.title} onChange={(event) => setForm({ ...form, title: event.target.value })} placeholder="标题" className="w-full rounded-md border border-slate-200 px-3 py-2 text-sm outline-none focus:border-emerald-400" />
-            <textarea value={form.body} onChange={(event) => setForm({ ...form, body: event.target.value })} placeholder="内容、背景、试用发现或会议摘要" rows={4} className="w-full rounded-md border border-slate-200 px-3 py-2 text-sm outline-none focus:border-emerald-400" />
-            {isTopics ? (
+            <input value={form.title} onChange={(event) => setForm({ ...form, title: event.target.value })} placeholder={isEval ? '测试集名称' : '标题'} className="w-full rounded-md border border-slate-200 px-3 py-2 text-sm outline-none focus:border-emerald-400" />
+            <textarea value={form.body} onChange={(event) => setForm({ ...form, body: event.target.value })} placeholder={isEval ? '测试目标、覆盖范围、评测说明或当前状态' : '内容、背景、试用发现或会议摘要'} rows={4} className="w-full rounded-md border border-slate-200 px-3 py-2 text-sm outline-none focus:border-emerald-400" />
+            {isTopics || isEval ? (
               <div className="grid gap-2 md:grid-cols-2">
-                <input value={form.ownerText} onChange={(event) => setForm({ ...form, ownerText: event.target.value })} placeholder="负责人，比如 王兆洋 / 待分配" className="rounded-md border border-slate-200 px-3 py-2 text-sm outline-none focus:border-emerald-400" />
+                <input value={form.ownerText} onChange={(event) => setForm({ ...form, ownerText: event.target.value })} placeholder={isEval ? '负责人，比如 评测负责人 / 待分配' : '负责人，比如 王兆洋 / 待分配'} className="rounded-md border border-slate-200 px-3 py-2 text-sm outline-none focus:border-emerald-400" />
                 <input type="number" min="0" max="100" value={form.progress} onChange={(event) => setForm({ ...form, progress: event.target.value })} placeholder="进度 %" className="rounded-md border border-slate-200 px-3 py-2 text-sm outline-none focus:border-emerald-400" />
               </div>
             ) : null}
-            <input value={form.sourceUrl} onChange={(event) => setForm({ ...form, sourceUrl: event.target.value })} placeholder="飞书文档或资料链接" className="w-full rounded-md border border-slate-200 px-3 py-2 text-sm outline-none focus:border-emerald-400" />
+            <input value={form.sourceUrl} onChange={(event) => setForm({ ...form, sourceUrl: event.target.value })} placeholder={isEval ? '测试集飞书链接' : '飞书文档或资料链接'} className="w-full rounded-md border border-slate-200 px-3 py-2 text-sm outline-none focus:border-emerald-400" />
             {isTopics ? (
               <div className="grid gap-2 md:grid-cols-2">
                 <input value={form.meetingDocUrl} onChange={(event) => setForm({ ...form, meetingDocUrl: event.target.value })} placeholder="来源周会文档链接" className="rounded-md border border-slate-200 px-3 py-2 text-sm outline-none focus:border-emerald-400" />
@@ -218,13 +223,13 @@ export function ContentHub({ mode = 'all', initialTopicType = 'daily' }) {
               <textarea value={form.timelineText} onChange={(event) => setForm({ ...form, timelineText: event.target.value })} placeholder="选题 timeline，比如 W1 试用，W2 采访，W3 成稿" rows={3} className="w-full rounded-md border border-slate-200 px-3 py-2 text-sm outline-none focus:border-emerald-400" />
             ) : null}
             <button disabled={creating} className="w-full rounded-md bg-emerald-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-emerald-500 disabled:opacity-60">
-              {creating ? '正在保存...' : isTopics ? '放进选题池' : '放进内容池'}
+              {creating ? '正在保存...' : isTopics ? '放进选题池' : isEval ? '加入 Eval' : '放进内容池'}
             </button>
           </form>
         </div>
       </div>
 
-      {!isDemo ? <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm shadow-slate-950/5">
+      {!isDemo && !isEval ? <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm shadow-slate-950/5">
         <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
           <div>
             <p className="flex items-center gap-2 text-sm font-semibold text-slate-950"><CalendarDays size={16} />{isTopics ? '周会文档 + 周会妙记' : '飞书妙记导入'}</p>
@@ -288,7 +293,7 @@ export function ContentHub({ mode = 'all', initialTopicType = 'daily' }) {
                 <Avatar member={{ name: item.created_by_name, avatar_url: item.created_by_avatar }} size="md" />
               </div>
 
-              {item.kind === 'topic' ? (
+              {item.kind === 'topic' || item.kind === 'eval' ? (
                 <div className="mt-4 grid gap-3 md:grid-cols-2">
                   <div className="rounded-md border border-slate-200 bg-slate-50 p-3">
                     <p className="text-xs font-semibold text-slate-500">负责人</p>
@@ -305,7 +310,7 @@ export function ContentHub({ mode = 'all', initialTopicType = 'daily' }) {
 
               {item.timeline_text ? (
                 <div className="mt-4 rounded-md border border-emerald-100 bg-emerald-50/70 p-3">
-                  <p className="text-xs font-semibold text-emerald-800">{item.sub_kind === 'deep' ? '深度选题长 timeline' : '选题执行计划'}</p>
+                  <p className="text-xs font-semibold text-emerald-800">{item.kind === 'eval' ? 'Eval 计划' : item.sub_kind === 'deep' ? '深度选题长 timeline' : '选题执行计划'}</p>
                   <p className="mt-1 whitespace-pre-wrap text-sm leading-6 text-emerald-900">{item.timeline_text}</p>
                 </div>
               ) : null}

@@ -268,6 +268,7 @@ export default function App() {
           <Route path="/topics/daily" element={<ContentHub mode="topics" initialTopicType="daily" />} />
           <Route path="/topics/deep" element={<ContentHub mode="topics" initialTopicType="deep" />} />
           <Route path="/demo" element={<ContentHub mode="demo" />} />
+          <Route path="/eval" element={<ContentHub mode="eval" />} />
           <Route path="/my-work" element={<MyWorkspace />} />
           <Route path="/projects" element={<ProjectList />} />
           <Route path="/projects/create" element={<ProjectCreate />} />

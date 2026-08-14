@@ -4,7 +4,7 @@ import { NavLink, Outlet, useLocation } from 'react-router-dom';
 import { useEffect, useState } from 'react';
 import { useStore } from '../../store';
 import { AgentAccountMenu } from '../AgentAccountMenu';
-import { Boxes, UserCheck, LayoutDashboard, BarChart3, List, Plus, Settings, NotebookTabs, Presentation, ChevronDown, Circle } from 'lucide-react';
+import { Boxes, UserCheck, LayoutDashboard, BarChart3, List, Plus, Settings, NotebookTabs, Presentation, ChevronDown, Circle, Microscope } from 'lucide-react';
 import { get } from '../../lib/api';
 
 export function Shell() {
@@ -75,6 +75,10 @@ export function Shell() {
 
               <NavGroup icon={Presentation} title="Demo" defaultOpen={location.pathname.startsWith('/demo')}>
                 <SubNavLink to="/demo" label="Memo 与评价" />
+              </NavGroup>
+
+              <NavGroup icon={Microscope} title="Eval" defaultOpen={location.pathname.startsWith('/eval')}>
+                <SubNavLink to="/eval" label="测试集" />
               </NavGroup>
 
               <NavGroup icon={List} title="Build" defaultOpen={location.pathname.startsWith('/projects')}>
