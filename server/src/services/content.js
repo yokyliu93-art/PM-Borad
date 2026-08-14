@@ -281,19 +281,25 @@ async function notifyTopicOwner({ ownerName, projectId, title, firstDraftAt, sum
 export async function parseWeeklyTopics(projectId, userId, fields = {}) {
   const meetingDocUrl = String(fields.meetingDocUrl || fields.meeting_doc_url || '').trim();
   const meetingMinutesUrl = String(fields.meetingMinutesUrl || fields.meeting_minutes_url || fields.minutesUrl || '').trim();
-  if (!meetingDocUrl || !meetingMinutesUrl) throw new Error('请同时提供周会文档链接和周会妙记链接');
+  const transcript = String(fields.transcript || fields.minutesTranscript || fields.minutes_transcript || '').trim();
+  if (!meetingDocUrl) throw new Error('请提供周会文档链接');
+  if (!transcript && !meetingMinutesUrl) throw new Error('请粘贴妙记转写文本，或提供周会妙记链接');
 
-  const [meetingDoc, meetingMinutes] = await Promise.all([
-    feishuService.fetchDocContent(userId, meetingDocUrl),
-    feishuService.fetchDocContent(userId, meetingMinutesUrl),
-  ]);
+  const meetingDoc = await feishuService.fetchDocContent(userId, meetingDocUrl);
+  const meetingMinutes = transcript
+    ? {
+        title: fields.title || '妙记文字记录',
+        url: meetingMinutesUrl,
+        content: transcript,
+      }
+    : await feishuService.fetchDocContent(userId, meetingMinutesUrl);
   const parsed = await aiService.parseWeeklyTopics({ meetingDoc, meetingMinutes });
   const meeting = create(projectId, userId, {
     kind: 'meeting',
     title: fields.title || meetingDoc.title || '周会选题解析',
     body: [
       `周会文档：${meetingDoc.title || meetingDocUrl}`,
-      `周会妙记：${meetingMinutes.title || meetingMinutesUrl}`,
+      transcript ? '妙记转写：已粘贴文字记录' : `周会妙记：${meetingMinutes.title || meetingMinutesUrl}`,
       `DeepSeek 已解析出 ${parsed.dailyTopics.length} 个日常选题、${parsed.deepTopics.length} 个深度选题。`,
     ].join('\n'),
     sourceUrl: meetingDocUrl,

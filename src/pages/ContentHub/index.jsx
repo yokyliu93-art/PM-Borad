@@ -125,16 +125,26 @@ export function ContentHub({ mode = 'all', initialTopicType = 'daily' }) {
       return;
     }
     const endpoint = isTopics ? 'parse-weekly-topics' : 'import-minutes';
-    if (isTopics && (!minutes.meetingDocUrl || !minutes.meetingMinutesUrl)) {
-      toast.error('请同时填写周会文档链接和周会妙记链接');
+    if (isTopics && !minutes.meetingDocUrl) {
+      toast.error('请填写周会文档链接');
+      return;
+    }
+    if (isTopics && !minutes.transcript?.trim() && !minutes.meetingMinutesUrl) {
+      toast.error('请粘贴妙记转写文本，或填写周会妙记链接');
       return;
     }
     setTopicParseError('');
     if (isTopics) setParsingTopics(true);
     else setImporting(true);
-    const res = await post(`/api/projects/${targetProjectId}/content/${endpoint}`, minutes);
-    if (isTopics) setParsingTopics(false);
-    else setImporting(false);
+    let res;
+    try {
+      res = await post(`/api/projects/${targetProjectId}/content/${endpoint}`, minutes);
+    } catch (err) {
+      res = { ok: false, error: err.message || '请求失败，请重试' };
+    } finally {
+      if (isTopics) setParsingTopics(false);
+      else setImporting(false);
+    }
     if (res.ok) {
       if (isTopics) {
         const daily = res.data?.dailyTopics?.length || 0;
@@ -188,22 +198,26 @@ export function ContentHub({ mode = 'all', initialTopicType = 'daily' }) {
             连接周会文档和妙记，自动生成选题板块
           </h2>
           <p className="mt-3 max-w-md text-sm leading-7 text-slate-600">
-            系统会先读取飞书文档，再调用 DeepSeek 解析日常选题、负责人和初稿时间。深度选题会生成长 timeline，后续像 Build 项目一样推进。
+            系统会读取周会文档，并结合你粘贴的妙记转写文本调用 DeepSeek 解析日常选题、负责人和初稿时间。深度选题会生成长 timeline，后续像 Build 项目一样推进。
           </p>
         </div>
         <div className="space-y-3">
-          <form onSubmit={importMinutes} className="grid w-full gap-3 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_120px]">
+          <form onSubmit={importMinutes} className="grid w-full gap-3 lg:grid-cols-[minmax(0,1fr)_120px]">
             <label className="block">
               <span className="mb-1.5 block text-xs font-medium text-slate-500">周会文档链接</span>
               <input value={minutes.meetingDocUrl} onChange={(event) => setMinutes({ ...minutes, meetingDocUrl: event.target.value })} placeholder="https://xxx.feishu.cn/docx/..." className="w-full rounded-md border border-slate-200 px-3 py-2.5 text-sm outline-none focus:border-emerald-400" />
             </label>
-            <label className="block">
-              <span className="mb-1.5 block text-xs font-medium text-slate-500">周会妙记 / 速记链接</span>
-              <input value={minutes.meetingMinutesUrl} onChange={(event) => setMinutes({ ...minutes, meetingMinutesUrl: event.target.value })} placeholder="https://xxx.feishu.cn/minutes/..." className="w-full rounded-md border border-slate-200 px-3 py-2.5 text-sm outline-none focus:border-emerald-400" />
-            </label>
             <button disabled={parsingTopics} className="mt-5 rounded-md bg-emerald-600 px-3 py-2.5 text-sm font-semibold text-white transition hover:bg-emerald-500 disabled:opacity-60">
               {parsingTopics ? '解析中' : '解析'}
             </button>
+            <label className="block lg:col-span-2">
+              <span className="mb-1.5 block text-xs font-medium text-slate-500">妙记导出的文字记录</span>
+              <textarea value={minutes.transcript} onChange={(event) => setMinutes({ ...minutes, transcript: event.target.value })} placeholder="从飞书妙记导出或复制文字记录，粘贴到这里" rows={6} className="w-full rounded-md border border-slate-200 px-3 py-2.5 text-sm leading-6 outline-none focus:border-emerald-400" />
+            </label>
+            <label className="block lg:col-span-2">
+              <span className="mb-1.5 block text-xs font-medium text-slate-500">妙记链接（可选，等飞书权限开通后使用）</span>
+              <input value={minutes.meetingMinutesUrl} onChange={(event) => setMinutes({ ...minutes, meetingMinutesUrl: event.target.value })} placeholder="https://xxx.feishu.cn/minutes/..." className="w-full rounded-md border border-slate-200 px-3 py-2.5 text-sm outline-none focus:border-emerald-400" />
+            </label>
           </form>
           {topicParseError ? (
             <div className="flex flex-col gap-3 rounded-md border border-red-100 bg-red-50 px-3 py-3 text-sm text-red-700 sm:flex-row sm:items-center sm:justify-between">
