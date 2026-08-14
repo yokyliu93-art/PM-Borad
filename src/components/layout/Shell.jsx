@@ -30,29 +30,29 @@ export function Shell() {
       ];
 
   return (
-    <div className="claude-skin min-h-screen bg-[#070a09] text-[#f4fbf7]">
+    <div className="claude-skin min-h-screen bg-[#f6f8fb] text-[#17211f]">
       <ErrorBoundary>
         <Toaster
           position="bottom-right"
           toastOptions={{
             style: {
-              background: '#101614',
-              color: '#f4fbf7',
-              border: '1px solid rgba(244,251,247,0.12)',
+              background: '#ffffff',
+              color: '#17211f',
+              border: '1px solid #e6eaf0',
             },
           }}
         />
       </ErrorBoundary>
       <div className="flex min-h-screen flex-col lg:flex-row">
-        <aside className="border-b border-white/10 bg-[#11141d]/95 lg:sticky lg:top-0 lg:h-screen lg:w-72 lg:border-b-0 lg:border-r">
+        <aside className="border-b border-slate-200 bg-white/90 lg:sticky lg:top-0 lg:h-screen lg:w-72 lg:border-b-0 lg:border-r">
           <div className="px-5 py-5">
             <div className="flex items-center gap-3">
-              <div className="grid h-10 w-10 place-items-center rounded-md bg-violet-500/20 text-violet-200 ring-1 ring-violet-400/30">
+              <div className="grid h-10 w-10 place-items-center rounded-md bg-emerald-50 text-emerald-600 ring-1 ring-emerald-100">
                 <Bot size={21} />
               </div>
               <div>
-                <p className="text-sm font-semibold text-white">PM Board</p>
-                <p className="text-xs text-slate-400">Agent 驱动协作面板</p>
+                <p className="text-sm font-semibold text-slate-950">PM Board</p>
+                <p className="text-xs text-slate-500">Agent 驱动协作面板</p>
               </div>
             </div>
             <div className="mt-6 space-y-1">
@@ -63,14 +63,14 @@ export function Shell() {
                   end={path === '/projects'}
                   className={({ isActive }) =>
                     `flex w-full items-center gap-3 rounded-md px-3 py-2 text-left text-sm transition ${
-                      isActive ? 'bg-white text-[#0f1117]' : 'text-slate-300 hover:bg-white/8 hover:text-white'
+                      isActive ? 'bg-slate-950 text-white shadow-sm' : 'text-slate-600 hover:bg-slate-100 hover:text-slate-950'
                     }`
                   }
                 >
                   <Icon size={16} />
                   <span>{label}</span>
                   {path.endsWith('/pool') && tasks.length > 0 ? (
-                    <span className="ml-auto rounded bg-violet-500/20 px-1.5 py-0.5 text-[10px] text-violet-200">{tasks.length}</span>
+                    <span className="ml-auto rounded bg-emerald-50 px-1.5 py-0.5 text-[10px] text-emerald-700">{tasks.length}</span>
                   ) : null}
                 </NavLink>
               ))}
@@ -79,11 +79,11 @@ export function Shell() {
         </aside>
 
         <main className="min-w-0 flex-1">
-          <header className="sticky top-0 z-20 border-b border-white/10 bg-[#0f1117]/85 px-4 py-4 backdrop-blur md:px-8">
+          <header className="sticky top-0 z-20 border-b border-slate-200 bg-white/80 px-4 py-4 backdrop-blur md:px-8">
             <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
               <div>
                 <p className="text-xs text-slate-500">{projectId ? `项目 #${projectId.slice(0, 8)}` : 'PM board'}</p>
-                <h1 className="mt-1 text-2xl font-semibold tracking-normal text-white md:text-3xl">总PM 与 Agent 拆解，PM Board 接收模块回传</h1>
+                <h1 className="mt-1 text-2xl font-semibold tracking-normal text-slate-950 md:text-3xl">PM Board 工作台</h1>
               </div>
               <UserSwitcher />
             </div>
