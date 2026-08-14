@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { useParams } from 'react-router-dom';
+import { useNavigate, useParams } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import { get, post, put, del, uploadFile } from '../../lib/api';
 import { useStore } from '../../store';
@@ -32,6 +32,7 @@ const SCHEDULE_STATUSES = ['未开始', '进行中', '已交付', '已完成'];
 
 export function Subproject() {
   const { projectId, taskId } = useParams();
+  const navigate = useNavigate();
   const { currentUser } = useStore();
   const [task, setTask] = useState(null);
   const [project, setProject] = useState(null);
@@ -366,6 +367,23 @@ export function Subproject() {
     const res = await del(`/api/projects/${projectId}/tasks/${taskId}/comments/${comment.id}`);
     if (!res.ok) toast.error(res.error || '删除失败');
     loadTask();
+  }
+
+  async function handleDeleteCurrentTask() {
+    if (!task) return;
+    const ownerText = task.owner_id ? `（已被 ${task.owner_name || '成员'} 认领）` : '';
+    if (!window.confirm(`确定删除任务「${task.title}」？${ownerText}\n删除后其子任务、评论、进度和附件都会一并移除，不可恢复。`)) return;
+    try {
+      const res = await del(`/api/projects/${projectId}/tasks/${task.id}`);
+      if (res.ok) {
+        toast.success('任务已删除');
+        navigate(`/projects/${projectId}/pool`);
+      } else {
+        toast.error(res.error || '删除失败');
+      }
+    } catch {
+      toast.error('删除失败，请确认后端已启动');
+    }
   }
 
   async function handleAdoptComment(comment) {
@@ -818,7 +836,17 @@ export function Subproject() {
               </div>
               <p className="mt-2 whitespace-pre-wrap text-sm leading-6 text-slate-400">{task.summary}</p>
             </div>
-            {owner ? <Avatar member={owner} size="xl" pm /> : null}
+            <div className="flex shrink-0 items-start gap-3">
+              {isReviewer ? (
+                <button
+                  onClick={handleDeleteCurrentTask}
+                  className="inline-flex items-center gap-1.5 rounded-md border border-red-400/40 bg-red-500/10 px-3 py-2 text-sm text-red-200 transition hover:bg-red-500/20"
+                >
+                  <Trash2 size={15} /> 删除任务
+                </button>
+              ) : null}
+              {owner ? <Avatar member={owner} size="xl" pm /> : null}
+            </div>
           </div>
 
           <div className="mt-6 grid gap-4 md:grid-cols-3">
