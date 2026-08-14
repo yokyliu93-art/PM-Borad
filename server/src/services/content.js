@@ -113,8 +113,11 @@ export function create(projectId, userId, fields = {}) {
   if (!title) throw new Error('标题不能为空');
   const id = uuid();
   db.prepare(`
-    INSERT INTO content_memos (id, project_id, kind, sub_kind, title, body, source_url, timeline_text, status, created_by)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    INSERT INTO content_memos (
+      id, project_id, kind, sub_kind, title, body, source_url, timeline_text,
+      status, owner_text, progress, meeting_doc_url, meeting_minutes_url, created_by
+    )
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `).run(
     id,
     projectId,
@@ -125,6 +128,10 @@ export function create(projectId, userId, fields = {}) {
     fields.sourceUrl || fields.source_url || '',
     fields.timelineText || fields.timeline_text || '',
     fields.status || 'open',
+    fields.ownerText || fields.owner_text || '',
+    Math.min(100, Math.max(0, Math.round(Number(fields.progress || 0)))),
+    fields.meetingDocUrl || fields.meeting_doc_url || fields.weeklyDocUrl || fields.weekly_doc_url || '',
+    fields.meetingMinutesUrl || fields.meeting_minutes_url || fields.minutesUrl || fields.minutes_url || '',
     userId
   );
   return get(projectId, id, userId);
@@ -172,24 +179,35 @@ export function addExperience(projectId, memoId, userId, content) {
 export function importMinutes(projectId, userId, fields = {}) {
   const title = String(fields.title || '飞书妙记导入').trim();
   const transcript = String(fields.transcript || fields.content || '').trim();
-  if (!transcript) throw new Error('请粘贴妙记转写内容');
+  const meetingDocUrl = fields.meetingDocUrl || fields.meeting_doc_url || fields.weeklyDocUrl || fields.weekly_doc_url || '';
+  const meetingMinutesUrl = fields.meetingMinutesUrl || fields.meeting_minutes_url || fields.minutesUrl || fields.minutes_url || fields.sourceUrl || fields.source_url || '';
+  if (!transcript && !meetingDocUrl && !meetingMinutesUrl) throw new Error('请提供周会文档、周会妙记链接或妙记转写内容');
   const memo = create(projectId, userId, {
     kind: 'meeting',
     title,
-    body: transcript,
-    sourceUrl: fields.sourceUrl || fields.source_url || '',
+    body: transcript || '已记录周会文档和周会妙记链接，等待同步转写内容后拆解选题。',
+    sourceUrl: meetingMinutesUrl || meetingDocUrl,
+    meetingDocUrl,
+    meetingMinutesUrl,
   });
   const topicLines = transcript
     .split(/\n+/)
     .map((line) => line.replace(/^[-*#\d.、\s]+/, '').trim())
     .filter((line) => /选题|demo|报道|采访|上线|发布|推荐/.test(line))
     .slice(0, 8);
-  const topics = topicLines.map((line, index) => create(projectId, userId, {
+  const topics = topicLines.map((line) => create(projectId, userId, {
     kind: 'topic',
+    subKind: /深度|长线|专题|系列|调查|深挖|long/i.test(line) ? 'deep' : 'daily',
     title: line.slice(0, 48),
     body: `来自例会「${title}」：${line}`,
-    timelineText: `待补充 timeline。建议从 W${index + 1} 开始确认负责人、采访/试用、成稿或 Demo 时间。`,
-    sourceUrl: fields.sourceUrl || fields.source_url || '',
+    ownerText: fields.ownerText || fields.owner_text || '待分配',
+    progress: 0,
+    timelineText: /深度|长线|专题|系列|调查|深挖|long/i.test(line)
+      ? `W1：确认角度、资料和采访对象\nW2-W3：采访、试用、资料整理\nW4：成稿、编辑、发布与复盘`
+      : `执行：确认负责人、采访/试用、成稿或 Demo 时间。`,
+    sourceUrl: meetingMinutesUrl || meetingDocUrl,
+    meetingDocUrl,
+    meetingMinutesUrl,
   }));
   return { meeting: memo, topics };
 }

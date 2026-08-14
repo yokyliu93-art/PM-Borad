@@ -382,6 +382,18 @@ export function migrate() {
   if (!memoCols.includes('sub_kind')) {
     db.exec("ALTER TABLE content_memos ADD COLUMN sub_kind TEXT DEFAULT ''");
   }
+  if (!memoCols.includes('owner_text')) {
+    db.exec("ALTER TABLE content_memos ADD COLUMN owner_text TEXT DEFAULT ''");
+  }
+  if (!memoCols.includes('progress')) {
+    db.exec('ALTER TABLE content_memos ADD COLUMN progress INTEGER DEFAULT 0');
+  }
+  if (!memoCols.includes('meeting_doc_url')) {
+    db.exec("ALTER TABLE content_memos ADD COLUMN meeting_doc_url TEXT DEFAULT ''");
+  }
+  if (!memoCols.includes('meeting_minutes_url')) {
+    db.exec("ALTER TABLE content_memos ADD COLUMN meeting_minutes_url TEXT DEFAULT ''");
+  }
 
   const moduleCols = db.prepare('PRAGMA table_info(project_modules)').all().map((c) => c.name);
   if (!moduleCols.includes('owner_id')) {

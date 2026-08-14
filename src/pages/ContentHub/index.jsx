@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useParams } from 'react-router-dom';
 import toast from 'react-hot-toast';
-import { BookOpenText, CalendarDays, FilePlus2, FlaskConical, MessageSquareText, Sparkles, ThumbsUp, Vote } from 'lucide-react';
+import { BookOpenText, CalendarDays, FilePlus2, FlaskConical, MessageSquareText, Sparkles, ThumbsUp, UserCheck, Vote } from 'lucide-react';
 import { get, post, del } from '../../lib/api';
 import { useStore } from '../../store';
 import { Avatar } from '../../components/ui/Avatar';
@@ -33,8 +33,8 @@ export function ContentHub({ mode = 'all', initialTopicType = 'daily' }) {
   const [loading, setLoading] = useState(true);
   const [creating, setCreating] = useState(false);
   const [importing, setImporting] = useState(false);
-  const [form, setForm] = useState({ kind: mode === 'topics' ? 'topic' : mode === 'demo' ? 'demo' : 'memo', subKind: mode === 'topics' ? 'daily' : '', title: '', body: '', sourceUrl: '', timelineText: '' });
-  const [minutes, setMinutes] = useState({ title: '', sourceUrl: '', transcript: '' });
+  const [form, setForm] = useState({ kind: mode === 'topics' ? 'topic' : mode === 'demo' ? 'demo' : 'memo', subKind: mode === 'topics' ? 'daily' : '', title: '', body: '', sourceUrl: '', timelineText: '', ownerText: '', progress: 0, meetingDocUrl: '', meetingMinutesUrl: '' });
+  const [minutes, setMinutes] = useState({ title: '', meetingDocUrl: '', meetingMinutesUrl: '', transcript: '' });
   const [experienceDrafts, setExperienceDrafts] = useState({});
   const isGlobal = !projectId;
   const isTopics = mode === 'topics';
@@ -123,7 +123,7 @@ export function ContentHub({ mode = 'all', initialTopicType = 'daily' }) {
     setImporting(false);
     if (res.ok) {
       toast.success(`已导入例会，并生成 ${res.data?.topics?.length || 0} 条候选选题`);
-      setMinutes({ title: '', sourceUrl: '', transcript: '' });
+      setMinutes({ title: '', meetingDocUrl: '', meetingMinutesUrl: '', transcript: '' });
       loadItems();
     } else {
       toast.error(res.error || '导入失败');
@@ -160,10 +160,15 @@ export function ContentHub({ mode = 'all', initialTopicType = 'daily' }) {
       <div className="grid gap-4 xl:grid-cols-[1fr_380px]">
         <div className="rounded-xl border border-emerald-100 bg-white p-5 shadow-sm shadow-emerald-950/5">
           <p className="text-sm font-medium text-emerald-700">{isTopics ? '硅星人选题' : isDemo ? '硅星人 Demo 模块' : '硅星人内容池'}</p>
-          <h2 className="mt-2 text-3xl font-semibold tracking-normal text-slate-950">{isTopics ? '日常选题和深度选题' : isDemo ? '从 memo 到 Demo 决策' : '把零散 memo 变成可协作的板块'}</h2>
+          <h2 className="mt-2 text-3xl font-semibold tracking-normal text-slate-950">{isTopics ? '从周会进入选题推进' : isDemo ? '从 memo 到 Demo 决策' : '把零散 memo 变成可协作的板块'}</h2>
           <p className="mt-3 max-w-3xl text-sm leading-6 text-slate-600">
-            {isTopics ? '会上讨论过的选题、临时机动选题和深度选题都先沉淀在这里，带 timeline 的选题可以继续转成 Build 项目。' : isDemo ? '这里都是大家扔上来的 Demo memo。试用后写体验，半数通过就进入 Demo。' : 'Demo、每周例会和选题先放在这里。大家写试用体验、投 Demo 票，够半数通过后就可以进入 Demo 或沉淀成项目任务。'}
+            {isTopics ? '把周会文档和周会妙记放进来，拆成日常选题和深度选题。日常选题看负责人和执行进度；深度选题按更长 timeline 协作推进。' : isDemo ? '这里都是大家扔上来的 Demo memo。试用后写体验，半数通过就进入 Demo。' : 'Demo、每周例会和选题先放在这里。大家写试用体验、投 Demo 票，够半数通过后就可以进入 Demo 或沉淀成项目任务。'}
           </p>
+          {isTopics ? (
+            <div className="mt-4 inline-flex items-center gap-2 rounded-full border border-emerald-100 bg-emerald-50 px-3 py-1.5 text-sm font-medium text-emerald-800">
+              <UserCheck size={15} />选题总负责人：王兆洋
+            </div>
+          ) : null}
           <div className="mt-5 grid gap-3 md:grid-cols-4">
             <Stat label="池内 memo" value={stats.memos} />
             <Stat label="可 Demo" value={stats.demoReady} />
@@ -172,7 +177,7 @@ export function ContentHub({ mode = 'all', initialTopicType = 'daily' }) {
           </div>
         </div>
         <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm shadow-slate-950/5">
-          <p className="flex items-center gap-2 text-sm font-semibold text-slate-950"><FilePlus2 size={16} />扔一个 memo 进来</p>
+          <p className="flex items-center gap-2 text-sm font-semibold text-slate-950"><FilePlus2 size={16} />{isTopics ? '新增一个选题' : '扔一个 memo 进来'}</p>
           <form onSubmit={createMemo} className="mt-4 space-y-3">
             {isGlobal ? (
               <select value={selectedProjectId} onChange={(event) => setSelectedProjectId(event.target.value)} className="w-full rounded-md border border-slate-200 bg-white px-3 py-2 text-sm outline-none focus:border-emerald-400">
@@ -196,12 +201,24 @@ export function ContentHub({ mode = 'all', initialTopicType = 'daily' }) {
             ) : null}
             <input value={form.title} onChange={(event) => setForm({ ...form, title: event.target.value })} placeholder="标题" className="w-full rounded-md border border-slate-200 px-3 py-2 text-sm outline-none focus:border-emerald-400" />
             <textarea value={form.body} onChange={(event) => setForm({ ...form, body: event.target.value })} placeholder="内容、背景、试用发现或会议摘要" rows={4} className="w-full rounded-md border border-slate-200 px-3 py-2 text-sm outline-none focus:border-emerald-400" />
+            {isTopics ? (
+              <div className="grid gap-2 md:grid-cols-2">
+                <input value={form.ownerText} onChange={(event) => setForm({ ...form, ownerText: event.target.value })} placeholder="负责人，比如 王兆洋 / 待分配" className="rounded-md border border-slate-200 px-3 py-2 text-sm outline-none focus:border-emerald-400" />
+                <input type="number" min="0" max="100" value={form.progress} onChange={(event) => setForm({ ...form, progress: event.target.value })} placeholder="进度 %" className="rounded-md border border-slate-200 px-3 py-2 text-sm outline-none focus:border-emerald-400" />
+              </div>
+            ) : null}
             <input value={form.sourceUrl} onChange={(event) => setForm({ ...form, sourceUrl: event.target.value })} placeholder="飞书文档或资料链接" className="w-full rounded-md border border-slate-200 px-3 py-2 text-sm outline-none focus:border-emerald-400" />
+            {isTopics ? (
+              <div className="grid gap-2 md:grid-cols-2">
+                <input value={form.meetingDocUrl} onChange={(event) => setForm({ ...form, meetingDocUrl: event.target.value })} placeholder="来源周会文档链接" className="rounded-md border border-slate-200 px-3 py-2 text-sm outline-none focus:border-emerald-400" />
+                <input value={form.meetingMinutesUrl} onChange={(event) => setForm({ ...form, meetingMinutesUrl: event.target.value })} placeholder="来源周会妙记链接" className="rounded-md border border-slate-200 px-3 py-2 text-sm outline-none focus:border-emerald-400" />
+              </div>
+            ) : null}
             {(form.kind === 'topic' || isTopics) ? (
               <textarea value={form.timelineText} onChange={(event) => setForm({ ...form, timelineText: event.target.value })} placeholder="选题 timeline，比如 W1 试用，W2 采访，W3 成稿" rows={3} className="w-full rounded-md border border-slate-200 px-3 py-2 text-sm outline-none focus:border-emerald-400" />
             ) : null}
             <button disabled={creating} className="w-full rounded-md bg-emerald-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-emerald-500 disabled:opacity-60">
-              {creating ? '正在保存...' : '放进内容池'}
+              {creating ? '正在保存...' : isTopics ? '放进选题池' : '放进内容池'}
             </button>
           </form>
         </div>
@@ -210,16 +227,17 @@ export function ContentHub({ mode = 'all', initialTopicType = 'daily' }) {
       {!isDemo ? <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm shadow-slate-950/5">
         <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
           <div>
-            <p className="flex items-center gap-2 text-sm font-semibold text-slate-950"><CalendarDays size={16} />飞书妙记导入</p>
-            <p className="mt-1 text-sm text-slate-500">现在先支持粘贴妙记转写。后续接飞书妙记 API 后，会自动拉例会、整理选题和 Demo 候选。</p>
+            <p className="flex items-center gap-2 text-sm font-semibold text-slate-950"><CalendarDays size={16} />{isTopics ? '周会文档 + 周会妙记' : '飞书妙记导入'}</p>
+            <p className="mt-1 text-sm text-slate-500">{isTopics ? '把两个飞书链接和妙记文本放进来，系统会先沉淀周会记录，并按关键词拆出日常/深度选题候选。' : '现在先支持粘贴妙记转写。后续接飞书妙记 API 后，会自动拉例会、整理选题和 Demo 候选。'}</p>
           </div>
-          <form onSubmit={importMinutes} className="grid w-full gap-2 lg:max-w-3xl lg:grid-cols-[180px_1fr_120px]">
+          <form onSubmit={importMinutes} className="grid w-full gap-2 lg:max-w-3xl lg:grid-cols-[180px_1fr_1fr_120px]">
             <input value={minutes.title} onChange={(event) => setMinutes({ ...minutes, title: event.target.value })} placeholder="例会标题" className="rounded-md border border-slate-200 px-3 py-2 text-sm outline-none focus:border-emerald-400" />
-            <input value={minutes.sourceUrl} onChange={(event) => setMinutes({ ...minutes, sourceUrl: event.target.value })} placeholder="妙记或飞书文档链接" className="rounded-md border border-slate-200 px-3 py-2 text-sm outline-none focus:border-emerald-400" />
+            <input value={minutes.meetingDocUrl} onChange={(event) => setMinutes({ ...minutes, meetingDocUrl: event.target.value })} placeholder="周会文档链接" className="rounded-md border border-slate-200 px-3 py-2 text-sm outline-none focus:border-emerald-400" />
+            <input value={minutes.meetingMinutesUrl} onChange={(event) => setMinutes({ ...minutes, meetingMinutesUrl: event.target.value })} placeholder="周会妙记链接" className="rounded-md border border-slate-200 px-3 py-2 text-sm outline-none focus:border-emerald-400" />
             <button disabled={importing} className="rounded-md border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm font-semibold text-emerald-700 transition hover:bg-emerald-100 disabled:opacity-60">
               {importing ? '导入中' : '导入'}
             </button>
-            <textarea value={minutes.transcript} onChange={(event) => setMinutes({ ...minutes, transcript: event.target.value })} placeholder="粘贴妙记转写文本" rows={4} className="lg:col-span-3 rounded-md border border-slate-200 px-3 py-2 text-sm outline-none focus:border-emerald-400" />
+            <textarea value={minutes.transcript} onChange={(event) => setMinutes({ ...minutes, transcript: event.target.value })} placeholder="粘贴妙记转写文本" rows={4} className="lg:col-span-4 rounded-md border border-slate-200 px-3 py-2 text-sm outline-none focus:border-emerald-400" />
           </form>
         </div>
       </div> : null}
@@ -270,16 +288,39 @@ export function ContentHub({ mode = 'all', initialTopicType = 'daily' }) {
                 <Avatar member={{ name: item.created_by_name, avatar_url: item.created_by_avatar }} size="md" />
               </div>
 
+              {item.kind === 'topic' ? (
+                <div className="mt-4 grid gap-3 md:grid-cols-2">
+                  <div className="rounded-md border border-slate-200 bg-slate-50 p-3">
+                    <p className="text-xs font-semibold text-slate-500">负责人</p>
+                    <p className="mt-1 text-sm font-semibold text-slate-950">{item.owner_text || '待分配'}</p>
+                  </div>
+                  <div className="rounded-md border border-slate-200 bg-slate-50 p-3">
+                    <div className="mb-2 flex items-center justify-between text-xs text-slate-500"><span>执行进度</span><span>{item.progress || 0}%</span></div>
+                    <div className="h-2 overflow-hidden rounded-full bg-slate-200">
+                      <div className="h-full rounded-full bg-emerald-500" style={{ width: `${item.progress || 0}%` }} />
+                    </div>
+                  </div>
+                </div>
+              ) : null}
+
               {item.timeline_text ? (
                 <div className="mt-4 rounded-md border border-emerald-100 bg-emerald-50/70 p-3">
-                  <p className="text-xs font-semibold text-emerald-800">选题 timeline</p>
+                  <p className="text-xs font-semibold text-emerald-800">{item.sub_kind === 'deep' ? '深度选题长 timeline' : '选题执行计划'}</p>
                   <p className="mt-1 whitespace-pre-wrap text-sm leading-6 text-emerald-900">{item.timeline_text}</p>
                 </div>
               ) : null}
 
-              {item.source_url ? (
-                <a href={item.source_url} target="_blank" rel="noreferrer" className="mt-4 inline-flex text-sm font-medium text-emerald-700 hover:text-emerald-600">打开资料链接</a>
-              ) : null}
+              <div className="mt-4 flex flex-wrap gap-3">
+                {item.source_url ? (
+                  <a href={item.source_url} target="_blank" rel="noreferrer" className="text-sm font-medium text-emerald-700 hover:text-emerald-600">打开资料链接</a>
+                ) : null}
+                {item.meeting_doc_url ? (
+                  <a href={item.meeting_doc_url} target="_blank" rel="noreferrer" className="text-sm font-medium text-slate-600 hover:text-slate-950">周会文档</a>
+                ) : null}
+                {item.meeting_minutes_url ? (
+                  <a href={item.meeting_minutes_url} target="_blank" rel="noreferrer" className="text-sm font-medium text-slate-600 hover:text-slate-950">周会妙记</a>
+                ) : null}
+              </div>
 
               <div className="mt-5 flex flex-wrap items-center gap-3">
                 <button onClick={() => toggleVote(item)} className={`inline-flex items-center gap-2 rounded-md px-3 py-2 text-sm font-semibold transition ${item.my_vote ? 'bg-emerald-600 text-white hover:bg-emerald-500' : 'border border-slate-200 text-slate-700 hover:bg-slate-50'}`}>
