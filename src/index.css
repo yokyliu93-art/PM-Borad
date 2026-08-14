@@ -161,12 +161,11 @@ option {
 }
 
 .claude-skin .bg-white {
-  background: var(--ink) !important;
-  color: #fffaf3 !important;
+  background: #ffffff !important;
 }
 
 .claude-skin .bg-white:hover {
-  background: #443b33 !important;
+  background: #f8fafc !important;
 }
 
 .claude-skin [class*="bg-white/8"],
@@ -991,14 +990,12 @@ option {
 }
 
 .claude-skin .bg-white {
-  background: var(--ink) !important;
-  color: #070a09 !important;
+  background: #ffffff !important;
 }
 
 .claude-skin .bg-white:hover,
 .claude-skin .hover\:bg-violet-100:hover {
-  background: var(--accent) !important;
-  color: #07110d !important;
+  background: #f8fafc !important;
 }
 
 .claude-skin [class*="hover:bg-white/8"]:hover,
@@ -1191,6 +1188,9 @@ body {
 .claude-skin .bg-violet-500,
 .claude-skin button.bg-violet-500,
 .claude-skin a.bg-violet-500,
+.claude-skin .bg-emerald-600,
+.claude-skin button.bg-emerald-600,
+.claude-skin a.bg-emerald-600,
 .claude-skin .bg-emerald-400,
 .claude-skin button.bg-emerald-400,
 .claude-skin a.bg-emerald-400 {
@@ -1202,6 +1202,10 @@ body {
 .claude-skin .bg-violet-500:hover,
 .claude-skin button.bg-violet-500:hover,
 .claude-skin a.bg-violet-500:hover,
+.claude-skin .hover\:bg-emerald-500:hover,
+.claude-skin .bg-emerald-600:hover,
+.claude-skin button.bg-emerald-600:hover,
+.claude-skin a.bg-emerald-600:hover,
 .claude-skin .hover\:bg-emerald-300:hover,
 .claude-skin .bg-emerald-400:hover,
 .claude-skin button.bg-emerald-400:hover,
@@ -1210,15 +1214,20 @@ body {
   color: #ffffff !important;
 }
 
-.claude-skin .bg-white {
-  background: #17211f !important;
+.claude-skin .bg-slate-950,
+.claude-skin button.bg-slate-950,
+.claude-skin a.bg-slate-950 {
+  background: #0f172a !important;
   color: #ffffff !important;
+}
+
+.claude-skin .bg-white {
+  background: #ffffff !important;
 }
 
 .claude-skin .bg-white:hover,
 .claude-skin .hover\:bg-violet-100:hover {
-  background: #0f172a !important;
-  color: #ffffff !important;
+  background: #f8fafc !important;
 }
 
 .claude-skin [class*="bg-violet-500/15"],

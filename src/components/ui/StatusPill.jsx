@@ -1,12 +1,12 @@
 export function StatusPill({ status }) {
   const styles = {
-    待开始: 'bg-slate-500/15 text-slate-300 ring-slate-400/20',
-    进行中: 'bg-cyan-500/15 text-cyan-200 ring-cyan-400/20',
-    审核中: 'bg-amber-500/15 text-amber-200 ring-amber-400/20',
-    已提交: 'bg-sky-500/15 text-sky-200 ring-sky-400/20',
-    已完成: 'bg-emerald-500/15 text-emerald-200 ring-emerald-400/20',
-    推进中: 'bg-amber-500/15 text-amber-200 ring-amber-400/20',
-    筹备中: 'bg-violet-500/15 text-violet-200 ring-violet-400/20',
+    待开始: 'bg-slate-100 text-slate-600 ring-slate-200',
+    进行中: 'bg-cyan-50 text-cyan-700 ring-cyan-100',
+    审核中: 'bg-amber-50 text-amber-700 ring-amber-100',
+    已提交: 'bg-sky-50 text-sky-700 ring-sky-100',
+    已完成: 'bg-emerald-50 text-emerald-700 ring-emerald-100',
+    推进中: 'bg-amber-50 text-amber-700 ring-amber-100',
+    筹备中: 'bg-emerald-50 text-emerald-700 ring-emerald-100',
   };
   return (
     <span className={`inline-flex w-fit items-center gap-1 rounded px-2 py-1 text-xs ring-1 ${styles[status] || styles['待开始']}`}>
