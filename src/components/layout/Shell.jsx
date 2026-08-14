@@ -61,11 +61,11 @@ export function Shell() {
               </div>
             </div>
             <div className="gxr-brand-tag mt-3">Powered by 硅星人</div>
-            <div className="mt-4 flex-1 space-y-2.5">
+            <div className="mt-4 flex-1 space-y-1.5">
               <NavLink to="/board" className={({ isActive }) => navClass(isActive)}>
                 <BarChart3 size={16} />
                 <span>部门大盘</span>
-                <span className="ml-auto text-xs font-medium text-slate-400">统帅视角</span>
+                <span className="ml-auto text-xs text-slate-400">统帅视角</span>
               </NavLink>
 
               <NavGroup icon={NotebookTabs} title="选题" defaultOpen={location.pathname.startsWith('/topics')}>
@@ -127,18 +127,22 @@ export function Shell() {
 }
 
 function navClass(isActive) {
-  return `gxr-nav-fancy ${isActive ? 'gxr-nav-active' : ''}`;
+  return `flex w-full items-center gap-3 rounded-md px-3 py-1.5 text-left text-sm transition ${
+    isActive
+      ? 'bg-emerald-50 text-emerald-700 ring-1 ring-emerald-100'
+      : 'text-slate-600 hover:bg-slate-100 hover:text-slate-950'
+  }`;
 }
 
 function NavGroup({ icon: Icon, title, children, defaultOpen = false }) {
   return (
     <details open={defaultOpen} className="group rounded-md">
-      <summary className={`gxr-nav-fancy ${defaultOpen ? 'gxr-nav-active' : ''}`}>
-        <Icon size={18} />
+      <summary className="flex cursor-pointer list-none items-center gap-3 rounded-md px-3 py-1.5 text-sm text-slate-600 transition hover:bg-slate-100 hover:text-slate-950">
+        <Icon size={16} />
         <span>{title}</span>
-        <ChevronDown size={16} className="ml-auto transition group-open:rotate-180" />
+        <ChevronDown size={14} className="ml-auto text-slate-400 transition group-open:rotate-180" />
       </summary>
-      <div className="mt-1.5 space-y-1 pl-5">{children}</div>
+      <div className="mt-1 space-y-0.5 pl-6">{children}</div>
     </details>
   );
 }
@@ -148,8 +152,8 @@ function SubNavLink({ to, label, icon: Icon = Circle }) {
     <NavLink
       to={to}
       className={({ isActive }) =>
-        `gxr-subnav-link ${
-          isActive ? 'gxr-subnav-active' : ''
+        `flex items-center gap-2 rounded-md px-3 py-1.5 text-sm transition ${
+          isActive ? 'bg-emerald-50 text-emerald-700' : 'text-slate-500 hover:bg-slate-50 hover:text-slate-950'
         }`
       }
     >
