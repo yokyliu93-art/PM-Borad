@@ -95,13 +95,13 @@ function summarizeTeam(team) {
           total: deepTopics.length,
           planned: deepTopics.filter((memo) => String(memo.timeline_text || '').trim()).length,
         },
-        recent: topicMemos.slice(0, 4),
+        recent: topicMemos,
       },
       demo: {
         total: demoMemos.length,
         ready: demoMemos.filter((memo) => Number(memo.vote_count || 0) >= demoThreshold).length,
         progress: percent(demoMemos.filter((memo) => Number(memo.vote_count || 0) >= demoThreshold).length, demoMemos.length),
-        recent: demoMemos.slice(0, 4),
+        recent: demoMemos,
       },
       eval: {
         total: evalTotal,
@@ -110,7 +110,7 @@ function summarizeTeam(team) {
         recent: [
           ...evalMemos.map((memo) => ({ ...memo, source: 'memo' })),
           ...evalTasks.map((task) => ({ ...task, source: 'task', title: task.title })),
-        ].slice(0, 4),
+        ],
       },
       build: {
         total: projects.length,
@@ -118,7 +118,7 @@ function summarizeTeam(team) {
         completed: projects.filter((project) => project.status === 'completed').length,
         tasks: tasks.length,
         progress: buildProgress,
-        recent: projects.slice(0, 4).map((project) => ({ ...project, progress: projectProgress(project.id, project.progress_override) })),
+        recent: projects.map((project) => ({ ...project, progress: projectProgress(project.id, project.progress_override) })),
       },
     },
   };
@@ -312,10 +312,10 @@ router.get('/department', authRequired, (req, res) => {
   `).all(req.user.id);
 
   const sections = {
-    topics: { total: 0, progress: 0, dailyTotal: 0, dailyPlanned: 0, deepTotal: 0, deepPlanned: 0 },
-    demo: { total: 0, ready: 0, progress: 0 },
-    eval: { total: 0, done: 0, progress: 0 },
-    build: { total: 0, active: 0, completed: 0, tasks: 0, progress: 0 },
+    topics: { total: 0, progress: 0, dailyTotal: 0, dailyPlanned: 0, deepTotal: 0, deepPlanned: 0, dailyItems: [], deepItems: [] },
+    demo: { total: 0, ready: 0, progress: 0, items: [] },
+    eval: { total: 0, done: 0, progress: 0, items: [] },
+    build: { total: 0, active: 0, completed: 0, tasks: 0, progress: 0, items: [] },
   };
   const teamRows = teams.map(summarizeTeam);
 
@@ -325,14 +325,19 @@ router.get('/department', authRequired, (req, res) => {
     sections.topics.dailyPlanned += team.sections.topics.daily.planned;
     sections.topics.deepTotal += team.sections.topics.deep.total;
     sections.topics.deepPlanned += team.sections.topics.deep.planned;
+    sections.topics.dailyItems.push(...team.sections.topics.recent.filter((item) => item.sub_kind !== 'deep').map((item) => ({ ...item, team_name: team.name })));
+    sections.topics.deepItems.push(...team.sections.topics.recent.filter((item) => item.sub_kind === 'deep').map((item) => ({ ...item, team_name: team.name })));
     sections.demo.total += team.sections.demo.total;
     sections.demo.ready += team.sections.demo.ready;
+    sections.demo.items.push(...team.sections.demo.recent.map((item) => ({ ...item, team_name: team.name })));
     sections.eval.total += team.sections.eval.total;
     sections.eval.done += team.sections.eval.done;
+    sections.eval.items.push(...team.sections.eval.recent.map((item) => ({ ...item, team_name: team.name })));
     sections.build.total += team.sections.build.total;
     sections.build.active += team.sections.build.active;
     sections.build.completed += team.sections.build.completed;
     sections.build.tasks += team.sections.build.tasks;
+    sections.build.items.push(...team.sections.build.recent.map((item) => ({ ...item, team_name: team.name })));
   }
 
   sections.topics.progress = percent(sections.topics.dailyPlanned + sections.topics.deepPlanned, sections.topics.total);
