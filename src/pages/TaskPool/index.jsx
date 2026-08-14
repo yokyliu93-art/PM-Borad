@@ -175,6 +175,34 @@ export function TaskPool() {
     ].join('\n');
   }
 
+  function weekAgentGuide(week, index) {
+    const [label, detail] = week || [];
+    const sections = getWeekPlanSections(detail);
+    return [
+      'PM Board 周计划 Agent 包',
+      `项目：${project?.name || ''}`,
+      `周期：${label || `W${index + 1}`}`,
+      '',
+      '你是这个项目本周推进 Agent。请基于下面的周计划，帮负责人拆成可执行动作，并在执行过程中持续和负责人确认进度。',
+      '',
+      '本周计划：',
+      detail || '暂无详细计划',
+      '',
+      sections.length ? '结构化拆解：' : '',
+      ...sections.map((section) => `- ${section.label}：${section.value}`),
+      '',
+      '你需要输出：',
+      '1. 本周目标是否清楚，如不清楚先追问。',
+      '2. 每天/每阶段要推进的动作。',
+      '3. 需要哪些人、材料、权限、预算、文档配合。',
+      '4. 风险点和卡点预警。',
+      '5. 最终交付物，以及交付到哪个飞书文档。',
+      '',
+      '回传 PM Board 时，请让负责人或总 PM 根据实际任务块使用对应 Agent API 更新进度和交付文档。',
+      `PM Board 项目页：${window.location.origin}/projects/${projectId}/pool`,
+    ].filter(Boolean).join('\n');
+  }
+
   function getTimeline() {
     try {
       const raw = typeof project?.timeline_json === 'string'
@@ -316,15 +344,32 @@ export function TaskPool() {
       {currentTimeline ? (
         <div className="grid gap-5 xl:grid-cols-[1fr_340px]">
           <div className="space-y-4">
-            <button
-              onClick={() => setSelectedTimelineIndex(null)}
-              className="inline-flex items-center gap-2 rounded-md border border-white/10 px-3 py-2 text-sm text-slate-300 transition hover:bg-white/8"
-            >
-              <ArrowLeft size={15} /> 回到项目总览
-            </button>
+            <div className="flex flex-wrap items-center gap-2">
+              <button
+                onClick={() => setSelectedTimelineIndex(null)}
+                className="inline-flex items-center gap-2 rounded-md border border-white/10 px-3 py-2 text-sm text-slate-300 transition hover:bg-white/8"
+              >
+                <ArrowLeft size={15} /> 回到项目总览
+              </button>
+              <button
+                onClick={() => copyText(weekAgentGuide(currentTimeline, selectedTimelineIndex), '本周 Agent 计划已复制')}
+                className="inline-flex items-center gap-2 rounded-md bg-emerald-400 px-3 py-2 text-sm font-semibold text-[#08110f] transition hover:bg-emerald-300"
+              >
+                <Copy size={15} /> 复制本周 Agent 计划
+              </button>
+            </div>
             <div className="rounded-lg border border-white/10 bg-[#151925] p-5">
               <p className="flex items-center gap-2 text-sm font-medium text-violet-100"><CalendarDays size={15} />{currentTimeline[0] || `阶段 ${selectedTimelineIndex + 1}`}</p>
-              <h3 className="mt-3 text-2xl font-semibold text-white">本周详细计划</h3>
+              <div className="mt-3 flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
+                <div>
+                  <h3 className="text-2xl font-semibold text-white">本周计划二级页</h3>
+                  <p className="mt-2 text-sm leading-6 text-slate-500">这里是这一周的完整工作包，可以直接复制给负责人的 Agent 继续拆执行动作。</p>
+                </div>
+              </div>
+              <div className="mt-5 rounded-md border border-emerald-400/20 bg-emerald-500/[0.06] p-4">
+                <p className="text-xs font-medium text-emerald-200">周计划全文</p>
+                <p className="mt-2 whitespace-pre-wrap text-sm leading-7 text-slate-200">{currentTimeline[1] || '暂无详细计划'}</p>
+              </div>
               {getWeekPlanSections(currentTimeline[1]).length ? (
                 <div className="mt-5 grid gap-3 md:grid-cols-2">
                   {getWeekPlanSections(currentTimeline[1]).map((section, index) => (
@@ -506,7 +551,7 @@ function TimelinePanel({ timeline, selectedTimelineIndex, onSelect }) {
   return (
     <div className="rounded-lg border border-emerald-400/20 bg-white/[0.03] p-4">
       <p className="flex items-center gap-2 text-sm font-medium text-violet-100"><CalendarDays size={15} />项目 Timeline</p>
-      <p className="mt-2 text-xs leading-5 text-slate-500">按周拆项目节奏。点开某一周查看具体计划。</p>
+      <p className="mt-2 text-xs leading-5 text-slate-500">按周拆项目节奏。点开某一周进入周计划二级页，并复制给 Agent。</p>
       {timeline.length ? (
         <div className="mt-5 space-y-2">
           {timeline.map(([time, detail], index) => {
@@ -523,6 +568,7 @@ function TimelinePanel({ timeline, selectedTimelineIndex, onSelect }) {
               >
                 <p className="text-sm font-semibold text-white">{time || `阶段 ${index + 1}`}</p>
                 <p className="mt-1 line-clamp-2 text-xs leading-5 text-slate-500">{detail || '待拆解阶段目标'}</p>
+                <p className="mt-2 text-xs text-emerald-200">进入周计划</p>
               </button>
             );
           })}
