@@ -6,7 +6,7 @@ import { useStore } from '../../store';
 import { useSocket } from '../../hooks/useSocket';
 import { TaskCard } from '../../components/ui/TaskCard';
 import { EmptyState } from '../../components/ui/EmptyState';
-import { AlertTriangle, ArrowLeft, BookOpen, Boxes, CalendarDays, Copy, FileText, KeyRound, Loader2, RefreshCw } from 'lucide-react';
+import { AlertTriangle, ArrowLeft, BookOpen, Boxes, CalendarDays, Copy, KeyRound, Loader2, RefreshCw } from 'lucide-react';
 
 const MODULES = [
   { key: 'product', name: '产品', detail: '需求、功能、体验、交互、技术实现相关模块' },
@@ -305,26 +305,21 @@ export function TaskPool() {
             })}
           </div>
 
-          <aside className="space-y-4">
-            <div className="rounded-lg border border-white/10 bg-white/[0.03] p-4">
-              <p className="flex items-center gap-2 text-sm font-medium text-violet-100"><FileText size={15} />项目需求说明书</p>
-              <p className="mt-2 line-clamp-6 whitespace-pre-wrap text-sm leading-6 text-slate-500">
-                {projectAgentInstructions || project?.agent_instructions || project?.plan_markdown || '创建项目时导入飞书文档后，这里会沉淀需求说明书。'}
-              </p>
-            </div>
-            <div className="rounded-lg border border-white/10 bg-white/[0.03] p-4">
+          <aside className="xl:sticky xl:top-28 xl:self-start">
+            <div className="rounded-lg border border-emerald-400/20 bg-white/[0.03] p-4">
               <p className="flex items-center gap-2 text-sm font-medium text-violet-100"><CalendarDays size={15} />项目 Timeline</p>
+              <p className="mt-2 text-xs leading-5 text-slate-500">这里固定展示项目节奏，不重复展示需求说明书。需求说明书在上方总PM Agent 包里维护。</p>
               {timeline.length ? (
-                <div className="mt-4 space-y-3">
+                <div className="mt-5 space-y-4">
                   {timeline.map(([time, detail], index) => (
-                    <div key={`${time}-${index}`} className="border-l border-emerald-400/30 pl-3">
+                    <div key={`${time}-${index}`} className="border-l border-emerald-400/40 pl-4">
                       <p className="text-sm font-semibold text-white">{time || `阶段 ${index + 1}`}</p>
-                      <p className="mt-1 text-xs leading-5 text-slate-500">{detail || '等待补充阶段目标'}</p>
+                      <p className="mt-1 text-xs leading-5 text-slate-500">{detail || '待拆解阶段目标'}</p>
                     </div>
                   ))}
                 </div>
               ) : (
-                <p className="mt-3 text-sm leading-6 text-slate-500">项目设置里可以补充按周或阶段划分的时间线。</p>
+                <p className="mt-4 text-sm leading-6 text-slate-500">项目设置里可以补充按周或阶段划分的时间线。</p>
               )}
             </div>
           </aside>
