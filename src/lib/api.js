@@ -47,6 +47,12 @@ async function readJsonResponse(res) {
   if (contentType.includes('application/json')) return res.json();
   const text = await res.text().catch(() => '');
   if (text.trim().startsWith('<')) {
+    if (res.status === 504) {
+      return { ok: false, error: '解析超时：飞书文档或 DeepSeek 响应太慢，请稍后重试' };
+    }
+    if (res.status >= 500) {
+      return { ok: false, error: `服务暂时不可用（${res.status}），请稍后重试` };
+    }
     return {
       ok: false,
       error: res.redirected ? '登录状态已失效，请重新飞书授权后再试' : '服务返回了网页而不是数据，请刷新页面后重试',
