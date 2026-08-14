@@ -193,6 +193,40 @@ router.delete('/:taskId', authRequired, requireProjectPM, (req, res) => {
   res.json({ ok: true });
 });
 
+router.post('/:taskId/comments/:commentId/adopt', authRequired, requireTaskManager, (req, res) => {
+  const comment = db.prepare('SELECT * FROM task_comments WHERE id = ? AND task_id = ?').get(req.params.commentId, req.params.taskId);
+  if (!comment) return res.status(404).json({ ok: false, error: '评论不存在' });
+  if (comment.target_type !== 'task') {
+    return res.status(400).json({ ok: false, error: '目前只能采纳任务块主讨论里的建议' });
+  }
+  if (comment.adopted_at) {
+    return res.status(400).json({ ok: false, error: '这条建议已经采纳过了' });
+  }
+  const task = taskService.getById(req.params.taskId);
+  if (!task) return res.status(404).json({ ok: false, error: '任务不存在' });
+  const suggestion = comment.content.trim();
+  const currentSummary = String(task.summary || '').trim();
+  const nextSummary = currentSummary.includes(suggestion)
+    ? currentSummary
+    : [
+        currentSummary,
+        currentSummary.includes('采纳建议：') ? `- ${suggestion}` : `采纳建议：\n- ${suggestion}`,
+      ].filter(Boolean).join('\n\n');
+  const updatedTask = taskService.update(task.id, { summary: nextSummary });
+  db.prepare(`
+    UPDATE task_comments
+    SET adopted_at = datetime('now'), adopted_by = ?, adopted_target = ?, updated_at = datetime('now')
+    WHERE id = ?
+  `).run(req.user.id, 'task.summary', comment.id);
+  const updatedComment = db.prepare(`
+    SELECT c.*, u.name as user_name, u.avatar_url as user_avatar
+    FROM task_comments c JOIN users u ON u.id = c.user_id
+    WHERE c.id = ?
+  `).get(comment.id);
+  broadcast(req, 'comment:adopted', { taskId: task.id, comment: updatedComment, task: updatedTask });
+  res.json({ ok: true, data: { task: updatedTask, comment: updatedComment } });
+});
+
 router.post('/:taskId/comments', authRequired, (req, res) => {
   const task = taskService.getById(req.params.taskId);
   if (!task) return res.status(404).json({ ok: false, error: '任务不存在' });

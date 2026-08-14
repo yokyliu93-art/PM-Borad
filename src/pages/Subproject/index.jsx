@@ -363,6 +363,16 @@ export function Subproject() {
     loadTask();
   }
 
+  async function handleAdoptComment(comment) {
+    const res = await post(`/api/projects/${projectId}/tasks/${taskId}/comments/${comment.id}/adopt`, {});
+    if (res.ok) {
+      toast.success('已采纳到左侧任务说明');
+      loadTask();
+    } else {
+      toast.error(res.error || '采纳失败');
+    }
+  }
+
   async function handleUploadFile(e) {
     const files = Array.from(e.target.files || []);
     if (!files.length) return;
@@ -456,7 +466,7 @@ export function Subproject() {
     return comment.user_id === currentUser?.id || canManage || isReviewer;
   }
 
-  function renderCommentList(comments = []) {
+  function renderCommentList(comments = [], { adoptable = false } = {}) {
     if (!comments.length) {
       return <p className="rounded-md border border-dashed border-white/10 bg-[#0c0f16] px-3 py-4 text-sm text-slate-500">还没有讨论，发第一条。</p>;
     }
@@ -469,6 +479,12 @@ export function Subproject() {
               <div className="flex flex-wrap items-baseline gap-2">
                 <span className="text-sm font-medium text-white">{comment.user_name}</span>
                 <span className="text-[11px] text-slate-600">{formatCommentTime(comment.created_at)}</span>
+                {comment.adopted_at ? (
+                  <span className="rounded bg-emerald-400/10 px-1.5 py-0.5 text-[11px] text-emerald-200">已采纳</span>
+                ) : null}
+                {adoptable && canManage && !comment.adopted_at ? (
+                  <button onClick={() => handleAdoptComment(comment)} className="opacity-0 text-[11px] text-emerald-300 transition hover:text-emerald-100 group-hover:opacity-100">采纳</button>
+                ) : null}
                 {canDeleteComment(comment) ? (
                   <button onClick={() => handleDeleteComment(comment)} className="opacity-0 text-[11px] text-slate-500 transition hover:text-red-300 group-hover:opacity-100">删除</button>
                 ) : null}
@@ -786,7 +802,7 @@ export function Subproject() {
                 <h2 className="text-3xl font-semibold tracking-normal text-white">{task.title}</h2>
                 <StatusPill status={task.status} />
               </div>
-              <p className="mt-2 text-sm leading-6 text-slate-400">{task.summary}</p>
+              <p className="mt-2 whitespace-pre-wrap text-sm leading-6 text-slate-400">{task.summary}</p>
             </div>
             {owner ? <Avatar member={owner} size="xl" pm /> : null}
           </div>
@@ -1040,7 +1056,7 @@ export function Subproject() {
             <span className="rounded-md bg-white/[0.04] px-2 py-1 text-xs text-slate-500">{(task.comments || []).length} 条</span>
           </div>
           <div className="mt-4">
-            {renderCommentList(task.comments || [])}
+            {renderCommentList(task.comments || [], { adoptable: true })}
             {renderCommentComposer()}
           </div>
         </div>

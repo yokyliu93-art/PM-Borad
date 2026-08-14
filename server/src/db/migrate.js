@@ -201,6 +201,9 @@ export function migrate() {
       target_id TEXT NOT NULL,
       user_id TEXT NOT NULL REFERENCES users(id),
       content TEXT NOT NULL,
+      adopted_at TEXT,
+      adopted_by TEXT REFERENCES users(id),
+      adopted_target TEXT DEFAULT '',
       created_at TEXT DEFAULT (datetime('now')),
       updated_at TEXT DEFAULT (datetime('now'))
     );
@@ -277,6 +280,17 @@ export function migrate() {
   const stepCols = db.prepare('PRAGMA table_info(subtask_steps)').all().map((c) => c.name);
   if (!stepCols.includes('delivery_doc_url')) {
     db.exec("ALTER TABLE subtask_steps ADD COLUMN delivery_doc_url TEXT DEFAULT ''");
+  }
+
+  const commentCols = db.prepare('PRAGMA table_info(task_comments)').all().map((c) => c.name);
+  if (!commentCols.includes('adopted_at')) {
+    db.exec('ALTER TABLE task_comments ADD COLUMN adopted_at TEXT');
+  }
+  if (!commentCols.includes('adopted_by')) {
+    db.exec('ALTER TABLE task_comments ADD COLUMN adopted_by TEXT');
+  }
+  if (!commentCols.includes('adopted_target')) {
+    db.exec("ALTER TABLE task_comments ADD COLUMN adopted_target TEXT DEFAULT ''");
   }
 
   // Normalize task/subtask statuses to the Chinese values used by the UI
