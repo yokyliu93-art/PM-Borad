@@ -5,20 +5,38 @@ import crypto from 'crypto';
 import db from '../db/connection.js';
 import { config } from '../config.js';
 
+const MODULES = [
+  { key: 'product', name: '产品', aliases: ['产品', 'product', 'prd', 'pm', '功能', '体验', '需求', '设计', '研发'] },
+  { key: 'operations', name: '运营', aliases: ['运营', 'operations', 'operation', 'ops', '增长', '用户', '活动', '社群', '渠道'] },
+  { key: 'content', name: '内容', aliases: ['内容', 'content', '文案', '文章', '视频', '媒体', '传播', '宣发'] },
+];
+
+export function normalizeModule(input = '', fallbackText = '') {
+  const raw = String(input || '').trim().toLowerCase();
+  const haystack = `${raw} ${String(fallbackText || '').toLowerCase()}`;
+  for (const mod of MODULES) {
+    if (mod.aliases.some((alias) => haystack.includes(alias.toLowerCase()))) {
+      return { moduleKey: mod.key, moduleName: mod.name };
+    }
+  }
+  return { moduleKey: 'product', moduleName: '产品' };
+}
+
 function unlinkAttachmentFiles(files) {
   for (const f of files) {
     try { unlinkSync(path.join(config.uploadsDir, path.basename(f.file_path))); } catch {}
   }
 }
 
-export function create({ projectId, title, summary, cycle, docUrl, sortOrder, publish = false, ideaText = '', executionPlan = '', resourcePlan = '' }) {
+export function create({ projectId, title, summary, cycle, docUrl, sortOrder, publish = false, ideaText = '', executionPlan = '', resourcePlan = '', module = '', moduleKey = '', moduleName = '' }) {
   const id = uuid();
   const maxSort = db.prepare('SELECT MAX(sort_order) as m FROM tasks WHERE project_id = ?').get(projectId);
   const order = sortOrder ?? (maxSort?.m ?? -1) + 1;
+  const normalizedModule = normalizeModule(module || moduleName || moduleKey, `${title || ''} ${summary || ''}`);
   db.prepare(`
-    INSERT INTO tasks (id, project_id, title, summary, cycle, doc_url, status, sort_order, is_published, idea_text, execution_plan, resource_plan)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-  `).run(id, projectId, title, summary || '', cycle || '', docUrl || '', '待开始', order, publish ? 1 : 0, ideaText || '', executionPlan || '', resourcePlan || '');
+    INSERT INTO tasks (id, project_id, module_key, module_name, title, summary, cycle, doc_url, status, sort_order, is_published, idea_text, execution_plan, resource_plan)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+  `).run(id, projectId, normalizedModule.moduleKey, normalizedModule.moduleName, title, summary || '', cycle || '', docUrl || '', '待开始', order, publish ? 1 : 0, ideaText || '', executionPlan || '', resourcePlan || '');
   ensureDefaultTaskAgentSetup(id);
   return getById(id);
 }
@@ -43,6 +61,7 @@ export function createTasksFromDefs(projectId, taskDefs) {
       cycle: def.cycle || '',
       docUrl: def.default_doc_url || '',
       sortOrder: i,
+      module: def.module || def.moduleName || def.module_name || def.moduleKey || def.module_key || '',
       ideaText: def.idea || def.ideaText || def.idea_text || '',
       executionPlan: def.executionPlan || def.execution_plan || '',
       resourcePlan: def.resourcePlan || def.resource_plan || '',
@@ -106,7 +125,14 @@ export function listPublished(projectId) {
 }
 
 export function update(id, fields) {
-  const allowed = ['title', 'summary', 'cycle', 'doc_url', 'progress', 'status', 'sort_order', 'is_published', 'idea_text', 'execution_plan', 'resource_plan', 'ai_detail_json', 'agent_instructions'];
+  if (fields.module !== undefined || fields.moduleName !== undefined || fields.module_name !== undefined || fields.moduleKey !== undefined || fields.module_key !== undefined) {
+    const normalizedModule = normalizeModule(
+      fields.module ?? fields.moduleName ?? fields.module_name ?? fields.moduleKey ?? fields.module_key ?? ''
+    );
+    fields.module_key = normalizedModule.moduleKey;
+    fields.module_name = normalizedModule.moduleName;
+  }
+  const allowed = ['title', 'summary', 'cycle', 'doc_url', 'progress', 'status', 'sort_order', 'is_published', 'module_key', 'module_name', 'idea_text', 'execution_plan', 'resource_plan', 'ai_detail_json', 'agent_instructions'];
   const sets = [];
   const values = [];
   for (const key of allowed) {

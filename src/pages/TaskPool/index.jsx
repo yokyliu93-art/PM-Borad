@@ -6,7 +6,22 @@ import { useStore } from '../../store';
 import { useSocket } from '../../hooks/useSocket';
 import { TaskCard } from '../../components/ui/TaskCard';
 import { EmptyState } from '../../components/ui/EmptyState';
-import { AlertTriangle, BookOpen, Copy, KeyRound, Loader2, RefreshCw } from 'lucide-react';
+import { AlertTriangle, BookOpen, Boxes, Copy, KeyRound, Loader2, RefreshCw } from 'lucide-react';
+
+const MODULES = [
+  { key: 'product', name: '产品', detail: '需求、功能、体验、交互、技术实现相关模块' },
+  { key: 'operations', name: '运营', detail: '增长、活动、用户、社群、渠道推进相关模块' },
+  { key: 'content', name: '内容', detail: '文案、文章、视频、宣发、媒体素材相关模块' },
+];
+
+function normalizeModule(task) {
+  const key = task.module_key || task.moduleKey;
+  const name = task.module_name || task.moduleName || task.module || '';
+  const text = `${name} ${task.title || ''} ${task.summary || ''}`.toLowerCase();
+  if (key === 'operations' || /运营|operation|ops|增长|活动|社群|渠道|用户/.test(text)) return 'operations';
+  if (key === 'content' || /内容|content|文案|文章|视频|媒体|宣发|传播/.test(text)) return 'content';
+  return 'product';
+}
 
 export function TaskPool() {
   const { projectId } = useParams();
@@ -134,7 +149,8 @@ export function TaskPool() {
       `GET ${origin}/api/agent/project 读取项目需求文档和已有任务块。`,
       `POST ${origin}/api/agent/project/tasks 回传你拆好的模块，PM Board 会把它们显示为项目模块。`,
       '请求头：Authorization: Bearer <API_KEY>',
-      '创建示例：{"tasks":[{"title":"任务块标题","summary":"目标","cycle":"第1周","idea":"核心想法","executionPlan":"执行方案","resourcePlan":"资源配合","subtasks":[{"title":"子任务","note":"说明"}]}],"publishNow":true}',
+      '一级模块只能是：产品、运营、内容。',
+      '创建示例：{"tasks":[{"module":"产品","title":"任务块标题","summary":"目标","cycle":"第1周","idea":"核心想法","executionPlan":"执行方案","resourcePlan":"资源配合","subtasks":[{"title":"子任务","note":"说明"}]}],"publishNow":true}',
     ].join('\n');
   }
 
@@ -154,8 +170,8 @@ export function TaskPool() {
     <section className="space-y-5">
       <div>
         <p className="text-sm font-medium text-violet-200">Agent 回传模块</p>
-        <h2 className="mt-2 text-3xl font-semibold tracking-normal text-white">先把项目交给总PM Agent 拆</h2>
-        <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-400">PM Board 不在这里手动拆任务。总PM复制 Agent 包，在自己的 Agent 里完成拆解；当 Agent 说“传到 PM Board”后，回传模块会出现在这里。</p>
+        <h2 className="mt-2 text-3xl font-semibold tracking-normal text-white">先按产品、运营、内容拆成三层结构</h2>
+        <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-400">PM Board 不在这里手动拆任务。总PM复制 Agent 包，在自己的 Agent 里完成拆解；Agent 回传后，这里会按三个一级模块展示，每个模块下面是可认领的细任务。</p>
       </div>
 
       {isProjectPM && (
@@ -164,7 +180,7 @@ export function TaskPool() {
             <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
               <div>
                 <p className="flex items-center gap-1.5 text-sm font-medium text-emerald-100"><KeyRound size={15} />总PM Agent 包</p>
-                <p className="mt-1 text-sm text-slate-500">复制需求文档和 API Key 给你的 Agent。拆解、讨论和确认都在 Agent 里完成，PM Board 只接收它回传的模块。</p>
+                <p className="mt-1 text-sm text-slate-500">复制需求文档和 API Key 给你的 Agent。请让 Agent 先分成产品、运营、内容三个一级模块，再把细任务回传到对应模块下。</p>
                 <p className="mt-2 text-xs text-slate-500">当前 Key：{projectAgentKey || project?.agent_api_key_prefix || '还没有生成'}</p>
               </div>
               <div className="flex flex-wrap gap-2">
@@ -187,18 +203,41 @@ export function TaskPool() {
           onClick={() => navigate('/projects')}
         />
       ) : (
-        <div className="grid gap-4 xl:grid-cols-2">
-          {tasks.map((task) => (
-            <TaskCard
-              key={task.id}
-              task={task}
-              currentUserId={currentUser?.id}
-              onClaim={handleClaim}
-              onUnclaim={currentUser && task.owner_id === currentUser.id ? () => handleUnclaim(task.id) : undefined}
-              onOpen={(id) => navigate(`/projects/${projectId}/tasks/${id}`)}
-              onDelete={isProjectPM ? () => handleDeleteTask(task) : undefined}
-            />
-          ))}
+        <div className="grid gap-4 xl:grid-cols-3">
+          {MODULES.map((module) => {
+            const moduleTasks = tasks.filter((task) => normalizeModule(task) === module.key);
+            return (
+              <section key={module.key} className="min-h-80 rounded-lg border border-white/10 bg-white/[0.025] p-4">
+                <div className="mb-4 flex items-start justify-between gap-3">
+                  <div>
+                    <p className="flex items-center gap-2 text-lg font-semibold text-white"><Boxes size={18} className="text-emerald-300" />{module.name}</p>
+                    <p className="mt-1 text-xs leading-5 text-slate-500">{module.detail}</p>
+                  </div>
+                  <span className="rounded bg-white/8 px-2 py-1 text-xs text-slate-400">{moduleTasks.length}</span>
+                </div>
+                {moduleTasks.length ? (
+                  <div className="space-y-3">
+                    {moduleTasks.map((task) => (
+                      <TaskCard
+                        key={task.id}
+                        task={task}
+                        currentUserId={currentUser?.id}
+                        onClaim={handleClaim}
+                        onUnclaim={currentUser && task.owner_id === currentUser.id ? () => handleUnclaim(task.id) : undefined}
+                        onOpen={(id) => navigate(`/projects/${projectId}/tasks/${id}`)}
+                        onDelete={isProjectPM ? () => handleDeleteTask(task) : undefined}
+                        compact
+                      />
+                    ))}
+                  </div>
+                ) : (
+                  <div className="grid min-h-40 place-items-center rounded-md border border-dashed border-white/10 bg-[#0c0f16]/60 p-4 text-center">
+                    <p className="text-sm text-slate-500">等待 Agent 回传{module.name}模块下的细任务</p>
+                  </div>
+                )}
+              </section>
+            );
+          })}
         </div>
       )}
     </section>

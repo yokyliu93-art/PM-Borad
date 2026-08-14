@@ -77,11 +77,11 @@ router.get('/', authRequired, (req, res) => {
 
 // Create task (manual). Only the project PM may add tasks to the pool.
 router.post('/', authRequired, requireProjectPM, (req, res) => {
-  const { title, summary, cycle, docUrl, sortOrder, publishNow } = req.body;
+  const { title, summary, cycle, docUrl, sortOrder, publishNow, module, moduleKey, moduleName } = req.body;
   if (!title) return res.status(400).json({ ok: false, error: '任务标题不能为空' });
   const task = taskService.create({
     projectId: req.params.projectId,
-    title, summary, cycle, docUrl, sortOrder,
+    title, summary, cycle, docUrl, sortOrder, module, moduleKey, moduleName,
     publish: !!publishNow,
   });
   broadcast(req, 'task:created', { task });

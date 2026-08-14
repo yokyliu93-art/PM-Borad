@@ -18,7 +18,7 @@ export function TaskCard({ task, onClaim, onUnclaim, onOpen, onDelete, currentUs
             <StatusPill status={task.status} />
             {task.cycle ? <span className="rounded bg-white/8 px-2 py-1 text-xs text-slate-400">{task.cycle}</span> : null}
           </div>
-          <h3 className="text-lg font-semibold text-white">{task.title}</h3>
+          <h3 className={`${compact ? 'text-base' : 'text-lg'} font-semibold text-white`}>{task.title}</h3>
           <p className="mt-2 text-sm leading-6 text-slate-400">{task.summary}</p>
           <div className="mt-3 flex flex-wrap gap-2 text-xs text-slate-500">
             <span className="rounded-md bg-white/[0.04] px-2 py-1">{(task.subtasks || []).length} 个子任务</span>
