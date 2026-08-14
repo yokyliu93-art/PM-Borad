@@ -189,7 +189,7 @@ export function TaskPool() {
       `GET ${origin}/api/agent/project 读取项目需求文档和已有任务块。`,
       `POST ${origin}/api/agent/project/tasks 创建任务块并发布到任务大厅。`,
       '请求头：Authorization: Bearer <API_KEY>',
-      '创建示例：{"tasks":[{"title":"任务块标题","summary":"目标","cycle":"第1周","subtasks":[{"title":"子任务","note":"说明"}]}],"publishNow":true}',
+      '创建示例：{"tasks":[{"title":"任务块标题","summary":"目标","cycle":"第1周","idea":"核心想法","executionPlan":"执行方案","resourcePlan":"资源配合","subtasks":[{"title":"子任务","note":"说明"}]}],"publishNow":true}',
     ].join('\n');
   }
 

@@ -175,6 +175,27 @@ router.put('/:taskId/agent-config', authRequired, requireTaskManager, (req, res)
   }
 });
 
+router.post('/:taskId/ai-refine', authRequired, requireTaskManager, async (req, res) => {
+  try {
+    const task = taskService.getById(req.params.taskId);
+    if (!task) return res.status(404).json({ ok: false, error: '任务不存在' });
+    const project = db.prepare('SELECT * FROM projects WHERE id = ?').get(task.project_id);
+    const subtasks = db.prepare('SELECT * FROM subtasks WHERE task_id = ? ORDER BY sort_order, created_at').all(task.id);
+    const detail = await aiService.refineTaskPackage({ project, task, subtasks });
+    const updated = taskService.update(task.id, {
+      idea_text: detail.idea || '',
+      execution_plan: detail.executionPlan || detail.execution_plan || '',
+      resource_plan: detail.resourcePlan || detail.resource_plan || '',
+      agent_instructions: detail.agentInstructions || detail.agent_instructions || task.agent_instructions || '',
+      ai_detail_json: JSON.stringify(detail),
+    });
+    broadcast(req, 'task:updated', { taskId: task.id, patch: updated });
+    res.json({ ok: true, data: { task: updated, detail } });
+  } catch (err) {
+    res.status(400).json({ ok: false, error: err.message });
+  }
+});
+
 // Update task — task owner (sub-PM) or project PM only.
 router.put('/:taskId', authRequired, requireTaskManager, (req, res) => {
   const task = taskService.update(req.params.taskId, req.body);

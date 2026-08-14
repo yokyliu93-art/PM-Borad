@@ -11,14 +11,14 @@ function unlinkAttachmentFiles(files) {
   }
 }
 
-export function create({ projectId, title, summary, cycle, docUrl, sortOrder, publish = false }) {
+export function create({ projectId, title, summary, cycle, docUrl, sortOrder, publish = false, ideaText = '', executionPlan = '', resourcePlan = '' }) {
   const id = uuid();
   const maxSort = db.prepare('SELECT MAX(sort_order) as m FROM tasks WHERE project_id = ?').get(projectId);
   const order = sortOrder ?? (maxSort?.m ?? -1) + 1;
   db.prepare(`
-    INSERT INTO tasks (id, project_id, title, summary, cycle, doc_url, status, sort_order, is_published)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-  `).run(id, projectId, title, summary || '', cycle || '', docUrl || '', '待开始', order, publish ? 1 : 0);
+    INSERT INTO tasks (id, project_id, title, summary, cycle, doc_url, status, sort_order, is_published, idea_text, execution_plan, resource_plan)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+  `).run(id, projectId, title, summary || '', cycle || '', docUrl || '', '待开始', order, publish ? 1 : 0, ideaText || '', executionPlan || '', resourcePlan || '');
   ensureDefaultTaskAgentSetup(id);
   return getById(id);
 }
@@ -43,6 +43,9 @@ export function createTasksFromDefs(projectId, taskDefs) {
       cycle: def.cycle || '',
       docUrl: def.default_doc_url || '',
       sortOrder: i,
+      ideaText: def.idea || def.ideaText || def.idea_text || '',
+      executionPlan: def.executionPlan || def.execution_plan || '',
+      resourcePlan: def.resourcePlan || def.resource_plan || '',
     });
     if (Array.isArray(def.subtasks)) {
       def.subtasks.forEach((s, j) => {
@@ -103,7 +106,7 @@ export function listPublished(projectId) {
 }
 
 export function update(id, fields) {
-  const allowed = ['title', 'summary', 'cycle', 'doc_url', 'progress', 'status', 'sort_order', 'is_published'];
+  const allowed = ['title', 'summary', 'cycle', 'doc_url', 'progress', 'status', 'sort_order', 'is_published', 'idea_text', 'execution_plan', 'resource_plan', 'ai_detail_json', 'agent_instructions'];
   const sets = [];
   const values = [];
   for (const key of allowed) {
@@ -329,6 +332,9 @@ export function buildDefaultAgentInstructions({ task, subtask }) {
     `所属总任务：${task.title}。`,
     task.summary ? `总任务背景：${task.summary}` : '',
     subtask.note ? `子任务备注：${subtask.note}` : '',
+    subtask.idea_text ? `想法：${subtask.idea_text}` : '',
+    subtask.execution_plan ? `执行方案：${subtask.execution_plan}` : '',
+    subtask.resource_plan ? `资源配合：${subtask.resource_plan}` : '',
     '你需要按周计划推进工作，定期回写进度；如果有阶段性交付，请提交飞书文档链接。',
     '回写进度时请说明：本周完成了什么、遇到什么阻塞、下一步做什么、交付文档在哪里。',
   ].filter(Boolean).join('\n');
@@ -339,6 +345,9 @@ export function buildDefaultTaskAgentInstructions({ project, task }) {
     `你是 PM Board 中「${task.title}」这块任务的子 PM Agent。`,
     `所属项目：${project.name}。`,
     task.summary ? `任务目标：${task.summary}` : '',
+    task.idea_text ? `想法：${task.idea_text}` : '',
+    task.execution_plan ? `执行方案：${task.execution_plan}` : '',
+    task.resource_plan ? `资源配合：${task.resource_plan}` : '',
     task.cycle ? `周期：${task.cycle}` : '',
     '你的权限边界：只能管理这块任务，不能改整个项目，也不能改其他子 PM 的任务块。',
     '你需要把这块任务继续拆成可执行子任务，给每个子任务生成说明书、周计划和交付要求。',
@@ -425,6 +434,24 @@ export function createSubtasksFromAgent(apiKey, payload = {}) {
       if (!title) continue;
       const id = uuid();
       insertSub.run(id, taskId, title, item.assigneeId || item.assignee_id || null, item.note || '', sortOrder++);
+      const detailPatch = [];
+      const detailValues = [];
+      if (item.idea || item.ideaText || item.idea_text) {
+        detailPatch.push('idea_text = ?');
+        detailValues.push(item.idea || item.ideaText || item.idea_text);
+      }
+      if (item.executionPlan || item.execution_plan) {
+        detailPatch.push('execution_plan = ?');
+        detailValues.push(item.executionPlan || item.execution_plan);
+      }
+      if (item.resourcePlan || item.resource_plan) {
+        detailPatch.push('resource_plan = ?');
+        detailValues.push(item.resourcePlan || item.resource_plan);
+      }
+      if (detailPatch.length) {
+        detailValues.push(id);
+        db.prepare(`UPDATE subtasks SET ${detailPatch.join(', ')} WHERE id = ?`).run(...detailValues);
+      }
       replaceSubtaskSteps(taskId, id, Array.isArray(item.steps) && item.steps.length ? item.steps : [
         { title: `明确「${title}」的输出标准` },
         { title: '推进执行并同步进展' },
@@ -453,6 +480,10 @@ export function updateTaskFromAgent(apiKey, payload = {}) {
   if (payload.status) patch.status = payload.status;
   if (payload.progress !== undefined) patch.progress = Number(payload.progress);
   if (payload.summary !== undefined) patch.summary = payload.summary;
+  if (payload.idea !== undefined || payload.ideaText !== undefined || payload.idea_text !== undefined) patch.idea_text = payload.idea ?? payload.ideaText ?? payload.idea_text;
+  if (payload.executionPlan !== undefined || payload.execution_plan !== undefined) patch.execution_plan = payload.executionPlan ?? payload.execution_plan;
+  if (payload.resourcePlan !== undefined || payload.resource_plan !== undefined) patch.resource_plan = payload.resourcePlan ?? payload.resource_plan;
+  if (payload.aiDetail !== undefined || payload.ai_detail_json !== undefined) patch.ai_detail_json = JSON.stringify(payload.aiDetail ?? payload.ai_detail_json ?? {});
   if (payload.docUrl !== undefined || payload.doc_url !== undefined) patch.doc_url = payload.docUrl ?? payload.doc_url;
   if (Object.keys(patch).length) update(pkg.task.id, patch);
   if (payload.progressNote !== undefined || payload.progress_note !== undefined) {
@@ -565,6 +596,22 @@ export function updateSubtaskFromAgent(apiKey, payload = {}) {
   if (payload.deliveryDocUrl !== undefined || payload.delivery_doc_url !== undefined) {
     fields.push('delivery_doc_url = ?');
     values.push(payload.deliveryDocUrl ?? payload.delivery_doc_url ?? '');
+  }
+  if (payload.idea !== undefined || payload.ideaText !== undefined || payload.idea_text !== undefined) {
+    fields.push('idea_text = ?');
+    values.push(payload.idea ?? payload.ideaText ?? payload.idea_text ?? '');
+  }
+  if (payload.executionPlan !== undefined || payload.execution_plan !== undefined) {
+    fields.push('execution_plan = ?');
+    values.push(payload.executionPlan ?? payload.execution_plan ?? '');
+  }
+  if (payload.resourcePlan !== undefined || payload.resource_plan !== undefined) {
+    fields.push('resource_plan = ?');
+    values.push(payload.resourcePlan ?? payload.resource_plan ?? '');
+  }
+  if (payload.aiDetail !== undefined || payload.ai_detail_json !== undefined) {
+    fields.push('ai_detail_json = ?');
+    values.push(JSON.stringify(payload.aiDetail ?? payload.ai_detail_json ?? {}));
   }
   if (fields.length) {
     fields.push("agent_last_update_at = datetime('now')");

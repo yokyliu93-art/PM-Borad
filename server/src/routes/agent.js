@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import * as taskService from '../services/task.js';
 import * as projectService from '../services/project.js';
+import * as aiService from '../services/ai.js';
 
 const router = Router();
 
@@ -39,6 +40,23 @@ router.post('/project/tasks', agentAuth, (req, res) => {
   try {
     const data = projectService.createTasksFromAgent(req.agentApiKey, req.body || {});
     res.status(201).json({ ok: true, data });
+  } catch (err) {
+    res.status(400).json({ ok: false, error: err.message });
+  }
+});
+
+router.post('/project/audit', agentAuth, async (req, res) => {
+  try {
+    const pkg = projectService.getProjectAgentPackageByKey(req.agentApiKey);
+    const task = req.body?.taskId
+      ? pkg.tasks.find((item) => item.id === req.body.taskId)
+      : null;
+    const audit = await aiService.auditAgentFile({
+      project: pkg.project,
+      task,
+      payload: req.body?.file || req.body?.content || req.body || {},
+    });
+    res.json({ ok: true, data: { audit, project: pkg.project, task } });
   } catch (err) {
     res.status(400).json({ ok: false, error: err.message });
   }

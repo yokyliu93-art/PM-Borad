@@ -8,7 +8,7 @@ import { StatusPill } from '../../components/ui/StatusPill';
 import { PanelTitle } from '../../components/ui/PanelTitle';
 import { InfoField } from '../../components/ui/InfoField';
 import { EmptyState } from '../../components/ui/EmptyState';
-import { Bell, BookOpen, CalendarDays, ClipboardList, Copy, KeyRound, Link2, MessageSquarePlus, Plus, RefreshCw, Send, Loader2, AlertTriangle, UploadCloud, X, Paperclip, PackageCheck, Trash2 } from 'lucide-react';
+import { Bell, BookOpen, CalendarDays, ClipboardList, Copy, KeyRound, Link2, MessageSquarePlus, Plus, RefreshCw, Send, Loader2, AlertTriangle, UploadCloud, X, Paperclip, PackageCheck, Sparkles, Trash2 } from 'lucide-react';
 
 const TASK_STATUSES = ['待开始', '进行中'];
 const SUBTASK_STATUSES = ['待开始', '进行中', '已提交', '已完成'];
@@ -43,6 +43,7 @@ export function Subproject() {
   const [reviewComment, setReviewComment] = useState('');
   const [uploading, setUploading] = useState(false);
   const [submitting, setSubmitting] = useState(false);
+  const [refining, setRefining] = useState(false);
   const [expanded, setExpanded] = useState({});
   const [drafts, setDrafts] = useState({});
   const [docDrafts, setDocDrafts] = useState({});
@@ -319,6 +320,22 @@ export function Subproject() {
     else toast.error(res.error || '保存需求文档失败');
   }
 
+  async function handleAIRefineTask() {
+    setRefining(true);
+    try {
+      const res = await post(`/api/projects/${projectId}/tasks/${taskId}/ai-refine`, {});
+      if (res.ok) {
+        toast.success('AI 已细化任务说明书');
+        loadTask();
+      } else {
+        toast.error(res.error || 'AI 细化失败');
+      }
+    } catch {
+      toast.error('AI 细化失败，请确认 DeepSeek Key 已配置');
+    }
+    setRefining(false);
+  }
+
   function taskAgentGuide() {
     const origin = window.location.origin;
     return [
@@ -327,10 +344,15 @@ export function Subproject() {
       '',
       taskAgentInstructions || task?.agent_instructions || '',
       '',
+      `想法：${task?.idea_text || '待 Agent 或 AI 补充'}`,
+      `执行方案：${task?.execution_plan || '待 Agent 或 AI 补充'}`,
+      `资源配合：${task?.resource_plan || '待 Agent 或 AI 补充'}`,
+      '',
       'API 使用方式：',
       `GET ${origin}/api/agent/task 读取这块任务的需求文档、子任务和成员执行状态。`,
       `POST ${origin}/api/agent/task/subtasks 创建子任务、执行步骤和周计划。`,
       `POST ${origin}/api/agent/task/progress 回写这块任务的整体进度。`,
+      '回写计划时请带上 idea / executionPlan / resourcePlan 三个字段。',
       '请求头：Authorization: Bearer <API_KEY>',
       '创建子任务示例：{"subtasks":[{"title":"子任务标题","note":"给执行人的说明","steps":[{"title":"第一步"}],"schedule":[{"weekIndex":1,"goal":"本周目标","reminderDay":1,"reminderTime":"10:00"}]}]}',
     ].join('\n');
@@ -524,6 +546,15 @@ export function Subproject() {
             </button>
           </div>
         </div>
+      </div>
+    );
+  }
+
+  function renderPlanBlock(title, value, fallback) {
+    return (
+      <div className="rounded-md border border-white/10 bg-white/[0.03] p-3">
+        <p className="text-xs font-medium text-slate-500">{title}</p>
+        <p className="mt-2 whitespace-pre-wrap text-sm leading-6 text-slate-300">{value || fallback}</p>
       </div>
     );
   }
@@ -813,6 +844,12 @@ export function Subproject() {
             <InfoField label="协作权限" value={canManage ? '管理自己这一块' : '查看进展'} />
           </div>
 
+          <div className="mt-5 grid gap-3 lg:grid-cols-3">
+            {renderPlanBlock('想法 Idea', task.idea_text, 'AI 细化或 Agent 回传后，这里会沉淀核心想法。')}
+            {renderPlanBlock('执行方案', task.execution_plan, '这里会沉淀阶段动作、验收标准和风险。')}
+            {renderPlanBlock('资源配合', task.resource_plan, '这里会沉淀需要谁配合、需要什么资源和权限。')}
+          </div>
+
           <div className="mt-6">
             <div className="mb-3 flex items-center justify-between">
               <span className="text-sm font-medium text-slate-300">这块任务进度</span>
@@ -839,6 +876,9 @@ export function Subproject() {
                 <p className="mt-2 text-xs text-slate-500">当前 Key：{taskAgentKey || task.agent_api_key_prefix || '还没有生成'}</p>
               </div>
               <div className="flex flex-wrap gap-2">
+                <button onClick={handleAIRefineTask} disabled={refining} className="inline-flex items-center gap-1 rounded-md border border-emerald-400/40 bg-emerald-500/10 px-2 py-1.5 text-xs text-emerald-100 hover:bg-emerald-500/20 disabled:opacity-60">
+                  {refining ? <Loader2 size={12} className="animate-spin" /> : <Sparkles size={12} />}AI 细化
+                </button>
                 <button onClick={() => copyText(taskAgentGuide(), '子PM Agent 说明书已复制')} className="inline-flex items-center gap-1 rounded-md border border-white/10 px-2 py-1.5 text-xs text-slate-300 hover:bg-white/8">
                   <BookOpen size={12} />复制说明书
                 </button>

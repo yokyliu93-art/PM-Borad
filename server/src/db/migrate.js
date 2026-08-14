@@ -239,6 +239,18 @@ export function migrate() {
   if (!taskCols.includes('agent_last_update_at')) {
     db.exec('ALTER TABLE tasks ADD COLUMN agent_last_update_at TEXT');
   }
+  if (!taskCols.includes('idea_text')) {
+    db.exec("ALTER TABLE tasks ADD COLUMN idea_text TEXT DEFAULT ''");
+  }
+  if (!taskCols.includes('execution_plan')) {
+    db.exec("ALTER TABLE tasks ADD COLUMN execution_plan TEXT DEFAULT ''");
+  }
+  if (!taskCols.includes('resource_plan')) {
+    db.exec("ALTER TABLE tasks ADD COLUMN resource_plan TEXT DEFAULT ''");
+  }
+  if (!taskCols.includes('ai_detail_json')) {
+    db.exec("ALTER TABLE tasks ADD COLUMN ai_detail_json TEXT DEFAULT '{}'");
+  }
 
   // Add submission fields to subtasks. CREATE TABLE IF NOT EXISTS won't add
   // columns to an existing table, so guard each ALTER by checking the schema.
@@ -275,6 +287,18 @@ export function migrate() {
   }
   if (!subCols.includes('feishu_chat_id')) {
     db.exec("ALTER TABLE subtasks ADD COLUMN feishu_chat_id TEXT DEFAULT ''");
+  }
+  if (!subCols.includes('idea_text')) {
+    db.exec("ALTER TABLE subtasks ADD COLUMN idea_text TEXT DEFAULT ''");
+  }
+  if (!subCols.includes('execution_plan')) {
+    db.exec("ALTER TABLE subtasks ADD COLUMN execution_plan TEXT DEFAULT ''");
+  }
+  if (!subCols.includes('resource_plan')) {
+    db.exec("ALTER TABLE subtasks ADD COLUMN resource_plan TEXT DEFAULT ''");
+  }
+  if (!subCols.includes('ai_detail_json')) {
+    db.exec("ALTER TABLE subtasks ADD COLUMN ai_detail_json TEXT DEFAULT '{}'");
   }
 
   const stepCols = db.prepare('PRAGMA table_info(subtask_steps)').all().map((c) => c.name);

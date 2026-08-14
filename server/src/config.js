@@ -20,4 +20,7 @@ export const config = {
   aiApiKey: process.env.AI_API_KEY || '',
   aiModel: process.env.AI_MODEL || '',
   aiTimeoutMs: Number(process.env.AI_TIMEOUT_MS || 60000),
+  deepseekBaseUrl: process.env.DEEPSEEK_BASE_URL || 'https://api.deepseek.com',
+  deepseekApiKey: process.env.DEEPSEEK_API_KEY || '',
+  deepseekModel: process.env.DEEPSEEK_MODEL || 'deepseek-v4-pro',
 };
