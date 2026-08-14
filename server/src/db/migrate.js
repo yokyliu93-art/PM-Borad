@@ -40,8 +40,8 @@ export function migrate() {
     CREATE TABLE IF NOT EXISTS tasks (
       id TEXT PRIMARY KEY,
       project_id TEXT NOT NULL REFERENCES projects(id),
-      module_key TEXT DEFAULT 'product',
-      module_name TEXT DEFAULT '产品',
+      module_key TEXT DEFAULT 'main',
+      module_name TEXT DEFAULT '主模块',
       title TEXT NOT NULL,
       summary TEXT DEFAULT '',
       cycle TEXT DEFAULT '',
@@ -72,6 +72,18 @@ export function migrate() {
       user_id TEXT NOT NULL REFERENCES users(id),
       content TEXT NOT NULL,
       created_at TEXT DEFAULT (datetime('now'))
+    );
+
+    CREATE TABLE IF NOT EXISTS project_modules (
+      id TEXT PRIMARY KEY,
+      project_id TEXT NOT NULL REFERENCES projects(id),
+      module_key TEXT NOT NULL,
+      module_name TEXT NOT NULL,
+      detail TEXT DEFAULT '',
+      sort_order INTEGER DEFAULT 0,
+      created_at TEXT DEFAULT (datetime('now')),
+      updated_at TEXT DEFAULT (datetime('now')),
+      UNIQUE(project_id, module_key)
     );
 
     CREATE TABLE IF NOT EXISTS template_definitions (
@@ -227,10 +239,10 @@ export function migrate() {
 
   const taskCols = db.prepare('PRAGMA table_info(tasks)').all().map((c) => c.name);
   if (!taskCols.includes('module_key')) {
-    db.exec("ALTER TABLE tasks ADD COLUMN module_key TEXT DEFAULT 'product'");
+    db.exec("ALTER TABLE tasks ADD COLUMN module_key TEXT DEFAULT 'main'");
   }
   if (!taskCols.includes('module_name')) {
-    db.exec("ALTER TABLE tasks ADD COLUMN module_name TEXT DEFAULT '产品'");
+    db.exec("ALTER TABLE tasks ADD COLUMN module_name TEXT DEFAULT '主模块'");
   }
   if (!taskCols.includes('agent_api_key_hash')) {
     db.exec("ALTER TABLE tasks ADD COLUMN agent_api_key_hash TEXT DEFAULT ''");

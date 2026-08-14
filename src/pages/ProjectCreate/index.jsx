@@ -266,7 +266,7 @@ export function ProjectCreate() {
           {!isEditing && (
             <div className="mt-5 rounded-md border border-emerald-400/20 bg-emerald-500/[0.06] p-4">
               <p className="text-sm font-medium text-emerald-100">创建后生成需求说明书和 API Key</p>
-              <p className="mt-1 text-sm leading-6 text-slate-500">正式项目请先导入飞书文档，或把飞书文档内容贴进项目计划书。创建后，总PM把需求说明书和 API Key 给自己的 Agent，由 Agent 回传产品、运营、内容三个一级模块下的二级任务。</p>
+              <p className="mt-1 text-sm leading-6 text-slate-500">正式项目请先导入飞书文档，或把飞书文档内容贴进项目计划书。创建后，总PM把需求说明书和 API Key 给自己的 Agent，由 Agent 先写入适合这个项目的一级菜单，再回传每个一级菜单下的二级任务。</p>
             </div>
           )}
         </div>

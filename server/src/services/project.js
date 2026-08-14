@@ -76,6 +76,7 @@ export function getById(id) {
       WHERE tm.team_id = ?
       ORDER BY u.name
     `).all(project.team_id);
+    project.modules = listModules(id);
   }
   return project;
 }
@@ -137,11 +138,11 @@ export function buildDefaultProjectAgentInstructions(project) {
     project.description ? `项目简介：${project.description}` : '',
     project.plan_markdown ? `项目计划书：\n${project.plan_markdown}` : '',
     '你的权限边界：只能管理这个项目下的任务块，不能越权到其他项目。',
-    '项目第一层固定只有三个一级模块：产品、运营、内容。PM Board 第一屏只展示这三个大模块。',
-    '你需要基于飞书文档/项目计划书，生成总项目需求说明书，然后在三个一级模块下面拆二级任务。',
+    '项目第一层不是固定模板。你需要先基于飞书文档/项目计划书判断这个项目应该有哪些一级菜单，并调用项目 Agent API 写入一级菜单。',
+    '一级菜单写入后，再把二级任务挂到对应一级菜单下面。每个项目情况不同，不要默认使用产品/运营/内容。',
     '你也可以回传项目 Timeline。Timeline 按周组织，W1 表示第一周，W2 表示第二周；每周要写清目标、关键动作、负责人/配合方和交付物。',
-    '回传每个二级任务时请带 module 字段，只能写「产品」「运营」「内容」之一。每个二级任务要有标题、目标说明、周期和建议子任务。',
-    '当总 PM 说“传到 PM Board”时，请调用项目 Agent API 回传 Timeline 和任务模块。PM Board 会以你回传的内容为主视图。',
+    '回传每个二级任务时请带 module 字段，module 应该等于某个一级菜单名称。每个二级任务要有标题、目标说明、周期和建议子任务。',
+    '当总 PM 说“传到 PM Board”时，请调用项目 Agent API 回传一级菜单、Timeline 和二级任务。PM Board 会以你回传的内容为主视图。',
   ].filter(Boolean).join('\n');
 }
 
@@ -188,6 +189,7 @@ export function getProjectAgentPackageByProjectId(projectId) {
   const tasks = taskService.listByProject(projectId).map((task) => taskService.ensureDefaultTaskAgentSetup(task.id).task);
   return {
     project,
+    modules: project.modules || [],
     tasks,
     instructions: project.agent_instructions || buildDefaultProjectAgentInstructions(project),
   };
@@ -216,6 +218,72 @@ export function createTasksFromAgent(apiKey, payload = {}) {
     created,
     package: getProjectAgentPackageByProjectId(pkg.project.id),
   };
+}
+
+function normalizeProjectModule(item, index) {
+  if (typeof item === 'string') {
+    const name = item.trim();
+    return { moduleKey: taskService.makeModuleKey(name), moduleName: name, detail: '', sortOrder: index };
+  }
+  const name = String(item?.name || item?.moduleName || item?.module_name || item?.title || '').trim();
+  const key = String(item?.key || item?.moduleKey || item?.module_key || taskService.makeModuleKey(name)).trim();
+  return {
+    moduleKey: taskService.makeModuleKey(key || name),
+    moduleName: name || key || `一级菜单 ${index + 1}`,
+    detail: String(item?.detail || item?.description || item?.summary || '').trim(),
+    sortOrder: item?.sortOrder ?? item?.sort_order ?? index,
+  };
+}
+
+export function updateModulesFromAgent(apiKey, payload = {}) {
+  const pkg = getProjectAgentPackageByKey(apiKey);
+  const rows = Array.isArray(payload.modules)
+    ? payload.modules
+    : Array.isArray(payload.menus)
+      ? payload.menus
+      : [];
+  if (rows.length === 0) throw new Error('请提供 modules 数组');
+  const modules = rows
+    .map((item, index) => normalizeProjectModule(item, index))
+    .filter((item) => item.moduleName);
+  if (modules.length === 0) throw new Error('一级菜单内容为空');
+  const uniqueModules = [];
+  const seenModuleKeys = new Set();
+  for (const module of modules) {
+    if (seenModuleKeys.has(module.moduleKey)) continue;
+    seenModuleKeys.add(module.moduleKey);
+    uniqueModules.push(module);
+  }
+  const tx = db.transaction(() => {
+    db.prepare('DELETE FROM project_modules WHERE project_id = ?').run(pkg.project.id);
+    const insert = db.prepare(`
+      INSERT INTO project_modules (id, project_id, module_key, module_name, detail, sort_order)
+      VALUES (?, ?, ?, ?, ?, ?)
+    `);
+    uniqueModules.forEach((item, index) => {
+      insert.run(uuid(), pkg.project.id, item.moduleKey, item.moduleName, item.detail, item.sortOrder ?? index);
+    });
+    db.prepare(`
+      UPDATE projects
+      SET agent_last_update_at = datetime('now'), updated_at = datetime('now')
+      WHERE id = ?
+    `).run(pkg.project.id);
+    db.prepare(`
+      INSERT INTO project_agent_events (id, project_id, action, progress_note, payload_json)
+      VALUES (?, ?, ?, ?, ?)
+    `).run(uuid(), pkg.project.id, 'update_modules', payload.progressNote || payload.progress_note || '', JSON.stringify(payload));
+  });
+  tx();
+  return getProjectAgentPackageByProjectId(pkg.project.id);
+}
+
+export function listModules(projectId) {
+  return db.prepare(`
+    SELECT module_key, module_name, detail, sort_order
+    FROM project_modules
+    WHERE project_id = ?
+    ORDER BY sort_order, created_at
+  `).all(projectId);
 }
 
 function normalizeTimelineItem(item, index) {
@@ -274,6 +342,7 @@ export function remove(id) {
     db.prepare('DELETE FROM subtask_attachments WHERE task_id IN (SELECT id FROM tasks WHERE project_id = ?)').run(id);
     db.prepare('DELETE FROM subtasks WHERE task_id IN (SELECT id FROM tasks WHERE project_id = ?)').run(id);
     db.prepare('DELETE FROM tasks WHERE project_id = ?').run(id);
+    db.prepare('DELETE FROM project_modules WHERE project_id = ?').run(id);
     db.prepare('DELETE FROM project_members WHERE project_id = ?').run(id);
     db.prepare('DELETE FROM projects WHERE id = ?').run(id);
     return [...files, ...subFiles];

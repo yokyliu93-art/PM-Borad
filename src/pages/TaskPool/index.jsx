@@ -8,21 +8,6 @@ import { TaskCard } from '../../components/ui/TaskCard';
 import { EmptyState } from '../../components/ui/EmptyState';
 import { AlertTriangle, ArrowLeft, BookOpen, Boxes, CalendarDays, Copy, KeyRound, Loader2, RefreshCw } from 'lucide-react';
 
-const MODULES = [
-  { key: 'product', name: '产品', detail: '需求、功能、体验、交互、技术实现相关模块' },
-  { key: 'operations', name: '运营', detail: '增长、活动、用户、社群、渠道推进相关模块' },
-  { key: 'content', name: '内容', detail: '文案、文章、视频、宣发、媒体素材相关模块' },
-];
-
-function normalizeModule(task) {
-  const key = task.module_key || task.moduleKey;
-  const name = task.module_name || task.moduleName || task.module || '';
-  const text = `${name} ${task.title || ''} ${task.summary || ''}`.toLowerCase();
-  if (key === 'operations' || /运营|operation|ops|增长|活动|社群|渠道|用户/.test(text)) return 'operations';
-  if (key === 'content' || /内容|content|文案|文章|视频|媒体|宣发|传播/.test(text)) return 'content';
-  return 'product';
-}
-
 export function TaskPool() {
   const { projectId } = useParams();
   const { currentUser, tasksVersion } = useStore();
@@ -145,19 +130,20 @@ export function TaskPool() {
       '总PM Agent 包',
       `项目：${project?.name || ''}`,
       '',
-      '项目一级模块：产品、运营、内容。',
-      '你需要先围绕这三个一级模块拆项目结构。PM Board 第一屏只展示这三个模块；每个模块点进去后才展示你回传的二级任务。',
+      '项目一级菜单由你根据项目说明书自行设计，不是固定模板。',
+      '你需要先写入一级菜单；PM Board 第一屏展示你写入的一级菜单；每个菜单点进去后才展示你回传的二级任务。',
       '',
       projectAgentInstructions || project?.agent_instructions || '',
       '',
       'API 使用方式：',
       `GET ${origin}/api/agent/project 读取项目需求文档和已有任务块。`,
+      `POST ${origin}/api/agent/project/modules 回传项目一级菜单。`,
       `POST ${origin}/api/agent/project/timeline 回传按周拆好的项目 Timeline。`,
       `POST ${origin}/api/agent/project/tasks 回传你拆好的模块，PM Board 会把它们显示为项目模块。`,
       '请求头：Authorization: Bearer <API_KEY>',
-      '一级模块只能是：产品、运营、内容。',
+      '一级菜单示例：{"modules":[{"name":"技术地基","detail":"域名、HTTPS、OAuth、基础前端能力"},{"name":"增长启动","detail":"冷启动、拉新、传播动作"}]}',
       'Timeline 示例：{"timeline":[{"week":"W1","detail":"第一周目标；关键动作；负责人/配合方；交付物"}]}',
-      '创建示例：{"tasks":[{"module":"产品","title":"任务块标题","summary":"目标","cycle":"第1周","idea":"核心想法","executionPlan":"执行方案","resourcePlan":"资源配合","subtasks":[{"title":"子任务","note":"说明"}]}],"publishNow":true}',
+      '二级任务示例：{"tasks":[{"module":"技术地基","title":"任务块标题","summary":"目标","cycle":"第1周","idea":"核心想法","executionPlan":"执行方案","resourcePlan":"资源配合","subtasks":[{"title":"子任务","note":"说明"}]}],"publishNow":true}',
     ].join('\n');
   }
 
@@ -172,8 +158,41 @@ export function TaskPool() {
     }
   }
 
+  function getTaskModuleKey(task) {
+    return task.module_key || task.moduleKey || makeModuleKey(task.module_name || task.moduleName || task.module || '主模块');
+  }
+
+  function getModules() {
+    const byKey = new Map();
+    const projectModules = Array.isArray(project?.modules) ? project.modules : [];
+
+    projectModules.forEach((module, index) => {
+      const name = module.module_name || module.moduleName || module.name || `一级菜单 ${index + 1}`;
+      const key = module.module_key || module.moduleKey || module.key || makeModuleKey(name);
+      byKey.set(key, {
+        key,
+        name,
+        detail: module.detail || module.description || module.summary || '',
+        sortOrder: module.sort_order ?? module.sortOrder ?? index,
+      });
+    });
+
+    tasks.forEach((task) => {
+      const key = getTaskModuleKey(task);
+      if (byKey.has(key)) return;
+      byKey.set(key, {
+        key,
+        name: task.module_name || task.moduleName || task.module || '主模块',
+        detail: '',
+        sortOrder: byKey.size,
+      });
+    });
+
+    return [...byKey.values()].sort((a, b) => (a.sortOrder ?? 0) - (b.sortOrder ?? 0));
+  }
+
   function getModuleTasks(moduleKey) {
-    return tasks.filter((task) => normalizeModule(task) === moduleKey);
+    return tasks.filter((task) => getTaskModuleKey(task) === moduleKey);
   }
 
   function moduleProgress(moduleTasks) {
@@ -202,7 +221,8 @@ export function TaskPool() {
   );
 
   const timeline = getTimeline();
-  const currentModule = MODULES.find((module) => module.key === selectedModule);
+  const modules = getModules();
+  const currentModule = modules.find((module) => module.key === selectedModule);
   const currentTimeline = Number.isInteger(selectedTimelineIndex) ? timeline[selectedTimelineIndex] : null;
 
   return (
@@ -212,14 +232,14 @@ export function TaskPool() {
         <h2 className="mt-2 text-3xl font-semibold tracking-normal text-white">
           {currentTimeline
             ? `${currentTimeline[0] || `阶段 ${selectedTimelineIndex + 1}`} · 周计划`
-            : currentModule ? `${currentModule.name}模块 · 二级任务` : '项目总览 · 产品 / 运营 / 内容'}
+            : currentModule ? `${currentModule.name} · 二级任务` : '项目总览 · 一级菜单'}
         </h2>
         <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-400">
           {currentTimeline
             ? '这里展开这一周的具体计划。后续可以由总PM Agent 回传更详细的目标、动作、负责人和交付物。'
             : currentModule
             ? '这里展示该一级模块下面的二级任务。进入任务后，子PM 再继续拆执行步骤、周计划和阶段交付。'
-            : '发起项目后先形成需求说明书和 API Key。总PM把它交给自己的 Agent，Agent 回传产品、运营、内容三个一级模块下的二级任务。'}
+            : '发起项目后先形成需求说明书和 API Key。总PM把它交给自己的 Agent，Agent 先回传一级菜单，再回传每个一级菜单下的二级任务。'}
         </p>
       </div>
 
@@ -229,7 +249,7 @@ export function TaskPool() {
             <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
               <div>
                 <p className="flex items-center gap-1.5 text-sm font-medium text-emerald-100"><KeyRound size={15} />总PM Agent 包</p>
-                <p className="mt-1 text-sm text-slate-500">复制需求说明书和 API Key 给你的 Agent。请让 Agent 先围绕产品、运营、内容三个一级模块拆项目，再把二级任务回传到对应模块下。</p>
+                <p className="mt-1 text-sm text-slate-500">复制需求说明书和 API Key 给你的 Agent。请让 Agent 先写入适合这个项目的一级菜单，再把二级任务回传到对应菜单下。</p>
                 <p className="mt-2 text-xs text-slate-500">当前 Key：{projectAgentKey || project?.agent_api_key_prefix || '还没有生成'}</p>
               </div>
               <div className="flex flex-wrap gap-2">
@@ -316,7 +336,7 @@ export function TaskPool() {
       ) : (
         <div className="grid gap-5 xl:grid-cols-[1fr_340px]">
           <div className="grid gap-4 lg:grid-cols-3">
-            {MODULES.map((module) => {
+            {modules.length ? modules.map((module) => {
               const moduleTasks = getModuleTasks(module.key);
               const progress = moduleProgress(moduleTasks);
               const claimed = moduleTasks.filter((task) => task.owner_id).length;
@@ -355,7 +375,15 @@ export function TaskPool() {
                   <p className="mt-5 text-sm text-emerald-200">{moduleTasks.length ? '进入查看二级任务' : '等待 Agent 回传二级任务'}</p>
                 </button>
               );
-            })}
+            }) : (
+              <div className="grid min-h-72 place-items-center rounded-lg border border-dashed border-white/15 bg-white/[0.025] p-6 text-center lg:col-span-3">
+                <div>
+                  <Boxes className="mx-auto text-slate-500" size={28} />
+                  <p className="mt-3 text-lg font-semibold text-white">等待 Agent 写入一级菜单</p>
+                  <p className="mt-2 max-w-md text-sm leading-6 text-slate-500">新项目不会预设产品、运营、内容。请把总PM Agent 包发给你的 Agent，让它先调用 modules 接口写入适合这个项目的一级菜单。</p>
+                </div>
+              </div>
+            )}
           </div>
 
           <aside className="xl:sticky xl:top-28 xl:self-start">
@@ -369,6 +397,18 @@ export function TaskPool() {
       )}
     </section>
   );
+}
+
+function makeModuleKey(name = '') {
+  const source = String(name || '').trim();
+  const ascii = source
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '');
+  if (ascii) return ascii.slice(0, 48);
+  let hash = 0;
+  for (const ch of source || '主模块') hash = ((hash << 5) - hash + ch.charCodeAt(0)) | 0;
+  return `module-${Math.abs(hash).toString(36)}`;
 }
 
 function TimelinePanel({ timeline, selectedTimelineIndex, onSelect }) {

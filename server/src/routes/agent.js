@@ -45,6 +45,15 @@ router.post('/project/tasks', agentAuth, (req, res) => {
   }
 });
 
+router.post('/project/modules', agentAuth, (req, res) => {
+  try {
+    const data = projectService.updateModulesFromAgent(req.agentApiKey, req.body || {});
+    res.json({ ok: true, data });
+  } catch (err) {
+    res.status(400).json({ ok: false, error: err.message });
+  }
+});
+
 router.post('/project/timeline', agentAuth, (req, res) => {
   try {
     const data = projectService.updateTimelineFromAgent(req.agentApiKey, req.body || {});

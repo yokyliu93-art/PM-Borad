@@ -5,21 +5,21 @@ import crypto from 'crypto';
 import db from '../db/connection.js';
 import { config } from '../config.js';
 
-const MODULES = [
-  { key: 'product', name: '产品', aliases: ['产品', 'product', 'prd', 'pm', '功能', '体验', '需求', '设计', '研发'] },
-  { key: 'operations', name: '运营', aliases: ['运营', 'operations', 'operation', 'ops', '增长', '用户', '活动', '社群', '渠道'] },
-  { key: 'content', name: '内容', aliases: ['内容', 'content', '文案', '文章', '视频', '媒体', '传播', '宣发'] },
-];
+export function makeModuleKey(input = '') {
+  const source = String(input || '').trim();
+  const ascii = source
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '');
+  if (ascii) return ascii.slice(0, 48);
+  let hash = 0;
+  for (const ch of source || '主模块') hash = ((hash << 5) - hash + ch.charCodeAt(0)) | 0;
+  return `module-${Math.abs(hash).toString(36)}`;
+}
 
 export function normalizeModule(input = '', fallbackText = '') {
-  const raw = String(input || '').trim().toLowerCase();
-  const haystack = `${raw} ${String(fallbackText || '').toLowerCase()}`;
-  for (const mod of MODULES) {
-    if (mod.aliases.some((alias) => haystack.includes(alias.toLowerCase()))) {
-      return { moduleKey: mod.key, moduleName: mod.name };
-    }
-  }
-  return { moduleKey: 'product', moduleName: '产品' };
+  const name = String(input || fallbackText || '主模块').trim() || '主模块';
+  return { moduleKey: makeModuleKey(name), moduleName: name };
 }
 
 function unlinkAttachmentFiles(files) {
