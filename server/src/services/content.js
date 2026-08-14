@@ -181,15 +181,15 @@ export function addExperience(projectId, memoId, userId, content) {
 }
 
 export function importMinutes(projectId, userId, fields = {}) {
-  const title = String(fields.title || '飞书妙记导入').trim();
+  const title = String(fields.title || '例会速记导入').trim();
   const transcript = String(fields.transcript || fields.content || '').trim();
   const meetingDocUrl = fields.meetingDocUrl || fields.meeting_doc_url || fields.weeklyDocUrl || fields.weekly_doc_url || '';
   const meetingMinutesUrl = fields.meetingMinutesUrl || fields.meeting_minutes_url || fields.minutesUrl || fields.minutes_url || fields.sourceUrl || fields.source_url || '';
-  if (!transcript && !meetingDocUrl && !meetingMinutesUrl) throw new Error('请提供周会文档、周会妙记链接或妙记转写内容');
+  if (!transcript && !meetingDocUrl && !meetingMinutesUrl) throw new Error('请提供周会文档、周会速记文档链接或速记文字记录');
   const memo = create(projectId, userId, {
     kind: 'meeting',
     title,
-    body: transcript || '已记录周会文档和周会妙记链接，等待同步转写内容后拆解选题。',
+    body: transcript || '已记录周会文档和周会速记文档，等待拆解选题。',
     sourceUrl: meetingMinutesUrl || meetingDocUrl,
     meetingDocUrl,
     meetingMinutesUrl,
@@ -313,31 +313,26 @@ async function notifyTopicOwner({ ownerName, projectId, title, firstDraftAt, sum
 
 export async function parseWeeklyTopics(projectId, userId, fields = {}) {
   const meetingDocUrl = String(fields.meetingDocUrl || fields.meeting_doc_url || '').trim();
-  const meetingMinutesUrl = String(fields.meetingMinutesUrl || fields.meeting_minutes_url || fields.minutesUrl || '').trim();
-  const transcript = String(fields.transcript || fields.minutesTranscript || fields.minutes_transcript || '').trim();
+  const meetingNotesUrl = String(fields.meetingNotesUrl || fields.meeting_notes_url || fields.meetingMinutesUrl || fields.meeting_minutes_url || '').trim();
   if (!meetingDocUrl) throw new Error('请提供周会文档链接');
-  if (!transcript && !meetingMinutesUrl) throw new Error('请粘贴妙记转写文本，或提供周会妙记链接');
+  if (!meetingNotesUrl) throw new Error('请提供周会速记文档链接');
 
-  const meetingDoc = await feishuService.fetchDocContent(userId, meetingDocUrl);
-  const meetingMinutes = transcript
-    ? {
-        title: fields.title || '妙记文字记录',
-        url: meetingMinutesUrl,
-        content: transcript,
-      }
-    : await feishuService.fetchDocContent(userId, meetingMinutesUrl);
-  const parsed = await aiService.parseWeeklyTopics({ meetingDoc, meetingMinutes });
+  const [meetingDoc, meetingNotes] = await Promise.all([
+    feishuService.fetchDocContent(userId, meetingDocUrl),
+    feishuService.fetchDocContent(userId, meetingNotesUrl),
+  ]);
+  const parsed = await aiService.parseWeeklyTopics({ meetingDoc, meetingNotes });
   const meeting = create(projectId, userId, {
     kind: 'meeting',
     title: fields.title || meetingDoc.title || '周会选题解析',
     body: [
       `周会文档：${meetingDoc.title || meetingDocUrl}`,
-      transcript ? '妙记转写：已粘贴文字记录' : `周会妙记：${meetingMinutes.title || meetingMinutesUrl}`,
+      `周会速记文档：${meetingNotes.title || meetingNotesUrl}`,
       `DeepSeek 已解析出 ${parsed.dailyTopics.length} 个日常选题、${parsed.deepTopics.length} 个深度选题。`,
     ].join('\n'),
     sourceUrl: meetingDocUrl,
     meetingDocUrl,
-    meetingMinutesUrl,
+    meetingMinutesUrl: meetingNotesUrl,
   });
 
   const createdDaily = parsed.dailyTopics.map((topic) => create(projectId, userId, {
@@ -350,7 +345,7 @@ export async function parseWeeklyTopics(projectId, userId, fields = {}) {
     timelineText: topicTimelineText(topic, false),
     sourceUrl: meetingDocUrl,
     meetingDocUrl,
-    meetingMinutesUrl,
+    meetingMinutesUrl: meetingNotesUrl,
   }));
   const createdDeep = parsed.deepTopics.map((topic) => create(projectId, userId, {
     kind: 'topic',
@@ -362,7 +357,7 @@ export async function parseWeeklyTopics(projectId, userId, fields = {}) {
     timelineText: topicTimelineText(topic, true),
     sourceUrl: meetingDocUrl,
     meetingDocUrl,
-    meetingMinutesUrl,
+    meetingMinutesUrl: meetingNotesUrl,
   }));
 
   const boardUrl = `${config.clientUrl}/topics/daily`;
@@ -386,7 +381,7 @@ export async function parseWeeklyTopics(projectId, userId, fields = {}) {
     notifications,
     source: {
       meetingDoc: { title: meetingDoc.title, url: meetingDocUrl },
-      meetingMinutes: { title: meetingMinutes.title, url: meetingMinutesUrl },
+      meetingNotes: { title: meetingNotes.title, url: meetingNotesUrl },
     },
   };
 }

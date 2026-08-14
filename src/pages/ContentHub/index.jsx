@@ -130,8 +130,8 @@ export function ContentHub({ mode = 'all', initialTopicType = 'daily' }) {
       toast.error('请填写周会文档链接');
       return;
     }
-    if (isTopics && !minutes.transcript?.trim() && !minutes.meetingMinutesUrl) {
-      toast.error('请粘贴妙记转写文本，或填写周会妙记链接');
+    if (isTopics && !minutes.meetingMinutesUrl) {
+      toast.error('请填写周会速记文档链接');
       return;
     }
     setTopicParseError('');
@@ -228,29 +228,25 @@ export function ContentHub({ mode = 'all', initialTopicType = 'daily' }) {
             <CalendarDays size={16} />周会选题解析台
           </p>
           <h2 className="mt-2 max-w-2xl text-2xl font-semibold leading-tight tracking-normal text-slate-950">
-            连接周会文档和妙记文字，自动生成选题板块
+            连接周会文档和速记文档，自动生成选题板块
           </h2>
           <p className="mt-3 max-w-md text-sm leading-7 text-slate-600">
-            系统会读取周会文档，并结合你粘贴的妙记转写文本调用 DeepSeek 解析日常选题、负责人和初稿时间。深度选题会生成长 timeline，后续像 Build 项目一样推进。
+            系统会读取两个飞书文档，再调用 DeepSeek 解析日常选题、负责人和初稿时间。深度选题会生成长 timeline，后续像 Build 项目一样推进。
           </p>
         </div>
         <div className="space-y-3">
-          <form onSubmit={importMinutes} className="grid w-full gap-3 lg:grid-cols-[minmax(0,1fr)_120px]">
+          <form onSubmit={importMinutes} className="grid w-full gap-3 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_120px]">
             <label className="block">
               <span className="mb-1.5 block text-xs font-medium text-slate-500">周会文档链接</span>
               <input value={minutes.meetingDocUrl} onChange={(event) => setMinutes({ ...minutes, meetingDocUrl: event.target.value })} placeholder="https://xxx.feishu.cn/docx/..." className="w-full rounded-md border border-slate-200 px-3 py-2.5 text-sm outline-none focus:border-emerald-400" />
             </label>
+            <label className="block">
+              <span className="mb-1.5 block text-xs font-medium text-slate-500">周会速记文档链接</span>
+              <input value={minutes.meetingMinutesUrl} onChange={(event) => setMinutes({ ...minutes, meetingMinutesUrl: event.target.value })} placeholder="https://xxx.feishu.cn/wiki/... 或 /docx/..." className="w-full rounded-md border border-slate-200 px-3 py-2.5 text-sm outline-none focus:border-emerald-400" />
+            </label>
             <button disabled={parsingTopics} className="mt-5 rounded-md bg-emerald-600 px-3 py-2.5 text-sm font-semibold text-white transition hover:bg-emerald-500 disabled:opacity-60">
               {parsingTopics ? '解析中' : '解析'}
             </button>
-            <label className="block lg:col-span-2">
-              <span className="mb-1.5 block text-xs font-medium text-slate-500">妙记导出的文字记录</span>
-              <textarea value={minutes.transcript} onChange={(event) => setMinutes({ ...minutes, transcript: event.target.value })} placeholder="从飞书妙记导出或复制文字记录，粘贴到这里" rows={6} className="w-full rounded-md border border-slate-200 px-3 py-2.5 text-sm leading-6 outline-none focus:border-emerald-400" />
-            </label>
-            <label className="block lg:col-span-2">
-              <span className="mb-1.5 block text-xs font-medium text-slate-500">妙记链接（可选，等飞书权限开通后使用）</span>
-              <input value={minutes.meetingMinutesUrl} onChange={(event) => setMinutes({ ...minutes, meetingMinutesUrl: event.target.value })} placeholder="https://xxx.feishu.cn/minutes/..." className="w-full rounded-md border border-slate-200 px-3 py-2.5 text-sm outline-none focus:border-emerald-400" />
-            </label>
           </form>
           {topicParseError ? (
             <div className="flex flex-col gap-3 rounded-md border border-red-100 bg-red-50 px-3 py-3 text-sm text-red-700 sm:flex-row sm:items-center sm:justify-between">
@@ -276,7 +272,7 @@ export function ContentHub({ mode = 'all', initialTopicType = 'daily' }) {
           <p className="text-sm font-medium text-emerald-700">{isTopics ? '硅星人选题' : isDemo ? '硅星人 Demo 模块' : isEval ? '硅星人 Eval' : '硅星人内容池'}</p>
           <h2 className="mt-2 text-3xl font-semibold tracking-normal text-slate-950">{isTopics ? '从周会进入选题推进' : isDemo ? '从 memo 到 Demo 决策' : isEval ? '测试集和评测进度' : '把零散 memo 变成可协作的板块'}</h2>
           <p className="mt-3 max-w-3xl text-sm leading-6 text-slate-600">
-            {isTopics ? '把周会文档和周会妙记放进来，拆成日常选题和深度选题。日常选题看负责人和执行进度；深度选题按更长 timeline 协作推进。' : isDemo ? '这里都是大家扔上来的 Demo memo。试用后写体验，半数通过就进入 Demo。' : isEval ? '把测试集以飞书链接的方式放进来，记录负责人、评测进度和当前说明，部门大盘会同步显示 Eval 进度。' : 'Demo、每周例会和选题先放在这里。大家写试用体验、投 Demo 票，够半数通过后就可以进入 Demo 或沉淀成项目任务。'}
+            {isTopics ? '把周会文档和周会速记文档放进来，拆成日常选题和深度选题。日常选题看负责人和执行进度；深度选题按更长 timeline 协作推进。' : isDemo ? '这里都是大家扔上来的 Demo memo。试用后写体验，半数通过就进入 Demo。' : isEval ? '把测试集以飞书链接的方式放进来，记录负责人、评测进度和当前说明，部门大盘会同步显示 Eval 进度。' : 'Demo、每周例会和选题先放在这里。大家写试用体验、投 Demo 票，够半数通过后就可以进入 Demo 或沉淀成项目任务。'}
           </p>
           {isTopics ? (
             <div className="mt-4 inline-flex items-center gap-2 rounded-full border border-emerald-100 bg-emerald-50 px-3 py-1.5 text-sm font-medium text-emerald-800">
@@ -344,7 +340,7 @@ export function ContentHub({ mode = 'all', initialTopicType = 'daily' }) {
             {isTopics ? (
               <div className="grid gap-2 md:grid-cols-2">
                 <input value={form.meetingDocUrl} onChange={(event) => setForm({ ...form, meetingDocUrl: event.target.value })} placeholder="来源周会文档链接" className="rounded-md border border-slate-200 px-3 py-2 text-sm outline-none focus:border-emerald-400" />
-                <input value={form.meetingMinutesUrl} onChange={(event) => setForm({ ...form, meetingMinutesUrl: event.target.value })} placeholder="来源周会妙记链接" className="rounded-md border border-slate-200 px-3 py-2 text-sm outline-none focus:border-emerald-400" />
+                <input value={form.meetingMinutesUrl} onChange={(event) => setForm({ ...form, meetingMinutesUrl: event.target.value })} placeholder="来源周会速记文档链接" className="rounded-md border border-slate-200 px-3 py-2 text-sm outline-none focus:border-emerald-400" />
               </div>
             ) : null}
             {(form.kind === 'topic' || isTopics) ? (
@@ -361,17 +357,17 @@ export function ContentHub({ mode = 'all', initialTopicType = 'daily' }) {
       {!isDemo && !isEval && !isTopics ? <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm shadow-slate-950/5">
         <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
           <div>
-            <p className="flex items-center gap-2 text-sm font-semibold text-slate-950"><CalendarDays size={16} />飞书妙记导入</p>
-            <p className="mt-1 text-sm text-slate-500">现在先支持粘贴妙记转写。后续接飞书妙记 API 后，会自动拉例会、整理选题和 Demo 候选。</p>
+            <p className="flex items-center gap-2 text-sm font-semibold text-slate-950"><CalendarDays size={16} />例会速记导入</p>
+            <p className="mt-1 text-sm text-slate-500">把例会文档和速记文档放进来，系统会整理选题和 Demo 候选。</p>
           </div>
           <form onSubmit={importMinutes} className="grid w-full gap-2 lg:max-w-3xl lg:grid-cols-[180px_1fr_1fr_120px]">
             <input value={minutes.title} onChange={(event) => setMinutes({ ...minutes, title: event.target.value })} placeholder="例会标题" className="rounded-md border border-slate-200 px-3 py-2 text-sm outline-none focus:border-emerald-400" />
             <input value={minutes.meetingDocUrl} onChange={(event) => setMinutes({ ...minutes, meetingDocUrl: event.target.value })} placeholder="周会文档链接" className="rounded-md border border-slate-200 px-3 py-2 text-sm outline-none focus:border-emerald-400" />
-            <input value={minutes.meetingMinutesUrl} onChange={(event) => setMinutes({ ...minutes, meetingMinutesUrl: event.target.value })} placeholder="周会妙记链接" className="rounded-md border border-slate-200 px-3 py-2 text-sm outline-none focus:border-emerald-400" />
+            <input value={minutes.meetingMinutesUrl} onChange={(event) => setMinutes({ ...minutes, meetingMinutesUrl: event.target.value })} placeholder="周会速记文档链接" className="rounded-md border border-slate-200 px-3 py-2 text-sm outline-none focus:border-emerald-400" />
             <button disabled={importing} className="rounded-md border border-emerald-200 bg-emerald-50 px-3 py-2 text-sm font-semibold text-emerald-700 transition hover:bg-emerald-100 disabled:opacity-60">
               {importing ? '导入中' : '导入'}
             </button>
-            <textarea value={minutes.transcript} onChange={(event) => setMinutes({ ...minutes, transcript: event.target.value })} placeholder="粘贴妙记转写文本" rows={4} className="lg:col-span-4 rounded-md border border-slate-200 px-3 py-2 text-sm outline-none focus:border-emerald-400" />
+            <textarea value={minutes.transcript} onChange={(event) => setMinutes({ ...minutes, transcript: event.target.value })} placeholder="可选：粘贴速记文字记录" rows={4} className="lg:col-span-4 rounded-md border border-slate-200 px-3 py-2 text-sm outline-none focus:border-emerald-400" />
           </form>
         </div>
       </div> : null}
@@ -452,7 +448,7 @@ export function ContentHub({ mode = 'all', initialTopicType = 'daily' }) {
                   <a href={item.meeting_doc_url} target="_blank" rel="noreferrer" className="text-sm font-medium text-slate-600 hover:text-slate-950">周会文档</a>
                 ) : null}
                 {item.meeting_minutes_url ? (
-                  <a href={item.meeting_minutes_url} target="_blank" rel="noreferrer" className="text-sm font-medium text-slate-600 hover:text-slate-950">周会妙记</a>
+                  <a href={item.meeting_minutes_url} target="_blank" rel="noreferrer" className="text-sm font-medium text-slate-600 hover:text-slate-950">周会速记文档</a>
                 ) : null}
               </div>
 

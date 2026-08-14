@@ -7,7 +7,7 @@ export async function api(path, options = {}) {
   if (res.status === 401) {
     throw new Error('Unauthorized');
   }
-  return res.json();
+  return readJsonResponse(res);
 }
 
 export async function optionalApi(path, options = {}) {
@@ -19,7 +19,7 @@ export async function optionalApi(path, options = {}) {
   if (res.status === 401) {
     return { ok: false, unauthorized: true };
   }
-  return res.json();
+  return readJsonResponse(res);
 }
 
 export function get(path) { return api(path); }
@@ -39,5 +39,18 @@ export async function uploadFile(path, file) {
   if (res.status === 401) {
     throw new Error('Unauthorized');
   }
-  return res.json();
+  return readJsonResponse(res);
+}
+
+async function readJsonResponse(res) {
+  const contentType = res.headers.get('content-type') || '';
+  if (contentType.includes('application/json')) return res.json();
+  const text = await res.text().catch(() => '');
+  if (text.trim().startsWith('<')) {
+    return {
+      ok: false,
+      error: res.redirected ? '登录状态已失效，请重新飞书授权后再试' : '服务返回了网页而不是数据，请刷新页面后重试',
+    };
+  }
+  return { ok: false, error: text || `请求失败（${res.status}）` };
 }

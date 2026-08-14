@@ -267,7 +267,7 @@ function LinkRow({ item }) {
   const links = [
     [item.source_url, '资料链接'],
     [item.meeting_doc_url, '周会文档'],
-    [item.meeting_minutes_url, '周会妙记'],
+    [item.meeting_minutes_url, '周会速记文档'],
   ].filter(([url]) => url);
   if (!links.length) return null;
   return (
