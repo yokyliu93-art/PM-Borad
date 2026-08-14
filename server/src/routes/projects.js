@@ -67,6 +67,15 @@ router.put('/:projectId/modules/:moduleKey/owner', authRequired, requireProjectP
   }
 });
 
+router.delete('/:projectId/modules/:moduleKey', authRequired, requireProjectPM, (req, res) => {
+  try {
+    const data = projectService.removeModule(req.params.projectId, req.params.moduleKey);
+    res.json({ ok: true, data });
+  } catch (err) {
+    res.status(400).json({ ok: false, error: err.message });
+  }
+});
+
 router.post('/:projectId/loops/:loopId/complete', authRequired, requireProjectMember, (req, res) => {
   try {
     const data = loopService.completeLoop(req.params.projectId, req.params.loopId, req.user.id, req.body?.note || '');

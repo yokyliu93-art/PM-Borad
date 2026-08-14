@@ -696,6 +696,18 @@ export async function assignModule(projectId, moduleKey, ownerId, assignedById) 
   return getById(projectId);
 }
 
+export function removeModule(projectId, moduleKey) {
+  const module = ensureModuleRow(projectId, moduleKey);
+  if (!module) throw new Error('一级菜单不存在');
+  const tasks = db.prepare('SELECT id FROM tasks WHERE project_id = ? AND module_key = ?').all(projectId, moduleKey);
+  for (const task of tasks) {
+    taskService.remove(task.id);
+  }
+  db.prepare('DELETE FROM project_modules WHERE project_id = ? AND module_key = ?').run(projectId, moduleKey);
+  db.prepare("UPDATE projects SET updated_at = datetime('now') WHERE id = ?").run(projectId);
+  return getById(projectId);
+}
+
 function normalizeTimelineItem(item, index) {
   if (Array.isArray(item)) {
     return [String(item[0] || `W${index + 1}`).trim(), String(item[1] || '').trim()];

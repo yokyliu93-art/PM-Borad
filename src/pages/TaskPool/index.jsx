@@ -7,7 +7,7 @@ import { useSocket } from '../../hooks/useSocket';
 import { TaskCard } from '../../components/ui/TaskCard';
 import { EmptyState } from '../../components/ui/EmptyState';
 import { Avatar } from '../../components/ui/Avatar';
-import { AlertTriangle, ArrowLeft, BookOpen, Boxes, CalendarDays, Copy, KeyRound, Loader2, RefreshCw, UserPlus } from 'lucide-react';
+import { AlertTriangle, ArrowLeft, BookOpen, Boxes, CalendarDays, Copy, KeyRound, Loader2, RefreshCw, Trash2, UserPlus } from 'lucide-react';
 
 export function TaskPool() {
   const { projectId } = useParams();
@@ -138,6 +138,21 @@ export function TaskPool() {
       setProject(res.data);
     } else {
       toast.error(res.error || '指派失败');
+    }
+  }
+
+  async function handleDeleteModule(module) {
+    const moduleTasks = getModuleTasks(module.key);
+    const detail = moduleTasks.length ? `\n这个一级菜单下面的 ${moduleTasks.length} 个二级任务、子任务和进度也会一起删除。` : '';
+    if (!window.confirm(`确定删除一级菜单「${module.name}」？${detail}\n删除后不可恢复。`)) return;
+    const res = await del(`/api/projects/${projectId}/modules/${encodeURIComponent(module.key)}`);
+    if (res.ok) {
+      toast.success('一级菜单已删除');
+      setProject(res.data);
+      setSelectedModule(null);
+      loadTasks();
+    } else {
+      toast.error(res.error || '删除失败');
     }
   }
 
@@ -532,6 +547,14 @@ export function TaskPool() {
                   >
                     {moduleTasks.length ? '进入查看二级任务' : '查看一级菜单'}
                   </button>
+                  {isProjectPM ? (
+                    <button
+                      onClick={() => handleDeleteModule(module)}
+                      className="ml-2 mt-5 inline-flex items-center gap-1 rounded-md border border-rose-200 bg-white px-3 py-2 text-sm font-medium text-rose-600 transition hover:bg-rose-50"
+                    >
+                      <Trash2 size={14} /> 删除
+                    </button>
+                  ) : null}
                 </div>
               );
             }) : (
