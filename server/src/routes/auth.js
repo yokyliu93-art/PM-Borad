@@ -4,6 +4,7 @@ import { config } from '../config.js';
 import db from '../db/connection.js';
 import { authRequired } from '../middleware/auth.js';
 import * as authService from '../services/auth.js';
+import * as userAgentService from '../services/userAgent.js';
 
 const router = Router();
 
@@ -91,6 +92,24 @@ router.put('/me', authRequired, (req, res) => {
         devLoginEnabled: config.devLoginEnabled,
       },
     });
+  } catch (err) {
+    res.status(400).json({ ok: false, error: err.message });
+  }
+});
+
+router.get('/me/agent', authRequired, (req, res) => {
+  try {
+    const data = userAgentService.getUserAgentAccess(req.user.id);
+    res.json({ ok: true, data });
+  } catch (err) {
+    res.status(400).json({ ok: false, error: err.message });
+  }
+});
+
+router.post('/me/agent-key', authRequired, (req, res) => {
+  try {
+    const data = userAgentService.generateUserAgentKey(req.user.id);
+    res.json({ ok: true, data });
   } catch (err) {
     res.status(400).json({ ok: false, error: err.message });
   }

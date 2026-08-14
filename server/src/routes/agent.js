@@ -2,6 +2,7 @@ import { Router } from 'express';
 import * as taskService from '../services/task.js';
 import * as projectService from '../services/project.js';
 import * as aiService from '../services/ai.js';
+import * as userAgentService from '../services/userAgent.js';
 
 const router = Router();
 
@@ -33,6 +34,42 @@ router.get('/project', agentAuth, (req, res) => {
     res.json({ ok: true, data });
   } catch (err) {
     res.status(401).json({ ok: false, error: err.message });
+  }
+});
+
+router.get('/user/package', agentAuth, (req, res) => {
+  try {
+    const data = userAgentService.getUserPackageByKey(req.agentApiKey);
+    res.json({ ok: true, data });
+  } catch (err) {
+    res.status(401).json({ ok: false, error: err.message });
+  }
+});
+
+router.post('/user/hello', agentAuth, (req, res) => {
+  try {
+    const data = userAgentService.updateConnectionFromAgent(req.agentApiKey, req.body || {});
+    res.json({ ok: true, data });
+  } catch (err) {
+    res.status(401).json({ ok: false, error: err.message });
+  }
+});
+
+router.post('/user/content', agentAuth, (req, res) => {
+  try {
+    const data = userAgentService.createContentFromAgent(req.agentApiKey, req.body || {});
+    res.status(201).json({ ok: true, data });
+  } catch (err) {
+    res.status(400).json({ ok: false, error: err.message });
+  }
+});
+
+router.post('/user/task-progress', agentAuth, (req, res) => {
+  try {
+    const data = userAgentService.updateTaskProgressFromAgent(req.agentApiKey, req.body || {});
+    res.json({ ok: true, data });
+  } catch (err) {
+    res.status(400).json({ ok: false, error: err.message });
   }
 });
 

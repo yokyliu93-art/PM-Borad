@@ -136,6 +136,25 @@ export function migrate() {
       updated_at TEXT DEFAULT (datetime('now'))
     );
 
+    CREATE TABLE IF NOT EXISTS user_agent_keys (
+      user_id TEXT PRIMARY KEY REFERENCES users(id),
+      api_key_hash TEXT NOT NULL,
+      api_key_prefix TEXT DEFAULT '',
+      created_at TEXT DEFAULT (datetime('now')),
+      updated_at TEXT DEFAULT (datetime('now'))
+    );
+
+    CREATE TABLE IF NOT EXISTS user_agent_connections (
+      user_id TEXT PRIMARY KEY REFERENCES users(id),
+      client_name TEXT DEFAULT '',
+      agent_name TEXT DEFAULT '',
+      status TEXT DEFAULT 'disconnected',
+      message TEXT DEFAULT '',
+      last_seen_at TEXT,
+      payload_json TEXT DEFAULT '{}',
+      updated_at TEXT DEFAULT (datetime('now'))
+    );
+
     CREATE TABLE IF NOT EXISTS feishu_docs (
       id TEXT PRIMARY KEY,
       project_id TEXT REFERENCES projects(id),

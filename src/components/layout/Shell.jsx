@@ -3,7 +3,7 @@ import { ErrorBoundary } from '../ui/ErrorBoundary';
 import { NavLink, Outlet, useLocation } from 'react-router-dom';
 import { useEffect, useState } from 'react';
 import { useStore } from '../../store';
-import { UserSwitcher } from '../UserSwitcher';
+import { AgentAccountMenu } from '../AgentAccountMenu';
 import { Boxes, UserCheck, LayoutDashboard, BarChart3, List, Plus, Settings, NotebookTabs, Presentation, ChevronDown, Circle } from 'lucide-react';
 import { get } from '../../lib/api';
 
@@ -52,7 +52,7 @@ export function Shell() {
       </ErrorBoundary>
       <div className="flex min-h-screen flex-col lg:flex-row">
         <aside className="border-b border-slate-200 bg-white/90 lg:sticky lg:top-0 lg:h-screen lg:w-72 lg:border-b-0 lg:border-r">
-          <div className="px-5 py-5">
+          <div className="flex min-h-full flex-col px-5 py-5">
             <div className="flex items-center gap-3">
               <img className="gxr-logo-mark h-11 w-11" src="/guixingren-logo.jpg" alt="硅星人" />
               <div>
@@ -61,7 +61,7 @@ export function Shell() {
               </div>
             </div>
             <div className="gxr-brand-tag mt-5">Powered by 硅星人</div>
-            <div className="mt-6 space-y-2">
+            <div className="mt-6 flex-1 space-y-2">
               <NavLink to="/board" className={({ isActive }) => navClass(isActive)}>
                 <BarChart3 size={16} />
                 <span>部门大盘</span>
@@ -114,6 +114,9 @@ export function Shell() {
                 ))}
               </div>
             </div> : null}
+            <div className="mt-auto pt-5">
+              <AgentAccountMenu />
+            </div>
           </div>
         </aside>
 
@@ -124,7 +127,6 @@ export function Shell() {
                 <p className="text-xs text-slate-500">{projectId ? `Build #${projectId.slice(0, 8)}` : 'PM board'}</p>
                 <h1 className="mt-1 text-2xl font-semibold tracking-normal text-slate-950 md:text-3xl">硅星人 PM Board</h1>
               </div>
-              <UserSwitcher />
             </div>
           </header>
 
