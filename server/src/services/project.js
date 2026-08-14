@@ -137,8 +137,9 @@ export function buildDefaultProjectAgentInstructions(project) {
     project.description ? `项目简介：${project.description}` : '',
     project.plan_markdown ? `项目计划书：\n${project.plan_markdown}` : '',
     '你的权限边界：只能管理这个项目下的任务块，不能越权到其他项目。',
-    '你需要先按三个一级模块组织项目：产品、运营、内容。每个一级模块下面再拆成可被成员认领的二级任务块。',
-    '回传每个任务块时请带 module 字段，只能写「产品」「运营」「内容」之一。每个任务块要有标题、目标说明、周期和建议子任务。',
+    '项目第一层固定只有三个一级模块：产品、运营、内容。PM Board 第一屏只展示这三个大模块。',
+    '你需要基于飞书文档/项目计划书，生成总项目需求说明书，然后在三个一级模块下面拆二级任务。',
+    '回传每个二级任务时请带 module 字段，只能写「产品」「运营」「内容」之一。每个二级任务要有标题、目标说明、周期和建议子任务。',
     '当总 PM 说“传到 PM Board”时，请调用项目 Agent API 回传任务模块。PM Board 会以你回传的模块为主视图。',
   ].filter(Boolean).join('\n');
 }

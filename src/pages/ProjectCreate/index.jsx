@@ -265,8 +265,8 @@ export function ProjectCreate() {
 
           {!isEditing && (
             <div className="mt-5 rounded-md border border-emerald-400/20 bg-emerald-500/[0.06] p-4">
-              <p className="text-sm font-medium text-emerald-100">创建后进入 Agent 回传页</p>
-              <p className="mt-1 text-sm leading-6 text-slate-500">PM Board 不在平台内拆任务。总PM会拿到 API Key 和说明书，交给自己的 Agent 拆出模块，再由 Agent 回传到 PM Board。</p>
+              <p className="text-sm font-medium text-emerald-100">创建后生成需求说明书和 API Key</p>
+              <p className="mt-1 text-sm leading-6 text-slate-500">正式项目请先导入飞书文档，或把飞书文档内容贴进项目计划书。创建后，总PM把需求说明书和 API Key 给自己的 Agent，由 Agent 回传产品、运营、内容三个一级模块下的二级任务。</p>
             </div>
           )}
         </div>
@@ -276,7 +276,7 @@ export function ProjectCreate() {
           <div className="flex items-center justify-between">
             <label className="flex items-center gap-2 text-sm font-medium text-slate-300">
               <ExternalLink size={16} className="text-violet-300" />
-              关联飞书文档
+              飞书文档 / 项目计划输入
             </label>
             {feishuBound ? (
               <span className="text-xs text-emerald-300/80">已授权飞书</span>
@@ -290,7 +290,7 @@ export function ProjectCreate() {
             )}
           </div>
           <p className="mt-1 text-xs text-slate-500">
-            粘贴飞书文档链接，内容会导入项目计划书。创建后可复制总PM Agent 包，让 Agent 基于计划书拆分并回传模块。
+            粘贴飞书文档链接，内容会导入项目计划书，并作为总PM Agent 的需求说明书输入。
           </p>
           <div className="mt-3 flex gap-2">
             <input
@@ -319,7 +319,7 @@ export function ProjectCreate() {
           <div className="flex items-center justify-between mb-4">
             <label className="text-sm font-medium text-slate-300 flex items-center gap-2">
               <FileText size={16} className="text-violet-300" />
-              项目计划书 Markdown
+              需求说明书 Markdown
             </label>
           </div>
           <textarea
