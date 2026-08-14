@@ -87,14 +87,22 @@ export function AgentAccountMenu() {
           </div>
 
           <div className="mt-3 rounded-lg border border-slate-200 p-3">
-            <p className="flex items-center gap-2 text-sm font-semibold text-slate-950"><KeyRound size={15} />我的 Key</p>
-            <p className="mt-1 text-xs text-slate-500">{apiKey || access?.keyPrefix || '还没有生成个人 Agent Key'}</p>
-            <div className="mt-3 grid grid-cols-2 gap-2">
-              <button onClick={generateKey} className="rounded-md bg-emerald-600 px-3 py-2 text-xs font-semibold text-white hover:bg-emerald-500">
-                {access?.hasKey ? '重新生成' : '生成 Key'}
+            <div className="flex items-center justify-between gap-3">
+              <p className="flex items-center gap-2 text-sm font-semibold text-slate-950"><KeyRound size={15} />我的 Key</p>
+              <button
+                onClick={() => copyText(apiKey, 'Key 已复制')}
+                className="inline-flex h-8 w-8 items-center justify-center rounded-full text-slate-400 transition hover:bg-slate-100 hover:text-slate-700"
+                title="复制 Key"
+              >
+                <Copy size={15} />
               </button>
-              <button onClick={() => copyText(apiKey, 'Key 已复制')} className="inline-flex items-center justify-center gap-1 rounded-md border border-slate-200 px-3 py-2 text-xs font-semibold text-slate-700 hover:bg-slate-50">
-                <Copy size={13} />复制 Key
+            </div>
+            <div className="mt-2 rounded-lg border border-slate-200 bg-slate-50 px-3 py-2">
+              <p className="truncate font-mono text-xs text-slate-600">{apiKey || access?.keyPrefix || '还没有生成个人 Agent Key'}</p>
+            </div>
+            <div className="mt-3">
+              <button onClick={generateKey} className="w-full rounded-md bg-emerald-600 px-3 py-2 text-xs font-semibold text-white transition hover:bg-emerald-500">
+                {access?.hasKey ? '重新生成' : '生成 Key'}
               </button>
             </div>
           </div>
