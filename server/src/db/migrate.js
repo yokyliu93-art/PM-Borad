@@ -158,13 +158,20 @@ export function migrate() {
     CREATE TABLE IF NOT EXISTS feishu_docs (
       id TEXT PRIMARY KEY,
       project_id TEXT REFERENCES projects(id),
+      target_type TEXT DEFAULT '',
+      target_id TEXT DEFAULT '',
       doc_token TEXT NOT NULL,
       doc_type TEXT DEFAULT 'docx',
       title TEXT DEFAULT '',
       url TEXT DEFAULT '',
       content_markdown TEXT DEFAULT '',
+      content_hash TEXT DEFAULT '',
+      sync_enabled INTEGER DEFAULT 1,
+      last_synced_at TEXT,
+      last_changed_at TEXT,
       created_by TEXT NOT NULL REFERENCES users(id),
-      created_at TEXT DEFAULT (datetime('now'))
+      created_at TEXT DEFAULT (datetime('now')),
+      updated_at TEXT DEFAULT (datetime('now'))
     );
 
     CREATE TABLE IF NOT EXISTS subtask_steps (
@@ -376,6 +383,29 @@ export function migrate() {
   }
   if (!projectCols.includes('feishu_boss_last_sent_at')) {
     db.exec('ALTER TABLE projects ADD COLUMN feishu_boss_last_sent_at TEXT');
+  }
+
+  const docCols = db.prepare('PRAGMA table_info(feishu_docs)').all().map((c) => c.name);
+  if (!docCols.includes('target_type')) {
+    db.exec("ALTER TABLE feishu_docs ADD COLUMN target_type TEXT DEFAULT ''");
+  }
+  if (!docCols.includes('target_id')) {
+    db.exec("ALTER TABLE feishu_docs ADD COLUMN target_id TEXT DEFAULT ''");
+  }
+  if (!docCols.includes('content_hash')) {
+    db.exec("ALTER TABLE feishu_docs ADD COLUMN content_hash TEXT DEFAULT ''");
+  }
+  if (!docCols.includes('sync_enabled')) {
+    db.exec('ALTER TABLE feishu_docs ADD COLUMN sync_enabled INTEGER DEFAULT 1');
+  }
+  if (!docCols.includes('last_synced_at')) {
+    db.exec('ALTER TABLE feishu_docs ADD COLUMN last_synced_at TEXT');
+  }
+  if (!docCols.includes('last_changed_at')) {
+    db.exec('ALTER TABLE feishu_docs ADD COLUMN last_changed_at TEXT');
+  }
+  if (!docCols.includes('updated_at')) {
+    db.exec('ALTER TABLE feishu_docs ADD COLUMN updated_at TEXT');
   }
 
   const memoCols = db.prepare('PRAGMA table_info(content_memos)').all().map((c) => c.name);

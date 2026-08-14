@@ -23,6 +23,7 @@ import { feishuRouter, projectFeishuRouter } from './routes/feishu.js';
 import { startReminderWorker } from './services/reminder.js';
 import { startProjectProgressSyncWorker } from './services/feishuProgress.js';
 import { startLoopWorker } from './services/loop.js';
+import { startFeishuDocSyncWorker } from './services/feishu.js';
 
 const app = express();
 const server = createServer(app);
@@ -85,6 +86,7 @@ setupSocket(io);
 startReminderWorker();
 startProjectProgressSyncWorker();
 startLoopWorker();
+startFeishuDocSyncWorker();
 
 server.listen(config.port, () => {
   console.log(`[server] Running on http://localhost:${config.port}`);

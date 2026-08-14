@@ -24,4 +24,5 @@ export const config = {
   deepseekApiKey: process.env.DEEPSEEK_API_KEY || '',
   deepseekModel: process.env.DEEPSEEK_MODEL || 'deepseek-v4-pro',
   feishuBossChatId: process.env.FEISHU_BOSS_CHAT_ID || '',
+  feishuDocSyncMinutes: Number(process.env.FEISHU_DOC_SYNC_MINUTES || 10),
 };

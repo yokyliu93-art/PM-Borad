@@ -2,17 +2,33 @@ import { Router } from 'express';
 import { authRequired, requireProjectMember, requireProjectPM } from '../middleware/auth.js';
 import * as projectService from '../services/project.js';
 import * as loopService from '../services/loop.js';
+import * as feishuService from '../services/feishu.js';
 
 const router = Router();
 
-router.post('/', authRequired, (req, res) => {
-  const { teamId, name, description, planMarkdown, timelineJson, memberIds } = req.body;
+router.post('/', authRequired, async (req, res) => {
+  const { teamId, name, description, planMarkdown, timelineJson, memberIds, sourceDocUrl, source_doc_url } = req.body;
   if (!teamId || !name) return res.status(400).json({ ok: false, error: '团队ID和项目名称不能为空' });
-  const project = projectService.create({
-    teamId, name, description, planMarkdown,
-    pmUserId: req.user.id, timelineJson, memberIds,
-  });
-  res.status(201).json({ ok: true, data: project });
+  try {
+    let project = projectService.create({
+      teamId, name, description, planMarkdown,
+      pmUserId: req.user.id, timelineJson, memberIds,
+    });
+    const docUrl = String(sourceDocUrl || source_doc_url || '').trim();
+    if (docUrl) {
+      await feishuService.attachDocSource({
+        projectId: project.id,
+        url: docUrl,
+        userId: req.user.id,
+        targetType: 'project_plan',
+        targetId: project.id,
+      });
+      project = projectService.getById(project.id);
+    }
+    res.status(201).json({ ok: true, data: project });
+  } catch (err) {
+    res.status(400).json({ ok: false, error: err.userMessage || err.message });
+  }
 });
 
 router.get('/', authRequired, (req, res) => {

@@ -125,14 +125,43 @@ projectFeishuRouter.get('/docs', authRequired, (req, res) => {
   res.json({ ok: true, data: docs });
 });
 
-// Import a doc and attach it to the project.
+// Attach a Feishu doc as a live source. PM Board stores the parsed result and
+// can re-sync when the source document changes.
 projectFeishuRouter.post('/docs', authRequired, async (req, res) => {
   const { url } = req.body;
   if (!url) return res.status(400).json({ ok: false, error: '请提供飞书文档链接' });
   try {
-    const doc = await feishuService.fetchDocContent(req.user.id, url);
-    const saved = feishuService.saveDoc({ ...doc, projectId: req.params.projectId, userId: req.user.id });
+    const saved = await feishuService.attachDocSource({
+      projectId: req.params.projectId,
+      url,
+      userId: req.user.id,
+      targetType: req.body?.targetType || req.body?.target_type || '',
+      targetId: req.body?.targetId || req.body?.target_id || '',
+      syncEnabled: req.body?.syncEnabled ?? req.body?.sync_enabled ?? 1,
+    });
     res.status(201).json({ ok: true, data: saved });
+  } catch (err) {
+    sendError(res, err);
+  }
+});
+
+projectFeishuRouter.post('/docs/:docId/sync', authRequired, async (req, res) => {
+  const doc = feishuService.getDoc(req.params.docId);
+  if (!doc || doc.project_id !== req.params.projectId) {
+    return res.status(404).json({ ok: false, error: '文档源不存在' });
+  }
+  try {
+    const data = await feishuService.syncDoc(doc.id);
+    res.json({ ok: true, data });
+  } catch (err) {
+    sendError(res, err);
+  }
+});
+
+projectFeishuRouter.post('/docs/sync-all', authRequired, async (req, res) => {
+  try {
+    const data = await feishuService.syncProjectDocs(req.params.projectId);
+    res.json({ ok: true, data });
   } catch (err) {
     sendError(res, err);
   }

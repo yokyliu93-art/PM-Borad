@@ -1,4 +1,5 @@
 import { v4 as uuid } from 'uuid';
+import crypto from 'crypto';
 import { config } from '../config.js';
 import db from '../db/connection.js';
 import { saveUserTokens } from './auth.js';
@@ -219,14 +220,139 @@ async function fetchMinuteTranscript(userId, minuteToken, url) {
   };
 }
 
-// Persist an imported doc against a project.
-export function saveDoc({ projectId, url, docToken, docType, title, content, userId }) {
-  const id = uuid();
+function contentHash(content = '') {
+  return crypto.createHash('sha256').update(String(content || '')).digest('hex');
+}
+
+function applyDocToTarget(doc) {
+  if (!doc?.target_type || !doc?.target_id) return;
+  if (doc.target_type === 'project_plan') {
+    db.prepare(`
+      UPDATE projects
+      SET plan_markdown = ?, updated_at = datetime('now')
+      WHERE id = ?
+    `).run(doc.content_markdown || '', doc.target_id);
+  }
+  if (doc.target_type === 'content_memo') {
+    db.prepare(`
+      UPDATE content_memos
+      SET body = ?, source_url = ?, updated_at = datetime('now')
+      WHERE id = ?
+    `).run(doc.content_markdown || '', doc.url || '', doc.target_id);
+  }
+}
+
+// Persist an imported Feishu doc as a source. The PM Board record stores the
+// parsed content, while the Feishu URL remains the canonical source for sync.
+export function saveDoc({ id = uuid(), projectId, url, docToken, docType, title, content, userId, targetType = '', targetId = '', syncEnabled = 1 }) {
+  const hash = contentHash(content);
   db.prepare(`
-    INSERT INTO feishu_docs (id, project_id, doc_token, doc_type, title, url, content_markdown, created_by)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-  `).run(id, projectId || null, docToken, docType || 'docx', title || '', url || '', content || '', userId);
-  return db.prepare('SELECT * FROM feishu_docs WHERE id = ?').get(id);
+    INSERT INTO feishu_docs (
+      id, project_id, target_type, target_id, doc_token, doc_type, title, url,
+      content_markdown, content_hash, sync_enabled, last_synced_at, last_changed_at, created_by
+    )
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'), datetime('now'), ?)
+    ON CONFLICT(id) DO UPDATE SET
+      title = excluded.title,
+      url = excluded.url,
+      doc_token = excluded.doc_token,
+      doc_type = excluded.doc_type,
+      target_type = excluded.target_type,
+      target_id = excluded.target_id,
+      content_markdown = excluded.content_markdown,
+      content_hash = excluded.content_hash,
+      sync_enabled = excluded.sync_enabled,
+      last_synced_at = datetime('now'),
+      last_changed_at = CASE WHEN feishu_docs.content_hash != excluded.content_hash THEN datetime('now') ELSE feishu_docs.last_changed_at END,
+      updated_at = datetime('now')
+  `).run(
+    id,
+    projectId || null,
+    targetType || '',
+    targetId || '',
+    docToken,
+    docType || 'docx',
+    title || '',
+    url || '',
+    content || '',
+    hash,
+    syncEnabled ? 1 : 0,
+    userId
+  );
+  const saved = db.prepare('SELECT * FROM feishu_docs WHERE id = ?').get(id);
+  applyDocToTarget(saved);
+  return saved;
+}
+
+export async function attachDocSource({ projectId, url, userId, targetType = '', targetId = '', syncEnabled = 1 }) {
+  const doc = await fetchDocContent(userId, url);
+  const existing = db.prepare(`
+    SELECT id FROM feishu_docs
+    WHERE (project_id = ? OR (project_id IS NULL AND ? IS NULL))
+      AND url = ? AND target_type = ? AND target_id = ?
+    LIMIT 1
+  `).get(projectId || null, projectId || null, doc.url || url, targetType || '', targetId || '');
+  const saved = saveDoc({
+    id: existing?.id || uuid(),
+    ...doc,
+    projectId,
+    userId,
+    targetType,
+    targetId,
+    syncEnabled,
+  });
+  return saved;
+}
+
+export async function syncDoc(docId) {
+  const oldDoc = getDoc(docId);
+  if (!oldDoc) throw new FeishuError('DOC_NOT_FOUND', '文档源不存在');
+  if (!oldDoc.sync_enabled) return { doc: oldDoc, changed: false, skipped: true };
+  const fresh = await fetchDocContent(oldDoc.created_by, oldDoc.url);
+  const nextHash = contentHash(fresh.content);
+  const changed = nextHash !== oldDoc.content_hash;
+  db.prepare(`
+    UPDATE feishu_docs
+    SET title = ?, doc_token = ?, doc_type = ?, content_markdown = ?, content_hash = ?,
+      last_synced_at = datetime('now'),
+      last_changed_at = CASE WHEN ? THEN datetime('now') ELSE last_changed_at END,
+      updated_at = datetime('now')
+    WHERE id = ?
+  `).run(fresh.title || oldDoc.title || '', fresh.docToken, fresh.docType, fresh.content || '', nextHash, changed ? 1 : 0, docId);
+  const doc = getDoc(docId);
+  if (changed) applyDocToTarget(doc);
+  return { doc, changed };
+}
+
+export async function syncProjectDocs(projectId) {
+  const docs = listDocs(projectId).filter((doc) => Number(doc.sync_enabled || 0) === 1);
+  const results = [];
+  for (const doc of docs) {
+    try {
+      results.push(await syncDoc(doc.id));
+    } catch (err) {
+      results.push({ doc, changed: false, error: err.userMessage || err.message });
+    }
+  }
+  return results;
+}
+
+export async function syncEnabledDocs(limit = 20) {
+  const docs = db.prepare(`
+    SELECT * FROM feishu_docs
+    WHERE sync_enabled = 1
+    ORDER BY COALESCE(last_synced_at, created_at) ASC
+    LIMIT ?
+  `).all(limit);
+  const results = [];
+  for (const doc of docs) {
+    try {
+      results.push(await syncDoc(doc.id));
+    } catch (err) {
+      results.push({ doc, changed: false, error: err.userMessage || err.message });
+    }
+  }
+  return results;
 }
 
 export function listDocs(projectId) {
@@ -239,6 +365,21 @@ export function getDoc(id) {
 
 export function removeDoc(id) {
   db.prepare('DELETE FROM feishu_docs WHERE id = ?').run(id);
+}
+
+export function startFeishuDocSyncWorker() {
+  const intervalMs = Math.max(5, Number(config.feishuDocSyncMinutes || 10)) * 60 * 1000;
+  const tick = async () => {
+    try {
+      const results = await syncEnabledDocs(25);
+      const changed = results.filter((item) => item.changed).length;
+      if (changed) console.log(`[feishu-doc-sync] ${changed} source docs changed`);
+    } catch (err) {
+      console.error('[feishu-doc-sync] failed:', err.userMessage || err.message);
+    }
+  };
+  setTimeout(tick, 30_000);
+  setInterval(tick, intervalMs);
 }
 
 function inlineText(elements) {

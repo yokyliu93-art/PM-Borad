@@ -46,6 +46,7 @@ export function ProjectCreate() {
 
   const [creating, setCreating] = useState(false);
   const [feishuUrl, setFeishuUrl] = useState('');
+  const [sourceDoc, setSourceDoc] = useState(null);
   const [importingDoc, setImportingDoc] = useState(false);
   const [feishuHint, setFeishuHint] = useState('');
   const feishuBound = !!currentUser?.feishuBound;
@@ -152,6 +153,20 @@ export function ProjectCreate() {
           return;
         }
 
+        if (sourceDoc?.url) {
+          const docRes = await post(`/api/projects/${projectId}/feishu/docs`, {
+            url: sourceDoc.url,
+            targetType: 'project_plan',
+            targetId: projectId,
+            syncEnabled: 1,
+          });
+          if (!docRes.ok) {
+            toast.error(docRes.error || '项目已保存，但飞书文档源绑定失败');
+            setCreating(false);
+            return;
+          }
+        }
+
         toast.success('项目详情已保存');
         setActiveProjectId(projectId);
         setCreating(false);
@@ -166,6 +181,7 @@ export function ProjectCreate() {
         planMarkdown: form.planMarkdown,
         timelineJson,
         memberIds: form.selectedMembers,
+        sourceDocUrl: sourceDoc?.url || '',
       });
 
       if (!res.ok || !res.data) {
@@ -207,9 +223,9 @@ export function ProjectCreate() {
         return;
       }
       setForm((f) => ({ ...f, planMarkdown: doc.content }));
+      setSourceDoc(doc);
       setFeishuUrl('');
-      // Defer so the toast commits after the (possibly large) textarea update
-      setTimeout(() => toast.success(`已导入「${doc.title}」到项目计划书`), 0);
+      setTimeout(() => toast.success(`已解析「${doc.title}」，创建后会作为飞书数据源持续同步`), 0);
     } catch {
       setFeishuHint('导入失败，请确认后端已启动');
       setTimeout(() => toast.error('导入失败，请确认后端已启动'), 0);
@@ -278,7 +294,7 @@ export function ProjectCreate() {
           <div className="flex items-center justify-between">
             <label className="flex items-center gap-2 text-sm font-medium text-slate-300">
               <ExternalLink size={16} className="text-violet-300" />
-              飞书文档 / 项目计划输入
+              飞书文档数据源
             </label>
             {feishuBound ? (
               <span className="text-xs text-emerald-300/80">已授权飞书</span>
@@ -292,7 +308,7 @@ export function ProjectCreate() {
             )}
           </div>
           <p className="mt-1 text-xs text-slate-500">
-            粘贴飞书文档链接，内容会导入项目计划书，并作为总PM Agent 的需求说明书输入。
+            粘贴飞书文档链接后，系统会解析内容生成项目计划预览；创建后会绑定为数据源，文档变化时 PM Board 会自动同步。
           </p>
           <div className="mt-3 flex gap-2">
             <input
@@ -308,9 +324,14 @@ export function ProjectCreate() {
             >
               <Loader2 size={14} className={importingDoc ? 'animate-spin' : 'hidden'} />
               <Download size={14} className={importingDoc ? 'hidden' : ''} />
-              导入文档
+              解析文档
             </button>
           </div>
+          {sourceDoc ? (
+            <div className="mt-3 rounded-md border border-emerald-400/20 bg-emerald-500/[0.08] px-3 py-2 text-xs leading-5 text-emerald-100">
+              已连接数据源：{sourceDoc.title || '飞书文档'}。PM Board 保存的是解析结果，飞书源内容变化后会跟随同步。
+            </div>
+          ) : null}
           {feishuHint && (
             <p className="mt-2 text-xs text-amber-300/90">{feishuHint}</p>
           )}
