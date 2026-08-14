@@ -15,14 +15,14 @@ import { ArrowRight, Check, FileText, LayoutDashboard, Loader2, ShieldCheck, Spa
 
 const landingFlow = [
   { title: '看清项目', detail: '把目标、时间线和关键事项放在同一个入口' },
-  { title: '拆出任务', detail: '把计划变成可认领、可追踪的责任模块' },
-  { title: '认领推进', detail: '成员进入项目后选择自己负责的部分' },
+  { title: '交给 Agent', detail: '总PM复制 API Key 和说明书，在自己的 Agent 里拆模块' },
+  { title: '回传模块', detail: 'Agent 确认后把模块、计划和资源配合传回 PM Board' },
   { title: '提交复盘', detail: '交付物、进展和确认记录都沉淀下来' },
 ];
 
 const productTour = [
-  { title: '项目负责人发起项目', detail: '创建项目组、导入计划书，把目标拆成公共任务池。', icon: FileText },
-  { title: '成员主动认领', detail: '每个任务都有负责人、状态、截止时间和邀请记录。', icon: UsersRound },
+  { title: '项目负责人发起项目', detail: '创建项目组、导入计划书，复制总PM Agent 包。', icon: FileText },
+  { title: 'Agent 回传模块', detail: '拆解在 Agent 里完成，PM Board 接收模块、计划和资源需求。', icon: UsersRound },
   { title: '过程透明推进', detail: '进展更新、任务确认和复盘材料留在同一个工作台。', icon: LayoutDashboard },
 ];
 
@@ -58,7 +58,7 @@ function LandingPage() {
         <div className="pm-hero-copy">
           <p className="pm-badge"><ShieldCheck size={15} />组织授权后进入项目空间</p>
           <h1>让项目计划变成可认领的责任网络</h1>
-          <p>PM Board 把计划拆成公共任务池。成员登录组织后，认领任务、提交进展、接受确认。</p>
+          <p>总 PM 把项目计划交给自己的 Agent 拆解。Agent 确认后回传模块，PM Board 再承接认领、进展和交付记录。</p>
           <div className="pm-actions">
             <a href="/api/auth/login" className="pm-primary">
               使用飞书登录
@@ -69,8 +69,8 @@ function LandingPage() {
           </div>
           <div className="pm-signal-strip" aria-label="PM Board 核心流程">
             <span>组织授权</span>
-            <span>任务池</span>
-            <span>责任人</span>
+            <span>Agent 包</span>
+            <span>模块回传</span>
             <span>复盘记录</span>
           </div>
         </div>
@@ -80,7 +80,7 @@ function LandingPage() {
             <span className="pm-icon-tile"><LayoutDashboard size={19} /></span>
             <div>
               <strong>PM Board</strong>
-              <small>从计划到责任人的项目入口</small>
+              <small>从 Agent 拆解到进度沉淀</small>
             </div>
           </div>
           <div className="pm-flow-list">
@@ -96,7 +96,7 @@ function LandingPage() {
           </div>
           <div className="pm-product-note">
             <strong>登录后进入你的组织项目</strong>
-            <p>你会看到可加入的项目组、待认领任务和自己负责的交付进展。</p>
+            <p>你会看到 Agent 回传的模块、自己负责的任务和交付进展。</p>
           </div>
         </section>
       </section>
@@ -104,7 +104,7 @@ function LandingPage() {
       <section id="tour" className="pm-section">
         <div className="pm-section-copy">
           <h2>它不是再做一个任务列表</h2>
-          <p>它把项目计划、责任人和交付记录放在一条线上，让每个人都知道自己能认领什么、需要推进什么。</p>
+          <p>它把 Agent 回传的模块、责任人和交付记录放在一条线上，让每个人都知道自己负责什么、需要推进什么。</p>
         </div>
         <div className="pm-tour-grid">
           {productTour.map((item) => {
@@ -136,8 +136,8 @@ function LandingPage() {
               <p>目标、预算、关键时间点</p>
             </div>
             <div>
-              <span>公共任务池</span>
-              <strong>24 个可认领任务</strong>
+              <span>Agent 回传模块</span>
+              <strong>24 个责任模块</strong>
               <p>宣发、赞助、嘉宾、直播</p>
             </div>
             <div className="pm-active-lane">
@@ -149,7 +149,7 @@ function LandingPage() {
         </div>
         <div className="pm-section-copy">
           <h2>给团队展示的不是页面，而是一套协作动作</h2>
-          <p>发起项目的人负责把任务拆清楚；成员进入项目组后主动认领；每次更新都会进入项目复盘记录。</p>
+          <p>发起项目的人负责和 Agent 把模块拆清楚；成员进入项目组后认领对应模块；每次更新都会进入项目复盘记录。</p>
         </div>
       </section>
 

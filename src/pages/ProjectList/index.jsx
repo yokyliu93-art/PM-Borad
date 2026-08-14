@@ -90,7 +90,7 @@ export function ProjectList() {
         <div>
           <p className="text-sm font-medium text-emerald-200">团队项目大厅</p>
           <h2 className="mt-1 text-3xl font-semibold tracking-normal text-white">所有项目都在这里</h2>
-          <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-400">所有项目对团队成员可见。成员进入项目任务池自主认领，认领后在个人执行台拆步骤、写阶段交付、等待 PM 确认。</p>
+          <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-400">所有项目对团队成员可见。总PM先把项目交给自己的 Agent 拆解；Agent 回传模块后，成员再进入具体模块负责推进。</p>
         </div>
         <button
           onClick={() => navigate('/projects/create')}
@@ -102,7 +102,7 @@ export function ProjectList() {
 
       <div className="grid gap-3 md:grid-cols-4">
         <div className="rounded-lg border border-white/10 bg-white/[0.035] p-4">
-          <div className="flex items-center gap-2 text-emerald-200"><Inbox size={16} /><span className="text-sm">可认领任务</span></div>
+          <div className="flex items-center gap-2 text-emerald-200"><Inbox size={16} /><span className="text-sm">待负责人模块</span></div>
           <p className="mt-3 text-3xl font-semibold text-white">{totals.claimable}</p>
         </div>
         <div className="rounded-lg border border-white/10 bg-white/[0.035] p-4">
@@ -122,7 +122,7 @@ export function ProjectList() {
       <div className="flex flex-col gap-2 border-t border-white/10 pt-5 md:flex-row md:items-end md:justify-between">
         <div>
           <h3 className="text-2xl font-semibold text-white">所有项目</h3>
-          <p className="mt-1 text-sm text-slate-500">先选项目，再进入该项目的任务池认领具体任务。</p>
+          <p className="mt-1 text-sm text-slate-500">先选项目；如果 Agent 已回传模块，就进入模块继续推进。</p>
         </div>
         <span className="text-sm text-slate-500">共 {projects.length} 个项目</span>
       </div>
@@ -131,7 +131,7 @@ export function ProjectList() {
         <div className="grid min-h-60 place-items-center rounded-lg border border-dashed border-white/15 bg-white/[0.025] p-8 text-center">
           <div>
             <h3 className="text-lg font-semibold text-white">还没有项目</h3>
-            <p className="mt-2 text-sm text-slate-500">点击"发起新项目"，用模板快速拆解任务池</p>
+            <p className="mt-2 text-sm text-slate-500">点击"发起新项目"，写入计划书后交给总PM Agent 拆解</p>
             <button
               onClick={() => navigate('/projects/create')}
               className="mt-4 inline-flex items-center gap-2 rounded-md bg-violet-500 px-4 py-2 text-sm font-semibold text-white hover:bg-violet-400"
@@ -165,7 +165,7 @@ export function ProjectList() {
                       <h3 className="truncate text-2xl font-semibold text-white">{p.name}</h3>
                       <span className={`rounded px-2 py-0.5 text-xs ${statusStyle}`}>{statusLabel}</span>
                     </div>
-                    <p className="mt-2 line-clamp-2 text-sm leading-6 text-slate-400">{p.description || '这个项目还没有描述，进入任务池后可以先看任务拆解。'}</p>
+                    <p className="mt-2 line-clamp-2 text-sm leading-6 text-slate-400">{p.description || '这个项目还没有描述，进入后可以复制 Agent 包或查看回传模块。'}</p>
                     <p className="mt-3 text-xs text-slate-500">总 PM: {p.pm_name} · {p.active_people_count || 0} 人已参与推进</p>
                   </div>
 
@@ -228,7 +228,7 @@ export function ProjectList() {
                       onClick={(e) => goPool(e, p)}
                       className="inline-flex items-center gap-2 rounded-md border border-emerald-400/30 bg-emerald-500/10 px-3 py-2 text-sm font-semibold text-emerald-100 hover:bg-emerald-500/20"
                     >
-                      进入任务池 <ArrowRight size={15} />
+                      查看回传模块 <ArrowRight size={15} />
                     </button>
                   </div>
                 </div>

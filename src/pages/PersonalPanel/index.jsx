@@ -73,7 +73,7 @@ export function PersonalPanel() {
             <div>
               <p className="text-sm font-medium text-violet-200">个人执行台</p>
               <h2 className="mt-1 text-3xl font-semibold tracking-normal text-white">{currentUser.name} 今天要推进什么</h2>
-              <p className="mt-2 text-sm text-slate-400">先从公共任务池认领；认领后拆细执行步骤，按阶段交付飞书文档。</p>
+              <p className="mt-2 text-sm text-slate-400">等总PM Agent 回传模块后，认领自己负责的模块；认领后拆细执行步骤，按阶段交付飞书文档。</p>
             </div>
           </div>
           <div className="grid grid-cols-2 gap-3 text-center md:grid-cols-4">
@@ -117,7 +117,7 @@ export function PersonalPanel() {
               ))}
             </div>
           ) : (
-            <EmptyState title="你还没有PM任务" detail="去公共任务池认领一个任务" />
+            <EmptyState title="你还没有PM任务" detail="等 Agent 回传模块后，再认领自己负责的部分" />
           )}
 
           <div className="rounded-lg border border-white/10 bg-white/[0.03] p-5">
@@ -193,7 +193,7 @@ export function PersonalPanel() {
           </div>
 
           <div className="rounded-lg border border-white/10 bg-white/[0.03] p-5">
-            <PanelTitle icon={Sparkles} title="可认领任务" />
+            <PanelTitle icon={Sparkles} title="Agent 回传的待认领模块" />
             <div className="mt-4 space-y-3">
               {claimable.length ? claimable.slice(0, 4).map((task) => (
                 <div key={task.id} className="rounded-md border border-white/10 bg-[#11141d] p-3">
@@ -201,7 +201,7 @@ export function PersonalPanel() {
                   <p className="mt-1 text-xs text-slate-500">{task.cycle || ''}</p>
                   <button onClick={() => handleClaim(task.id)} className="mt-3 rounded-md bg-violet-500 px-3 py-2 text-sm font-semibold text-white">认领成为PM</button>
                 </div>
-              )) : <p className="text-sm text-slate-500">公共池里的任务都已经有人负责了。</p>}
+              )) : <p className="text-sm text-slate-500">还没有待认领模块，或模块都已经有人负责了。</p>}
             </div>
           </div>
         </aside>

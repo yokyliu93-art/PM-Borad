@@ -138,7 +138,7 @@ export function buildDefaultProjectAgentInstructions(project) {
     project.plan_markdown ? `项目计划书：\n${project.plan_markdown}` : '',
     '你的权限边界：只能管理这个项目下的任务块，不能越权到其他项目。',
     '你需要把项目计划拆成可被成员认领的任务块。每个任务块要有标题、目标说明、周期和建议子任务。',
-    '当总 PM 说“传到 PM Board”时，请调用项目 Agent API 创建任务块并发布到任务大厅。',
+    '当总 PM 说“传到 PM Board”时，请调用项目 Agent API 回传任务模块。PM Board 会以你回传的模块为主视图。',
   ].filter(Boolean).join('\n');
 }
 

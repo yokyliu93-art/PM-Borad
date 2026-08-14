@@ -6,7 +6,7 @@ import { useStore } from '../../store';
 import { useSocket } from '../../hooks/useSocket';
 import { TaskCard } from '../../components/ui/TaskCard';
 import { EmptyState } from '../../components/ui/EmptyState';
-import { AlertTriangle, BookOpen, Copy, KeyRound, Loader2, Plus, RefreshCw, X } from 'lucide-react';
+import { AlertTriangle, BookOpen, Copy, KeyRound, Loader2, RefreshCw } from 'lucide-react';
 
 export function TaskPool() {
   const { projectId } = useParams();
@@ -18,9 +18,6 @@ export function TaskPool() {
   const [projectAgentKey, setProjectAgentKey] = useState('');
   const [projectAgentInstructions, setProjectAgentInstructions] = useState('');
   const [isProjectPM, setIsProjectPM] = useState(false);
-  const [showAddForm, setShowAddForm] = useState(false);
-  const [adding, setAdding] = useState(false);
-  const [newTask, setNewTask] = useState({ title: '', summary: '', cycle: '' });
   const navigate = useNavigate();
 
   useSocket(projectId);
@@ -76,7 +73,7 @@ export function TaskPool() {
     try {
       const res = await post(`/api/projects/${projectId}/tasks/${taskId}/unclaim`);
       if (res.ok) {
-        toast.success('已取消认领，任务块回到大厅');
+        toast.success('已取消认领，模块回到待负责人状态');
         loadTasks();
       } else {
         toast.error(res.error || '取消认领失败');
@@ -84,33 +81,6 @@ export function TaskPool() {
     } catch {
       toast.error('取消认领失败，请确认后端已启动');
     }
-  }
-
-  async function handleAddTask(e) {
-    e.preventDefault();
-    if (!newTask.title.trim()) {
-      toast.error('任务标题不能为空');
-      return;
-    }
-    setAdding(true);
-    try {
-      const res = await post(`/api/projects/${projectId}/tasks`, {
-        ...newTask,
-        docUrl: '',
-        publishNow: true,
-      });
-      if (res.ok) {
-        toast.success('任务块已发布');
-        setNewTask({ title: '', summary: '', cycle: '' });
-        setShowAddForm(false);
-        loadTasks();
-      } else {
-        toast.error(res.error || '添加任务失败');
-      }
-    } catch {
-      toast.error('添加任务失败，请确认后端已启动');
-    }
-    setAdding(false);
   }
 
   async function handleDeleteTask(task) {
@@ -162,7 +132,7 @@ export function TaskPool() {
       '',
       'API 使用方式：',
       `GET ${origin}/api/agent/project 读取项目需求文档和已有任务块。`,
-      `POST ${origin}/api/agent/project/tasks 创建任务块并发布到任务大厅。`,
+      `POST ${origin}/api/agent/project/tasks 回传你拆好的模块，PM Board 会把它们显示为项目模块。`,
       '请求头：Authorization: Bearer <API_KEY>',
       '创建示例：{"tasks":[{"title":"任务块标题","summary":"目标","cycle":"第1周","idea":"核心想法","executionPlan":"执行方案","resourcePlan":"资源配合","subtasks":[{"title":"子任务","note":"说明"}]}],"publishNow":true}',
     ].join('\n');
@@ -183,9 +153,9 @@ export function TaskPool() {
   return (
     <section className="space-y-5">
       <div>
-        <p className="text-sm font-medium text-violet-200">任务大厅</p>
-        <h2 className="mt-2 text-3xl font-semibold tracking-normal text-white">项目PM拆出任务块，成员认领成为子PM</h2>
-        <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-400">每个任务块只归一个子PM负责。进入后，子PM可以继续拆子任务并分配给组内成员执行。</p>
+        <p className="text-sm font-medium text-violet-200">Agent 回传模块</p>
+        <h2 className="mt-2 text-3xl font-semibold tracking-normal text-white">先把项目交给总PM Agent 拆</h2>
+        <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-400">PM Board 不在这里手动拆任务。总PM复制 Agent 包，在自己的 Agent 里完成拆解；当 Agent 说“传到 PM Board”后，回传模块会出现在这里。</p>
       </div>
 
       {isProjectPM && (
@@ -194,7 +164,7 @@ export function TaskPool() {
             <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
               <div>
                 <p className="flex items-center gap-1.5 text-sm font-medium text-emerald-100"><KeyRound size={15} />总PM Agent 包</p>
-                <p className="mt-1 text-sm text-slate-500">复制需求文档和 API Key 给你的 Agent，它可以把项目计划拆成任务块并传回 PM Board。</p>
+                <p className="mt-1 text-sm text-slate-500">复制需求文档和 API Key 给你的 Agent。拆解、讨论和确认都在 Agent 里完成，PM Board 只接收它回传的模块。</p>
                 <p className="mt-2 text-xs text-slate-500">当前 Key：{projectAgentKey || project?.agent_api_key_prefix || '还没有生成'}</p>
               </div>
               <div className="flex flex-wrap gap-2">
@@ -206,61 +176,13 @@ export function TaskPool() {
             <textarea value={projectAgentInstructions} onChange={(e) => setProjectAgentInstructions(e.target.value)} className="mt-3 h-28 w-full resize-none rounded-md border border-white/10 bg-[#0c0f16] p-3 text-sm leading-6 text-slate-200 outline-none focus:border-emerald-300/60" />
             <button onClick={saveProjectAgentDoc} className="mt-2 rounded-md bg-white px-3 py-1.5 text-xs font-semibold text-[#0f1117]">保存需求文档</button>
           </div>
-          {!showAddForm ? (
-            <div className="flex flex-wrap gap-2">
-              <button
-                onClick={() => setShowAddForm(true)}
-                className="inline-flex items-center gap-2 rounded-md bg-violet-500 px-3 py-2 text-sm font-semibold text-white transition hover:bg-violet-400"
-              >
-                <Plus size={16} /> 添加任务块
-              </button>
-            </div>
-          ) : (
-            <form onSubmit={handleAddTask} className="space-y-3">
-              <div className="flex items-center justify-between">
-                <label className="text-sm font-medium text-slate-300">发布新的任务块</label>
-                <button
-                  type="button"
-                  onClick={() => { setShowAddForm(false); setNewTask({ title: '', summary: '', cycle: '' }); }}
-                  className="grid h-7 w-7 place-items-center rounded-md border border-white/10 text-slate-500 hover:bg-white/8"
-                >
-                  <X size={14} />
-                </button>
-              </div>
-              <input
-                value={newTask.title}
-                onChange={(e) => setNewTask({ ...newTask, title: e.target.value })}
-                placeholder="任务块标题（必填）"
-                className="w-full rounded-md border border-white/10 bg-[#0c0f16] px-3 py-2 text-sm text-slate-200 outline-none focus:border-violet-400/60"
-              />
-              <input
-                value={newTask.summary}
-                onChange={(e) => setNewTask({ ...newTask, summary: e.target.value })}
-                placeholder="一句话说明任务目标"
-                className="w-full rounded-md border border-white/10 bg-[#0c0f16] px-3 py-2 text-sm text-slate-200 outline-none focus:border-violet-400/60"
-              />
-              <input
-                value={newTask.cycle}
-                onChange={(e) => setNewTask({ ...newTask, cycle: e.target.value })}
-                placeholder="周期，如 第1周"
-                className="w-full rounded-md border border-white/10 bg-[#0c0f16] px-3 py-2 text-sm text-slate-200 outline-none focus:border-violet-400/60"
-              />
-              <button
-                type="submit"
-                disabled={adding}
-                className="inline-flex items-center gap-2 rounded-md bg-white px-3 py-2 text-sm font-semibold text-[#0f1117] transition hover:bg-violet-100 disabled:opacity-70"
-              >
-                {adding ? '发布中...' : '发布任务块'}
-              </button>
-            </form>
-          )}
         </div>
       )}
 
       {tasks.length === 0 ? (
         <EmptyState
-          title="任务大厅还没有任务块"
-          detail="总PM可以复制 Agent 包给自己的 Agent，由 Agent 拆出任务块并回传到 PM Board。也可以先手动添加任务块。"
+          title={isProjectPM ? '等待总PM Agent 回传模块' : '模块还没有回传'}
+          detail={isProjectPM ? '复制上面的 Agent 包，在你的 Agent 里拆解并确认模块；确认后让 Agent 传到 PM Board。' : '总PM会先和 Agent 拆解项目，等模块回传后你再进入具体模块。'}
           action="返回项目列表"
           onClick={() => navigate('/projects')}
         />

@@ -4,7 +4,7 @@ import { ErrorBoundary } from '../ui/ErrorBoundary';
 import { NavLink, Outlet, useLocation } from 'react-router-dom';
 import { useStore } from '../../store';
 import { UserSwitcher } from '../UserSwitcher';
-import { Users, UserCheck, LayoutDashboard, BarChart3, List, Plus, Settings } from 'lucide-react';
+import { Boxes, UserCheck, LayoutDashboard, BarChart3, List, Plus, Settings } from 'lucide-react';
 
 export function Shell() {
   const { tasks, activeProject, currentUser } = useStore();
@@ -18,7 +18,7 @@ export function Shell() {
       const nav = isInProject
     ? [
         ['/projects', '项目大厅', List],
-        [`/projects/${projectId}/pool`, '任务大厅', Users],
+        [`/projects/${projectId}/pool`, 'Agent 回传', Boxes],
         [`/projects/${projectId}/mine`, '我的任务', UserCheck],
         [`/projects/${projectId}/commander`, '项目PM面板', LayoutDashboard],
         [`/projects/${projectId}/boss`, '部门大盘', BarChart3],
@@ -52,7 +52,7 @@ export function Shell() {
               </div>
               <div>
                 <p className="text-sm font-semibold text-white">PM Board</p>
-                <p className="text-xs text-slate-400">认领制协作面板</p>
+                <p className="text-xs text-slate-400">Agent 驱动协作面板</p>
               </div>
             </div>
             <div className="mt-6 space-y-1">
@@ -83,7 +83,7 @@ export function Shell() {
             <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
               <div>
                 <p className="text-xs text-slate-500">{projectId ? `项目 #${projectId.slice(0, 8)}` : 'PM board'}</p>
-                <h1 className="mt-1 text-2xl font-semibold tracking-normal text-white md:text-3xl">项目PM拆任务，子PM认领自己这一块</h1>
+                <h1 className="mt-1 text-2xl font-semibold tracking-normal text-white md:text-3xl">总PM 与 Agent 拆解，PM Board 接收模块回传</h1>
               </div>
               <UserSwitcher />
             </div>

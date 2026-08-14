@@ -174,7 +174,7 @@ export function ProjectCreate() {
 
       const project = res.data;
 
-      toast.success('项目已创建，请在任务大厅复制总PM Agent 包');
+      toast.success('项目已创建，请复制总PM Agent 包');
       setActiveProjectId(project.id);
       setCreating(false);
       navigate(`/projects/${project.id}/pool`);
@@ -265,8 +265,8 @@ export function ProjectCreate() {
 
           {!isEditing && (
             <div className="mt-5 rounded-md border border-emerald-400/20 bg-emerald-500/[0.06] p-4">
-              <p className="text-sm font-medium text-emerald-100">创建后进入任务大厅</p>
-              <p className="mt-1 text-sm leading-6 text-slate-500">PM Board 不在平台内自动拆任务。总PM会拿到 API Key 和说明书，交给自己的 Agent 拆出模块，再由 Agent 回传到任务大厅。</p>
+              <p className="text-sm font-medium text-emerald-100">创建后进入 Agent 回传页</p>
+              <p className="mt-1 text-sm leading-6 text-slate-500">PM Board 不在平台内拆任务。总PM会拿到 API Key 和说明书，交给自己的 Agent 拆出模块，再由 Agent 回传到 PM Board。</p>
             </div>
           )}
         </div>
@@ -290,7 +290,7 @@ export function ProjectCreate() {
             )}
           </div>
           <p className="mt-1 text-xs text-slate-500">
-            粘贴飞书文档链接，内容会导入项目计划书。创建后可复制总PM Agent 包，让 Agent 基于计划书拆分并回传任务块。
+            粘贴飞书文档链接，内容会导入项目计划书。创建后可复制总PM Agent 包，让 Agent 基于计划书拆分并回传模块。
           </p>
           <div className="mt-3 flex gap-2">
             <input
@@ -339,7 +339,7 @@ export function ProjectCreate() {
           <Loader2 size={16} className={creating ? 'animate-spin' : 'hidden'} />
           {isEditing
             ? (creating ? '正在保存项目详情...' : '保存项目详情')
-            : (creating ? '正在发起项目...' : '发起项目，进入任务大厅')}
+            : (creating ? '正在发起项目...' : '发起项目，进入 Agent 回传页')}
         </button>
       </div>
 
