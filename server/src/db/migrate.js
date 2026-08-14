@@ -236,6 +236,27 @@ export function migrate() {
   if (!projectCols.includes('agent_last_update_at')) {
     db.exec('ALTER TABLE projects ADD COLUMN agent_last_update_at TEXT');
   }
+  if (!projectCols.includes('feishu_progress_enabled')) {
+    db.exec('ALTER TABLE projects ADD COLUMN feishu_progress_enabled INTEGER DEFAULT 0');
+  }
+  if (!projectCols.includes('feishu_progress_chat_id')) {
+    db.exec("ALTER TABLE projects ADD COLUMN feishu_progress_chat_id TEXT DEFAULT ''");
+  }
+  if (!projectCols.includes('feishu_progress_frequency')) {
+    db.exec("ALTER TABLE projects ADD COLUMN feishu_progress_frequency TEXT DEFAULT 'weekly'");
+  }
+  if (!projectCols.includes('feishu_progress_last_sent_at')) {
+    db.exec('ALTER TABLE projects ADD COLUMN feishu_progress_last_sent_at TEXT');
+  }
+  if (!projectCols.includes('feishu_boss_enabled')) {
+    db.exec('ALTER TABLE projects ADD COLUMN feishu_boss_enabled INTEGER DEFAULT 0');
+  }
+  if (!projectCols.includes('feishu_boss_chat_id')) {
+    db.exec("ALTER TABLE projects ADD COLUMN feishu_boss_chat_id TEXT DEFAULT ''");
+  }
+  if (!projectCols.includes('feishu_boss_last_sent_at')) {
+    db.exec('ALTER TABLE projects ADD COLUMN feishu_boss_last_sent_at TEXT');
+  }
 
   const taskCols = db.prepare('PRAGMA table_info(tasks)').all().map((c) => c.name);
   if (!taskCols.includes('module_key')) {

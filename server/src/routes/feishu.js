@@ -1,6 +1,7 @@
 import { Router } from 'express';
-import { authRequired, requireProjectMember } from '../middleware/auth.js';
+import { authRequired, requireProjectMember, requireProjectPM } from '../middleware/auth.js';
 import * as feishuService from '../services/feishu.js';
+import * as feishuProgressService from '../services/feishuProgress.js';
 
 function sendError(res, err) {
   res.status(400).json({ ok: false, error: err.userMessage || err.message });
@@ -9,6 +10,24 @@ function sendError(res, err) {
 // --- Global (used during project creation, before a project exists) ---
 
 export const feishuRouter = Router();
+
+feishuRouter.post('/events', (req, res) => {
+  const body = req.body || {};
+  if (body.challenge) {
+    return res.json({ challenge: body.challenge });
+  }
+  if (body.type === 'url_verification' && body.challenge) {
+    return res.json({ challenge: body.challenge });
+  }
+
+  const header = body.header || {};
+  const event = body.event || {};
+  console.log('[feishu] event received:', {
+    eventType: header.event_type || body.type || '',
+    chatId: event.message?.chat_id || event.chat_id || '',
+  });
+  res.json({ code: 0, msg: 'success' });
+});
 
 // Fetch a Feishu doc's content by URL and return it so the client can fill the
 // project plan. Not persisted here — project-scoped endpoints below store it.
@@ -64,4 +83,42 @@ projectFeishuRouter.post('/docs/:docId/ai-split', authRequired, async (req, res)
     ok: false,
     error: 'PM Board 不再根据飞书文档做平台内 AI 拆分。请把文档放进总PM Agent 包，由 Agent 拆分后回传。',
   });
+});
+
+projectFeishuRouter.get('/progress-sync', authRequired, requireProjectPM, (req, res) => {
+  const data = feishuProgressService.getProjectFeishuSync(req.params.projectId);
+  res.json({ ok: true, data });
+});
+
+projectFeishuRouter.put('/progress-sync', authRequired, requireProjectPM, (req, res) => {
+  try {
+    const data = feishuProgressService.updateProjectFeishuSync(req.params.projectId, req.body || {});
+    res.json({ ok: true, data });
+  } catch (err) {
+    sendError(res, err);
+  }
+});
+
+projectFeishuRouter.post('/progress-sync/test', authRequired, requireProjectPM, async (req, res) => {
+  try {
+    const sync = feishuProgressService.getProjectFeishuSync(req.params.projectId);
+    const chatId = req.body?.chatId || req.body?.chat_id || sync?.feishu_progress_chat_id;
+    if (!chatId) return res.status(400).json({ ok: false, error: '请先填写飞书群 chat_id' });
+    const text = await feishuProgressService.sendProjectProgress(req.params.projectId, chatId);
+    res.json({ ok: true, data: { text } });
+  } catch (err) {
+    sendError(res, err);
+  }
+});
+
+projectFeishuRouter.post('/boss-dashboard/test', authRequired, requireProjectPM, async (req, res) => {
+  try {
+    const sync = feishuProgressService.getProjectFeishuSync(req.params.projectId);
+    const chatId = req.body?.chatId || req.body?.chat_id || sync?.feishu_boss_chat_id;
+    if (!chatId) return res.status(400).json({ ok: false, error: '请先填写老板看板飞书群 chat_id' });
+    const text = await feishuProgressService.sendBossDashboard(chatId);
+    res.json({ ok: true, data: { text } });
+  } catch (err) {
+    sendError(res, err);
+  }
 });

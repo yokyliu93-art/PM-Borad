@@ -19,6 +19,7 @@ import dashboardRoutes from './routes/dashboard.js';
 import agentRoutes from './routes/agent.js';
 import { feishuRouter, projectFeishuRouter } from './routes/feishu.js';
 import { startReminderWorker } from './services/reminder.js';
+import { startProjectProgressSyncWorker } from './services/feishuProgress.js';
 
 const app = express();
 const server = createServer(app);
@@ -77,6 +78,7 @@ migrate();
 seed();
 setupSocket(io);
 startReminderWorker();
+startProjectProgressSyncWorker();
 
 server.listen(config.port, () => {
   console.log(`[server] Running on http://localhost:${config.port}`);

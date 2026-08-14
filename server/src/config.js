@@ -23,4 +23,5 @@ export const config = {
   deepseekBaseUrl: process.env.DEEPSEEK_BASE_URL || 'https://api.deepseek.com',
   deepseekApiKey: process.env.DEEPSEEK_API_KEY || '',
   deepseekModel: process.env.DEEPSEEK_MODEL || 'deepseek-v4-pro',
+  feishuBossChatId: process.env.FEISHU_BOSS_CHAT_ID || '',
 };
