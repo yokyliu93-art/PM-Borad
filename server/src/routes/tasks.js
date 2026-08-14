@@ -272,6 +272,36 @@ router.post('/:taskId/claim', authRequired, (req, res) => {
   }
 });
 
+// Assign task — project PM only.
+router.put('/:taskId/owner', authRequired, requireProjectPM, async (req, res) => {
+  try {
+    const ownerId = req.body?.ownerId || req.body?.owner_id;
+    if (!ownerId) return res.status(400).json({ ok: false, error: '请选择负责人' });
+    const task = taskService.getById(req.params.taskId);
+    const project = db.prepare('SELECT id, team_id, name FROM projects WHERE id = ?').get(task?.project_id);
+    const member = db.prepare('SELECT 1 FROM team_members WHERE team_id = ? AND user_id = ?').get(project?.team_id, ownerId);
+    if (!member) return res.status(400).json({ ok: false, error: '只能指派给当前团队成员' });
+    const updated = taskService.assign(req.params.taskId, ownerId);
+    try {
+      await feishuPushService.sendTaskAssignmentCard({
+        openId: ownerId,
+        projectName: project?.name || '',
+        taskTitle: updated.title,
+        taskSummary: updated.summary,
+        assignedByName: req.user?.name || '',
+        actionText: '你被指派为二级任务负责人',
+        boardUrl: `${config.clientUrl}/projects/${project?.id}/tasks/${updated.id}`,
+      });
+    } catch (err) {
+      console.error('[task] Feishu owner notification failed:', err.userMessage || err.message);
+    }
+    broadcast(req, 'task:assigned', { task: updated, taskId: updated.id, userId: ownerId });
+    res.json({ ok: true, data: updated });
+  } catch (err) {
+    res.status(400).json({ ok: false, error: err.message });
+  }
+});
+
 // Unclaim task — task owner or project PM only.
 router.post('/:taskId/unclaim', authRequired, requireTaskManager, (req, res) => {
   const task = taskService.unclaim(req.params.taskId);

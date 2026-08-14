@@ -51,7 +51,11 @@ export function BossBoard() {
           <p className="p-5 text-sm text-slate-500">还没有项目</p>
         ) : (
           projects.map((project) => {
-            const progress = project.tasks.length ? Math.round(project.tasks.reduce((s, t) => s + t.progress, 0) / project.tasks.length) : 0;
+            const progress = project.progress_override !== null && project.progress_override !== undefined
+              ? Number(project.progress_override)
+              : project.tasks.length
+                ? Math.round(project.tasks.reduce((s, t) => s + t.progress, 0) / project.tasks.length)
+                : 0;
             return (
               <div key={project.id} className="border-b border-white/10 last:border-b-0">
                 <button onClick={() => setExpandedProject(expandedProject === project.id ? null : project.id)} className="grid w-full gap-4 p-4 text-left md:grid-cols-[1fr_140px_180px_120px_32px] md:items-center">

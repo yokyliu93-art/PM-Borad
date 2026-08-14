@@ -3,7 +3,7 @@ import { Avatar } from './Avatar';
 import { StatusPill } from './StatusPill';
 import { Progress } from './Progress';
 
-export function TaskCard({ task, onClaim, onUnclaim, onOpen, onDelete, currentUserId, compact = false }) {
+export function TaskCard({ task, onClaim, onUnclaim, onOpen, onDelete, onAssign, memberOptions = [], currentUserId, compact = false }) {
   const owner = task.owner_id || task.ownerId
     ? { id: task.owner_id || task.ownerId, name: task.owner_name || '子PM', color: 'from-violet-500 to-fuchsia-500', avatar_url: task.owner_avatar }
     : null;
@@ -46,8 +46,20 @@ export function TaskCard({ task, onClaim, onUnclaim, onOpen, onDelete, currentUs
       </div>
 
       <div className="mt-4 flex flex-wrap items-center justify-between gap-3">
-        <div className="flex items-center">
+        <div className="flex items-center gap-2">
           {!owner ? <span className="text-sm text-slate-500">暂未认领</span> : null}
+          {onAssign ? (
+            <select
+              value={task.owner_id || ''}
+              onChange={(event) => onAssign(event.target.value)}
+              className="max-w-40 rounded-md border border-white/10 bg-[#0c0f16] px-2 py-2 text-xs text-slate-200 outline-none transition focus:border-violet-400/60"
+            >
+              <option value="">指派子 PM...</option>
+              {memberOptions.map((member) => (
+                <option key={member.id} value={member.id}>{member.name}</option>
+              ))}
+            </select>
+          ) : null}
         </div>
         <div className="flex gap-2">
           {owner ? (

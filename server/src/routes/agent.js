@@ -63,6 +63,24 @@ router.post('/project/timeline', agentAuth, (req, res) => {
   }
 });
 
+router.post('/project/progress', agentAuth, (req, res) => {
+  try {
+    const data = projectService.updateProjectProgressFromAgent(req.agentApiKey, req.body || {});
+    res.json({ ok: true, data });
+  } catch (err) {
+    res.status(400).json({ ok: false, error: err.message });
+  }
+});
+
+router.post('/project/assignments', agentAuth, async (req, res) => {
+  try {
+    const data = await projectService.updateProjectAssignmentsFromAgent(req.agentApiKey, req.body || {});
+    res.json({ ok: true, data });
+  } catch (err) {
+    res.status(400).json({ ok: false, error: err.message });
+  }
+});
+
 router.post('/project/audit', agentAuth, async (req, res) => {
   try {
     const pkg = projectService.getProjectAgentPackageByKey(req.agentApiKey);

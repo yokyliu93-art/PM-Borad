@@ -49,7 +49,9 @@ export function listByTeam(teamId, userId) {
     'SELECT COUNT(DISTINCT owner_id) as c FROM tasks WHERE project_id = ? AND owner_id IS NOT NULL AND is_published = 1'
   );
   for (const project of projects) {
-    project.progress = Math.round(progressStmt.get(project.id).p ?? 0);
+    project.progress = project.progress_override !== null && project.progress_override !== undefined
+      ? Number(project.progress_override)
+      : Math.round(progressStmt.get(project.id).p ?? 0);
     project.task_count = taskCountStmt.get(project.id).c;
     project.claimable_count = claimableStmt.get(project.id).c;
     project.my_task_count = userId ? myTaskStmt.get(project.id, userId).c : 0;
@@ -66,6 +68,9 @@ export function getById(id) {
     WHERE p.id = ?
   `).get(id);
   if (project) {
+    project.progress = project.progress_override !== null && project.progress_override !== undefined
+      ? Number(project.progress_override)
+      : Math.round(db.prepare('SELECT COALESCE(AVG(progress), 0) as p FROM tasks WHERE project_id = ? AND is_published = 1').get(id).p ?? 0);
     project.members = db.prepare(`
       SELECT u.id, u.name, u.avatar_url
       FROM project_members pm JOIN users u ON u.id = pm.user_id
@@ -157,7 +162,9 @@ export function buildDefaultProjectAgentInstructions(project) {
     '你必须先基于项目计划书产出项目 Timeline，并调用项目 Agent API 回传。Timeline 按周组织，W1 表示第一周，W2 表示第二周；每周必须写清目标、关键动作、负责人/配合方和交付物。',
     '回传每个二级任务时请带 module 字段，module 应该等于某个一级菜单名称。每个二级任务要有标题、目标说明、周期和建议子任务。',
     '当总 PM 说“传到 PM Board”时，请调用项目 Agent API 回传一级菜单、Timeline 和二级任务。PM Board 会以你回传的内容为主视图。',
-    '推荐回传顺序：1）先 POST /api/agent/project/timeline 写入项目周计划；2）再 POST /api/agent/project/modules 写入一级菜单；3）最后 POST /api/agent/project/tasks 写入一级菜单下的二级任务。',
+    '一级菜单和二级任务的负责人也可以由你操作。总 PM 说“认领/指派给谁”时，请调用 POST /api/agent/project/assignments。',
+    '项目开始、项目整体进度、任务块状态和任务块进度也由你回传。总 PM 说“开始项目”“这块做完了”“更新进度到 PM Board”时，请调用 POST /api/agent/project/progress。',
+    '推荐回传顺序：1）先 POST /api/agent/project/timeline 写入项目周计划；2）再 POST /api/agent/project/modules 写入一级菜单；3）POST /api/agent/project/tasks 写入一级菜单下的二级任务；4）POST /api/agent/project/progress 持续同步状态和进度。',
   ].filter(Boolean).join('\n');
 }
 
@@ -170,6 +177,16 @@ export function ensureDefaultProjectAgentSetup(projectId) {
   } else if (!project.agent_instructions.includes('Timeline 是必填项') && !project.agent_instructions.includes('你必须先基于项目计划书产出项目 Timeline')) {
     db.prepare('UPDATE projects SET agent_instructions = ? WHERE id = ?')
       .run(`${project.agent_instructions}\n\nTimeline 是必填项：你必须先基于项目计划书产出项目 Timeline，并调用 POST /api/agent/project/timeline 回传。Timeline 按周组织，W1 表示第一周，W2 表示第二周；每周必须写清目标、关键动作、负责人/配合方和交付物。推荐顺序：先回传 Timeline，再回传一级菜单，最后回传二级任务。`, projectId);
+  }
+  const refreshed = getById(projectId);
+  if (refreshed.agent_instructions && !refreshed.agent_instructions.includes('/api/agent/project/progress')) {
+    db.prepare('UPDATE projects SET agent_instructions = ? WHERE id = ?')
+      .run(`${refreshed.agent_instructions}\n\n项目进度回传：当总 PM 说“开始项目”“这块做完了”“更新进度到 PM Board”时，请调用 POST /api/agent/project/progress。你可以写入项目状态、项目整体进度、进度说明，也可以批量更新任务块状态和进度。`, projectId);
+  }
+  const withProgressDoc = getById(projectId);
+  if (withProgressDoc.agent_instructions && !withProgressDoc.agent_instructions.includes('/api/agent/project/assignments')) {
+    db.prepare('UPDATE projects SET agent_instructions = ? WHERE id = ?')
+      .run(`${withProgressDoc.agent_instructions}\n\n负责人回传：当总 PM 说“认领这个模块”“指派给某个人”“这个二级任务归谁负责”时，请调用 POST /api/agent/project/assignments。你可以按 ownerId、ownerName 或 ownerEmail 在项目团队成员中匹配负责人。`, projectId);
   }
   if (!project.agent_api_key_hash) {
     const apiKey = createProjectAgentKey(projectId);
@@ -234,6 +251,268 @@ export function createTasksFromAgent(apiKey, payload = {}) {
   `).run(uuid(), pkg.project.id, 'create_tasks', payload.progressNote || payload.progress_note || '', JSON.stringify(payload));
   return {
     created,
+    package: getProjectAgentPackageByProjectId(pkg.project.id),
+  };
+}
+
+function clampProgress(value) {
+  if (value === null || value === undefined || value === '') return null;
+  const n = Number(value);
+  if (!Number.isFinite(n)) throw new Error('progress 必须是 0-100 的数字');
+  return Math.min(100, Math.max(0, Math.round(n)));
+}
+
+function normalizeProjectStatus(status = '') {
+  const value = String(status || '').trim();
+  const map = {
+    start: 'active',
+    started: 'active',
+    active: 'active',
+    in_progress: 'active',
+    '进行中': 'active',
+    '已开始': 'active',
+    draft: 'draft',
+    pending: 'draft',
+    '草稿': 'draft',
+    '筹备中': 'draft',
+    complete: 'completed',
+    completed: 'completed',
+    done: 'completed',
+    '已完成': 'completed',
+  };
+  return map[value] || value;
+}
+
+function normalizeTaskStatus(status = '') {
+  const value = String(status || '').trim();
+  const map = {
+    start: '进行中',
+    started: '进行中',
+    active: '进行中',
+    in_progress: '进行中',
+    '已开始': '进行中',
+    '进行中': '进行中',
+    pending: '待开始',
+    draft: '待开始',
+    todo: '待开始',
+    '待开始': '待开始',
+    submit: '审核中',
+    submitted: '审核中',
+    review: '审核中',
+    '审核中': '审核中',
+    complete: '已完成',
+    completed: '已完成',
+    done: '已完成',
+    '已完成': '已完成',
+  };
+  return map[value] || value;
+}
+
+function findTaskForAgentUpdate(projectId, item = {}) {
+  const id = item.taskId || item.task_id || item.id;
+  if (id) {
+    const task = taskService.getById(id);
+    if (task?.project_id === projectId) return task;
+  }
+  const title = String(item.title || item.taskTitle || item.task_title || '').trim();
+  if (title) {
+    const task = db.prepare('SELECT * FROM tasks WHERE project_id = ? AND title = ? ORDER BY sort_order, created_at LIMIT 1')
+      .get(projectId, title);
+    if (task) return task;
+  }
+  return null;
+}
+
+function resolveProjectMember(project, item = {}, fallbackUserId = '') {
+  const ownerId = item.ownerId || item.owner_id || item.userId || item.user_id || item.assigneeId || item.assignee_id;
+  if (ownerId) {
+    if (ownerId === project.pm_user_id) return ownerId;
+    const row = db.prepare('SELECT 1 FROM team_members WHERE team_id = ? AND user_id = ?').get(project.team_id, ownerId);
+    if (row) return ownerId;
+  }
+  const ownerEmail = String(item.ownerEmail || item.owner_email || item.email || '').trim().toLowerCase();
+  if (ownerEmail) {
+    const row = db.prepare(`
+      SELECT u.id
+      FROM users u JOIN team_members tm ON tm.user_id = u.id
+      WHERE tm.team_id = ? AND lower(u.email) = ?
+      LIMIT 1
+    `).get(project.team_id, ownerEmail);
+    if (row) return row.id;
+  }
+  const ownerName = String(item.ownerName || item.owner_name || item.userName || item.user_name || item.assigneeName || item.assignee_name || '').trim();
+  if (ownerName) {
+    const row = db.prepare(`
+      SELECT u.id
+      FROM users u JOIN team_members tm ON tm.user_id = u.id
+      WHERE tm.team_id = ? AND u.name = ?
+      LIMIT 1
+    `).get(project.team_id, ownerName);
+    if (row) return row.id;
+  }
+  if (fallbackUserId) return fallbackUserId;
+  return '';
+}
+
+function findModuleForAgentUpdate(projectId, item = {}) {
+  const moduleKey = String(item.moduleKey || item.module_key || item.key || '').trim();
+  if (moduleKey) {
+    const module = ensureModuleRow(projectId, moduleKey);
+    if (module) return module;
+  }
+  const moduleName = String(item.module || item.moduleName || item.module_name || item.name || item.title || '').trim();
+  if (moduleName) {
+    const key = taskService.makeModuleKey(moduleName);
+    const byKey = ensureModuleRow(projectId, key);
+    if (byKey) return byKey;
+    return db.prepare('SELECT * FROM project_modules WHERE project_id = ? AND module_name = ? LIMIT 1')
+      .get(projectId, moduleName);
+  }
+  return null;
+}
+
+function shouldClearOwner(item = {}) {
+  const action = String(item.action || '').trim().toLowerCase();
+  return action === 'unclaim' || action === 'clear' || action === 'remove_owner' || item.clearOwner || item.clear_owner;
+}
+
+export async function updateProjectAssignmentsFromAgent(apiKey, payload = {}) {
+  const pkg = getProjectAgentPackageByKey(apiKey);
+  const project = pkg.project;
+  const moduleUpdates = Array.isArray(payload.moduleUpdates)
+    ? payload.moduleUpdates
+    : Array.isArray(payload.module_updates)
+      ? payload.module_updates
+      : [];
+  const taskUpdates = Array.isArray(payload.taskUpdates)
+    ? payload.taskUpdates
+    : Array.isArray(payload.task_updates)
+      ? payload.task_updates
+      : [];
+  const updatedModules = [];
+  const updatedTasks = [];
+
+  for (const item of moduleUpdates) {
+    const module = findModuleForAgentUpdate(project.id, item);
+    if (!module) continue;
+    if (shouldClearOwner(item)) {
+      db.prepare(`
+        UPDATE project_modules
+        SET owner_id = NULL, owner_assigned_by = ?, owner_assigned_at = datetime('now'), updated_at = datetime('now')
+        WHERE project_id = ? AND module_key = ?
+      `).run(project.pm_user_id, project.id, module.module_key);
+      updatedModules.push(module.module_key);
+      continue;
+    }
+    const ownerId = resolveProjectMember(project, item, project.pm_user_id);
+    if (!ownerId) continue;
+    await assignModule(project.id, module.module_key, ownerId, project.pm_user_id);
+    updatedModules.push(module.module_key);
+  }
+
+  for (const item of taskUpdates) {
+    const task = findTaskForAgentUpdate(project.id, item);
+    if (!task) continue;
+    if (shouldClearOwner(item)) {
+      taskService.unclaim(task.id);
+      updatedTasks.push(task.id);
+      continue;
+    }
+    const ownerId = resolveProjectMember(project, item, project.pm_user_id);
+    if (!ownerId) continue;
+    const updated = taskService.assign(task.id, ownerId, normalizeTaskStatus(item.status || '进行中'));
+    try {
+      const assignedBy = db.prepare('SELECT name FROM users WHERE id = ?').get(project.pm_user_id);
+      await feishuPushService.sendTaskAssignmentCard({
+        openId: ownerId,
+        projectName: project.name,
+        taskTitle: updated.title,
+        taskSummary: updated.summary,
+        assignedByName: assignedBy?.name || '',
+        actionText: '你被指派为二级任务负责人',
+        boardUrl: `${config.clientUrl}/projects/${project.id}/tasks/${updated.id}`,
+      });
+    } catch (err) {
+      console.error('[project-agent] Feishu task owner notification failed:', err.userMessage || err.message);
+    }
+    updatedTasks.push(task.id);
+  }
+
+  db.prepare(`
+    INSERT INTO project_agent_events (id, project_id, action, progress_note, payload_json)
+    VALUES (?, ?, ?, ?, ?)
+  `).run(uuid(), project.id, 'update_assignments', payload.progressNote || payload.progress_note || '', JSON.stringify(payload));
+  return {
+    updatedModules,
+    updatedTaskIds: updatedTasks,
+    package: getProjectAgentPackageByProjectId(project.id),
+  };
+}
+
+export function updateProjectProgressFromAgent(apiKey, payload = {}) {
+  const pkg = getProjectAgentPackageByKey(apiKey);
+  const projectPatch = [];
+  const projectValues = [];
+  const status = normalizeProjectStatus(payload.status || payload.projectStatus || payload.project_status || '');
+  if (status) {
+    projectPatch.push('status = ?');
+    projectValues.push(status);
+  }
+  const progress = clampProgress(payload.progress ?? payload.projectProgress ?? payload.project_progress);
+  if (progress !== null) {
+    projectPatch.push('progress_override = ?');
+    projectValues.push(progress);
+  }
+  if (payload.clearProgressOverride || payload.clear_progress_override) {
+    projectPatch.push('progress_override = NULL');
+  }
+  const progressNote = payload.progressNote ?? payload.progress_note ?? payload.note ?? '';
+  if (progressNote !== '') {
+    projectPatch.push('agent_progress_note = ?');
+    projectValues.push(progressNote);
+  }
+
+  const taskUpdates = Array.isArray(payload.taskUpdates)
+    ? payload.taskUpdates
+    : Array.isArray(payload.task_updates)
+      ? payload.task_updates
+      : [];
+  const updatedTasks = [];
+  const tx = db.transaction(() => {
+    if (projectPatch.length) {
+      projectPatch.push("agent_last_update_at = datetime('now')");
+      projectPatch.push("updated_at = datetime('now')");
+      projectValues.push(pkg.project.id);
+      db.prepare(`UPDATE projects SET ${projectPatch.join(', ')} WHERE id = ?`).run(...projectValues);
+    }
+    for (const item of taskUpdates) {
+      const task = findTaskForAgentUpdate(pkg.project.id, item);
+      if (!task) continue;
+      const patch = {};
+      const itemStatus = normalizeTaskStatus(item.status || '');
+      if (itemStatus) patch.status = itemStatus;
+      const itemProgress = clampProgress(item.progress);
+      if (itemProgress !== null) patch.progress = itemProgress;
+      if (item.summary !== undefined) patch.summary = item.summary;
+      if (item.docUrl !== undefined || item.doc_url !== undefined) patch.doc_url = item.docUrl ?? item.doc_url;
+      if (item.idea !== undefined || item.ideaText !== undefined || item.idea_text !== undefined) patch.idea_text = item.idea ?? item.ideaText ?? item.idea_text;
+      if (item.executionPlan !== undefined || item.execution_plan !== undefined) patch.execution_plan = item.executionPlan ?? item.execution_plan;
+      if (item.resourcePlan !== undefined || item.resource_plan !== undefined) patch.resource_plan = item.resourcePlan ?? item.resource_plan;
+      if (Object.keys(patch).length) taskService.update(task.id, patch);
+      if (item.progressNote !== undefined || item.progress_note !== undefined || item.note !== undefined) {
+        db.prepare('UPDATE tasks SET agent_progress_note = ?, agent_last_update_at = datetime(\'now\') WHERE id = ?')
+          .run(item.progressNote ?? item.progress_note ?? item.note ?? '', task.id);
+      }
+      updatedTasks.push(task.id);
+    }
+    db.prepare(`
+      INSERT INTO project_agent_events (id, project_id, action, progress_note, payload_json)
+      VALUES (?, ?, ?, ?, ?)
+    `).run(uuid(), pkg.project.id, 'update_progress', progressNote || '', JSON.stringify(payload));
+  });
+  tx();
+  return {
+    updatedTaskIds: updatedTasks,
     package: getProjectAgentPackageByProjectId(pkg.project.id),
   };
 }

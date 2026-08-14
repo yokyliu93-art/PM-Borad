@@ -744,6 +744,14 @@ export function claim(taskId, userId) {
   return getById(taskId);
 }
 
+export function assign(taskId, userId, status = '进行中') {
+  const task = db.prepare('SELECT * FROM tasks WHERE id = ?').get(taskId);
+  if (!task) throw new Error('任务不存在');
+  db.prepare('UPDATE tasks SET owner_id = ?, status = ?, updated_at = datetime(\'now\') WHERE id = ?')
+    .run(userId, status || '进行中', taskId);
+  return getById(taskId);
+}
+
 export function unclaim(taskId) {
   db.prepare('UPDATE tasks SET owner_id = NULL, status = ?, updated_at = datetime(\'now\') WHERE id = ?')
     .run('待开始', taskId);

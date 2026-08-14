@@ -89,6 +89,21 @@ export function TaskPool() {
     }
   }
 
+  async function handleAssignTask(taskId, ownerId) {
+    if (!ownerId) return;
+    try {
+      const res = await put(`/api/projects/${projectId}/tasks/${taskId}/owner`, { ownerId });
+      if (res.ok) {
+        toast.success('二级任务已指派');
+        loadTasks();
+      } else {
+        toast.error(res.error || '指派失败');
+      }
+    } catch {
+      toast.error('指派失败，请确认后端已启动');
+    }
+  }
+
   async function handleDeleteTask(task) {
     const ownerText = task.owner_id ? `（已被 ${task.owner_name || '成员'} 认领）` : '';
     if (!window.confirm(`确定删除任务「${task.title}」？${ownerText}\n删除后其子任务与进度将一并移除，不可恢复。`)) return;
@@ -167,11 +182,17 @@ export function TaskPool() {
       `POST ${origin}/api/agent/project/timeline 回传按周拆好的项目 Timeline。`,
       `POST ${origin}/api/agent/project/modules 回传项目一级菜单。`,
       `POST ${origin}/api/agent/project/tasks 回传你拆好的模块，PM Board 会把它们显示为项目模块。`,
+      `POST ${origin}/api/agent/project/assignments 认领/指派一级模块和二级任务负责人。`,
+      `POST ${origin}/api/agent/project/progress 开始项目、更新项目整体进度、批量更新任务块状态和进度。`,
       '请求头：Authorization: Bearer <API_KEY>',
-      '推荐顺序：先回传 Timeline，再回传一级菜单，最后回传二级任务。',
+      '推荐顺序：先回传 Timeline，再回传一级菜单，再回传二级任务；执行过程中持续用 progress 接口同步状态。',
       '一级菜单示例：{"modules":[{"name":"技术地基","detail":"域名、HTTPS、OAuth、基础前端能力"},{"name":"增长启动","detail":"冷启动、拉新、传播动作"}]}',
       'Timeline 示例：{"timeline":[{"week":"W1","detail":"本周目标：...；关键动作：...；负责人/配合方：...；交付物：..."},{"week":"W2","detail":"本周目标：...；关键动作：...；负责人/配合方：...；交付物：..."}]}',
       '二级任务示例：{"tasks":[{"module":"技术地基","title":"任务块标题","summary":"目标","cycle":"第1周","idea":"核心想法","executionPlan":"执行方案","resourcePlan":"资源配合","subtasks":[{"title":"子任务","note":"说明"}]}],"publishNow":true}',
+      '负责人示例：{"moduleUpdates":[{"module":"技术地基","ownerName":"张三"}],"taskUpdates":[{"title":"任务块标题","ownerName":"李四","status":"进行中"}]}',
+      '项目开始示例：{"status":"active","progressNote":"项目已启动，开始按 W1 推进"}',
+      '项目进度示例：{"progress":65,"progressNote":"核心流程已完成，等待内容素材补齐"}',
+      '任务完成示例：{"taskUpdates":[{"title":"技术地基","status":"已完成","progress":100,"progressNote":"域名、HTTPS 和 OAuth 已完成"}]}',
     ].join('\n');
   }
 
@@ -415,6 +436,8 @@ export function TaskPool() {
                   onUnclaim={currentUser && task.owner_id === currentUser.id ? () => handleUnclaim(task.id) : undefined}
                   onOpen={(id) => navigate(`/projects/${projectId}/tasks/${id}`)}
                   onDelete={isProjectPM ? () => handleDeleteTask(task) : undefined}
+                  onAssign={isProjectPM ? (ownerId) => handleAssignTask(task.id, ownerId) : undefined}
+                  memberOptions={project?.teamMembers || []}
                 />
               ))}
             </div>

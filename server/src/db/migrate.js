@@ -299,6 +299,12 @@ export function migrate() {
   if (!projectCols.includes('agent_last_update_at')) {
     db.exec('ALTER TABLE projects ADD COLUMN agent_last_update_at TEXT');
   }
+  if (!projectCols.includes('agent_progress_note')) {
+    db.exec("ALTER TABLE projects ADD COLUMN agent_progress_note TEXT DEFAULT ''");
+  }
+  if (!projectCols.includes('progress_override')) {
+    db.exec('ALTER TABLE projects ADD COLUMN progress_override INTEGER');
+  }
   if (!projectCols.includes('feishu_progress_enabled')) {
     db.exec('ALTER TABLE projects ADD COLUMN feishu_progress_enabled INTEGER DEFAULT 0');
   }

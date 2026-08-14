@@ -111,6 +111,32 @@ export async function sendModuleAssignmentCard({ openId, projectName, moduleName
   return sendMessage(openId, 'open_id', 'interactive', card);
 }
 
+export async function sendTaskAssignmentCard({ openId, projectName, taskTitle, taskSummary, assignedByName, actionText, boardUrl }) {
+  const card = {
+    config: { wide_screen_mode: true },
+    header: {
+      template: 'green',
+      title: { tag: 'plain_text', content: `PM Board：${actionText || '任务负责人更新'}` },
+    },
+    elements: [
+      { tag: 'div', text: { tag: 'lark_md', content: `**项目**：${projectName || ''}` } },
+      { tag: 'div', text: { tag: 'lark_md', content: `**任务块**：${taskTitle || ''}` } },
+      taskSummary ? { tag: 'div', text: { tag: 'lark_md', content: `**说明**：${taskSummary}` } } : null,
+      assignedByName ? { tag: 'div', text: { tag: 'lark_md', content: `**操作人**：${assignedByName}` } } : null,
+      boardUrl ? {
+        tag: 'action',
+        actions: [{
+          tag: 'button',
+          text: { tag: 'plain_text', content: '打开任务' },
+          type: 'primary',
+          url: boardUrl,
+        }],
+      } : null,
+    ].filter(Boolean),
+  };
+  return sendMessage(openId, 'open_id', 'interactive', card);
+}
+
 export async function sendLoopReminderCard({ openId, projectName, title, description, promptText, boardUrl }) {
   const card = {
     config: { wide_screen_mode: true },
