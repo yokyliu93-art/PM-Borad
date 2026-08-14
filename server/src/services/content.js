@@ -3,7 +3,7 @@ import db from '../db/connection.js';
 
 function normalizeKind(kind = '') {
   const value = String(kind || '').trim();
-  if (['demo', 'meeting', 'topic', 'memo'].includes(value)) return value;
+  if (['demo', 'meeting', 'topic', 'memo', 'eval'].includes(value)) return value;
   if (value.includes('例会')) return 'meeting';
   if (value.includes('选题')) return 'topic';
   if (value.toLowerCase().includes('demo')) return 'demo';
