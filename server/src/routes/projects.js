@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import { authRequired, requireProjectMember, requireProjectPM } from '../middleware/auth.js';
 import * as projectService from '../services/project.js';
+import * as loopService from '../services/loop.js';
 
 const router = Router();
 
@@ -60,6 +61,15 @@ router.put('/:projectId/modules/:moduleKey/owner', authRequired, requireProjectP
     const ownerId = req.body?.ownerId || req.body?.owner_id;
     if (!ownerId) return res.status(400).json({ ok: false, error: '请选择负责人' });
     const data = await projectService.assignModule(req.params.projectId, req.params.moduleKey, ownerId, req.user.id);
+    res.json({ ok: true, data });
+  } catch (err) {
+    res.status(400).json({ ok: false, error: err.message });
+  }
+});
+
+router.post('/:projectId/loops/:loopId/complete', authRequired, requireProjectMember, (req, res) => {
+  try {
+    const data = loopService.completeLoop(req.params.projectId, req.params.loopId, req.user.id, req.body?.note || '');
     res.json({ ok: true, data });
   } catch (err) {
     res.status(400).json({ ok: false, error: err.message });

@@ -1,6 +1,7 @@
 import { Router } from 'express';
 import { authRequired, canAccessProject } from '../middleware/auth.js';
 import * as taskService from '../services/task.js';
+import * as loopService from '../services/loop.js';
 import db from '../db/connection.js';
 
 const router = Router();
@@ -134,6 +135,7 @@ router.get('/personal', authRequired, (req, res) => {
     WHERE t.project_id = ? AND t.owner_id IS NULL AND t.is_published = 1
     ORDER BY t.sort_order
   `).all(projectId);
+  const loops = loopService.listUserLoops(projectId, req.user.id);
 
   res.json({
     ok: true,
@@ -145,6 +147,7 @@ router.get('/personal', authRequired, (req, res) => {
       isProjectPM,
       pendingTaskReviews,
       pendingSubtaskReviews,
+      loops,
     },
   });
 });

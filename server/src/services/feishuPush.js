@@ -110,3 +110,28 @@ export async function sendModuleAssignmentCard({ openId, projectName, moduleName
   };
   return sendMessage(openId, 'open_id', 'interactive', card);
 }
+
+export async function sendLoopReminderCard({ openId, projectName, title, description, promptText, boardUrl }) {
+  const card = {
+    config: { wide_screen_mode: true },
+    header: {
+      template: 'blue',
+      title: { tag: 'plain_text', content: `PM Board 周常：${title || ''}` },
+    },
+    elements: [
+      { tag: 'div', text: { tag: 'lark_md', content: `**项目**：${projectName || ''}` } },
+      description ? { tag: 'div', text: { tag: 'lark_md', content: `**任务**：${description}` } } : null,
+      promptText ? { tag: 'div', text: { tag: 'lark_md', content: promptText } } : null,
+      boardUrl ? {
+        tag: 'action',
+        actions: [{
+          tag: 'button',
+          text: { tag: 'plain_text', content: '去 PM Board 完成' },
+          type: 'primary',
+          url: boardUrl,
+        }],
+      } : null,
+    ].filter(Boolean),
+  };
+  return sendMessage(openId, 'open_id', 'interactive', card);
+}

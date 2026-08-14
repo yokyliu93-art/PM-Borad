@@ -6,7 +6,7 @@ import { Avatar } from '../../components/ui/Avatar';
 import { PanelTitle } from '../../components/ui/PanelTitle';
 import { StatusPill } from '../../components/ui/StatusPill';
 import { EmptyState } from '../../components/ui/EmptyState';
-import { Briefcase, ClipboardList, Sparkles, Loader2, AlertTriangle, CheckCircle2, Clock3, Link2, ShieldCheck } from 'lucide-react';
+import { Briefcase, ClipboardList, Sparkles, Loader2, AlertTriangle, CheckCircle2, Clock3, Link2, ShieldCheck, Repeat2 } from 'lucide-react';
 
 export function PersonalPanel() {
   const { projectId } = useParams();
@@ -38,6 +38,15 @@ export function PersonalPanel() {
     loadData();
   }
 
+  async function handleCompleteLoop(loop) {
+    const note = window.prompt(`完成「${loop.title}」了吗？可以补一句记录：`, loop.loop_key === 'weekly_invite_builder' ? '已邀请 1 位 Builder / 推荐项目' : '');
+    if (note === null) return;
+    const res = await post(`/api/projects/${projectId}/loops/${loop.id}/complete`, { note });
+    if (res.ok) {
+      setData((current) => ({ ...current, loops: res.data }));
+    }
+  }
+
   if (loading) return <div className="grid place-items-center h-64"><Loader2 className="animate-spin text-slate-400" size={32} /></div>;
   if (error) return (
     <div className="grid place-items-center h-64">
@@ -59,6 +68,7 @@ export function PersonalPanel() {
     isProjectPM,
     pendingTaskReviews = [],
     pendingSubtaskReviews = [],
+    loops = [],
   } = data;
   const activeStages = myStages.filter((stage) => stage.status !== '已完成');
   const deliveredStages = myStages.filter((stage) => stage.delivery_doc_url);
@@ -99,6 +109,39 @@ export function PersonalPanel() {
 
       <div className="grid gap-5 xl:grid-cols-[1fr_380px]">
         <div className="space-y-4">
+          <div className="rounded-lg border border-emerald-400/20 bg-emerald-500/[0.06] p-5">
+            <PanelTitle icon={Repeat2} title="本周固定 Loop" />
+            <div className="mt-4 grid gap-3 md:grid-cols-2">
+              {loops.length ? loops.map((loop) => {
+                const done = loop.status === 'done';
+                return (
+                  <div key={loop.id} className="rounded-md border border-white/10 bg-[#11141d] p-4">
+                    <div className="flex items-start justify-between gap-3">
+                      <div>
+                        <p className="text-sm font-semibold text-white">{loop.title}</p>
+                        <p className="mt-1 text-xs leading-5 text-slate-500">{loop.description}</p>
+                      </div>
+                      <span className={`shrink-0 rounded px-2 py-1 text-xs ${done ? 'bg-emerald-400/15 text-emerald-200' : 'bg-white/8 text-slate-400'}`}>
+                        {done ? '已完成' : '本周待做'}
+                      </span>
+                    </div>
+                    {loop.prompt_text ? <p className="mt-3 rounded bg-white/[0.04] p-2 text-xs leading-5 text-slate-300">{loop.prompt_text}</p> : null}
+                    {loop.note ? <p className="mt-2 text-xs text-emerald-200">记录：{loop.note}</p> : null}
+                    <button
+                      onClick={() => handleCompleteLoop(loop)}
+                      disabled={done}
+                      className={`mt-4 rounded-md px-3 py-2 text-sm font-semibold ${
+                        done ? 'cursor-not-allowed bg-white/8 text-slate-500' : 'bg-emerald-400 text-[#08110f] hover:bg-emerald-300'
+                      }`}
+                    >
+                      {done ? '本周已完成' : '点击完成'}
+                    </button>
+                  </div>
+                );
+              }) : <p className="text-sm text-slate-500">暂无本周固定动作。</p>}
+            </div>
+          </div>
+
           <PanelTitle icon={Briefcase} title="我认领后负责推进的任务" />
           {myTasks.length ? (
             <div className="grid gap-4 xl:grid-cols-2">

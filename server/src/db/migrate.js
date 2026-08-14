@@ -236,6 +236,37 @@ export function migrate() {
       updated_at TEXT DEFAULT (datetime('now')),
       UNIQUE(chat_id, audience)
     );
+
+    CREATE TABLE IF NOT EXISTS project_loops (
+      id TEXT PRIMARY KEY,
+      project_id TEXT NOT NULL REFERENCES projects(id),
+      loop_key TEXT NOT NULL,
+      title TEXT NOT NULL,
+      description TEXT DEFAULT '',
+      audience TEXT NOT NULL DEFAULT 'all',
+      frequency TEXT NOT NULL DEFAULT 'weekly',
+      prompt_text TEXT DEFAULT '',
+      enabled INTEGER DEFAULT 1,
+      last_prompt_week TEXT DEFAULT '',
+      sort_order INTEGER DEFAULT 0,
+      created_at TEXT DEFAULT (datetime('now')),
+      updated_at TEXT DEFAULT (datetime('now')),
+      UNIQUE(project_id, loop_key)
+    );
+
+    CREATE TABLE IF NOT EXISTS project_loop_completions (
+      id TEXT PRIMARY KEY,
+      loop_id TEXT NOT NULL REFERENCES project_loops(id),
+      project_id TEXT NOT NULL REFERENCES projects(id),
+      user_id TEXT NOT NULL REFERENCES users(id),
+      week_key TEXT NOT NULL,
+      status TEXT NOT NULL DEFAULT 'pending',
+      note TEXT DEFAULT '',
+      completed_at TEXT,
+      created_at TEXT DEFAULT (datetime('now')),
+      updated_at TEXT DEFAULT (datetime('now')),
+      UNIQUE(loop_id, user_id, week_key)
+    );
   `);
 
   const userCols = db.prepare('PRAGMA table_info(users)').all().map((c) => c.name);
