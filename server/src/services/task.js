@@ -654,6 +654,7 @@ export function remove(id) {
     db.prepare('DELETE FROM subtask_attachments WHERE task_id = ?').run(id);
     db.prepare('DELETE FROM task_attachments WHERE task_id = ?').run(id);
     db.prepare('DELETE FROM progress_updates WHERE task_id = ?').run(id);
+    db.prepare('DELETE FROM task_comments WHERE task_id = ?').run(id);
     db.prepare('DELETE FROM subtasks WHERE task_id = ?').run(id);
     db.prepare('DELETE FROM tasks WHERE id = ?').run(id);
     return [...files, ...subFiles];

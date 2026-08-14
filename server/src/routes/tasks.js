@@ -49,6 +49,15 @@ function broadcast(req, event, data) {
   if (req.io) emit(req.io, req.params.projectId, event, data);
 }
 
+function listComments(taskId, targetType = 'task', targetId = taskId) {
+  return db.prepare(`
+    SELECT c.*, u.name as user_name, u.avatar_url as user_avatar
+    FROM task_comments c JOIN users u ON u.id = c.user_id
+    WHERE c.task_id = ? AND c.target_type = ? AND c.target_id = ?
+    ORDER BY c.created_at ASC
+  `).all(taskId, targetType, targetId);
+}
+
 // List tasks for project
 router.get('/', authRequired, (req, res) => {
   const { published } = req.query;
@@ -130,6 +139,10 @@ router.get('/:taskId', authRequired, (req, res) => {
     WHERE s.task_id = ? ORDER BY s.sort_order, s.created_at
   `).all(task.id));
   task.subtasks = task.subtasks.map((sub) => taskService.ensureDefaultAgentSetup(task.id, sub.id));
+  for (const sub of task.subtasks) {
+    sub.comments = listComments(task.id, 'subtask', sub.id);
+  }
+  task.comments = listComments(task.id);
   task.updates = db.prepare(`
     SELECT pu.*, u.name as user_name, u.avatar_url as user_avatar
     FROM progress_updates pu JOIN users u ON pu.user_id = u.id
@@ -177,6 +190,44 @@ router.delete('/:taskId', authRequired, requireProjectPM, (req, res) => {
   }
   taskService.remove(req.params.taskId);
   broadcast(req, 'task:deleted', { taskId: req.params.taskId });
+  res.json({ ok: true });
+});
+
+router.post('/:taskId/comments', authRequired, (req, res) => {
+  const task = taskService.getById(req.params.taskId);
+  if (!task) return res.status(404).json({ ok: false, error: '任务不存在' });
+  const content = String(req.body?.content || '').trim();
+  if (!content) return res.status(400).json({ ok: false, error: '评论不能为空' });
+  if (content.length > 2000) return res.status(400).json({ ok: false, error: '评论不能超过 2000 字' });
+  const targetType = req.body?.targetType === 'subtask' || req.body?.target_type === 'subtask' ? 'subtask' : 'task';
+  const targetId = targetType === 'subtask' ? String(req.body?.targetId || req.body?.target_id || '') : task.id;
+  if (targetType === 'subtask') {
+    const sub = db.prepare('SELECT id FROM subtasks WHERE id = ? AND task_id = ?').get(targetId, task.id);
+    if (!sub) return res.status(404).json({ ok: false, error: '子任务不存在' });
+  }
+  const id = uuid();
+  db.prepare(`
+    INSERT INTO task_comments (id, task_id, target_type, target_id, user_id, content)
+    VALUES (?, ?, ?, ?, ?, ?)
+  `).run(id, task.id, targetType, targetId, req.user.id, content);
+  const comment = db.prepare(`
+    SELECT c.*, u.name as user_name, u.avatar_url as user_avatar
+    FROM task_comments c JOIN users u ON u.id = c.user_id
+    WHERE c.id = ?
+  `).get(id);
+  broadcast(req, 'comment:posted', { taskId: task.id, targetType, targetId, comment });
+  res.status(201).json({ ok: true, data: comment });
+});
+
+router.delete('/:taskId/comments/:commentId', authRequired, (req, res) => {
+  const comment = db.prepare('SELECT * FROM task_comments WHERE id = ? AND task_id = ?').get(req.params.commentId, req.params.taskId);
+  if (!comment) return res.status(404).json({ ok: false, error: '评论不存在' });
+  const task = taskService.getById(req.params.taskId);
+  const project = db.prepare('SELECT pm_user_id FROM projects WHERE id = ?').get(task?.project_id);
+  const canDelete = comment.user_id === req.user.id || task?.owner_id === req.user.id || project?.pm_user_id === req.user.id;
+  if (!canDelete) return res.status(403).json({ ok: false, error: '无权删除该评论' });
+  db.prepare('DELETE FROM task_comments WHERE id = ?').run(comment.id);
+  broadcast(req, 'comment:deleted', { taskId: req.params.taskId, commentId: comment.id });
   res.json({ ok: true });
 });
 
@@ -263,6 +314,7 @@ router.delete('/:taskId/subtasks/:subtaskId', authRequired, requireTaskManager, 
   db.prepare('DELETE FROM subtask_steps WHERE subtask_id = ? AND task_id = ?').run(req.params.subtaskId, req.params.taskId);
   db.prepare('DELETE FROM subtask_schedule_items WHERE subtask_id = ? AND task_id = ?').run(req.params.subtaskId, req.params.taskId);
   db.prepare('DELETE FROM agent_events WHERE subtask_id = ? AND task_id = ?').run(req.params.subtaskId, req.params.taskId);
+  db.prepare('DELETE FROM task_comments WHERE target_type = ? AND target_id = ? AND task_id = ?').run('subtask', req.params.subtaskId, req.params.taskId);
   db.prepare('DELETE FROM subtasks WHERE id = ? AND task_id = ?').run(req.params.subtaskId, req.params.taskId);
   taskService.recomputeProgress(req.params.taskId);
   res.json({ ok: true });

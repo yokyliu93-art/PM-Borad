@@ -227,6 +227,7 @@ export function remove(id) {
     db.prepare('DELETE FROM progress_updates WHERE task_id IN (SELECT id FROM tasks WHERE project_id = ?)').run(id);
     db.prepare('DELETE FROM task_agent_events WHERE project_id = ?').run(id);
     db.prepare('DELETE FROM project_agent_events WHERE project_id = ?').run(id);
+    db.prepare('DELETE FROM task_comments WHERE task_id IN (SELECT id FROM tasks WHERE project_id = ?)').run(id);
     db.prepare('DELETE FROM subtask_steps WHERE task_id IN (SELECT id FROM tasks WHERE project_id = ?)').run(id);
     db.prepare('DELETE FROM subtask_schedule_items WHERE task_id IN (SELECT id FROM tasks WHERE project_id = ?)').run(id);
     db.prepare('DELETE FROM agent_events WHERE task_id IN (SELECT id FROM tasks WHERE project_id = ?)').run(id);

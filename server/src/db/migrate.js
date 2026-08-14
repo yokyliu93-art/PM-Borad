@@ -193,6 +193,17 @@ export function migrate() {
       payload_json TEXT DEFAULT '{}',
       created_at TEXT DEFAULT (datetime('now'))
     );
+
+    CREATE TABLE IF NOT EXISTS task_comments (
+      id TEXT PRIMARY KEY,
+      task_id TEXT NOT NULL REFERENCES tasks(id),
+      target_type TEXT NOT NULL DEFAULT 'task',
+      target_id TEXT NOT NULL,
+      user_id TEXT NOT NULL REFERENCES users(id),
+      content TEXT NOT NULL,
+      created_at TEXT DEFAULT (datetime('now')),
+      updated_at TEXT DEFAULT (datetime('now'))
+    );
   `);
 
   const projectCols = db.prepare('PRAGMA table_info(projects)').all().map((c) => c.name);

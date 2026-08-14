@@ -8,7 +8,6 @@ import { StatusPill } from '../../components/ui/StatusPill';
 import { PanelTitle } from '../../components/ui/PanelTitle';
 import { InfoField } from '../../components/ui/InfoField';
 import { EmptyState } from '../../components/ui/EmptyState';
-import { FeedList } from '../../components/ui/FeedList';
 import { Bell, BookOpen, CalendarDays, ClipboardList, Copy, KeyRound, Link2, MessageSquarePlus, Plus, RefreshCw, Send, Loader2, AlertTriangle, UploadCloud, X, Paperclip, PackageCheck, Trash2 } from 'lucide-react';
 
 const TASK_STATUSES = ['待开始', '进行中'];
@@ -39,7 +38,8 @@ export function Subproject() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [newSubtask, setNewSubtask] = useState({ title: '' });
-  const [newUpdate, setNewUpdate] = useState('');
+  const [newTaskComment, setNewTaskComment] = useState('');
+  const [commentDrafts, setCommentDrafts] = useState({});
   const [reviewComment, setReviewComment] = useState('');
   const [uploading, setUploading] = useState(false);
   const [submitting, setSubmitting] = useState(false);
@@ -343,10 +343,23 @@ export function Subproject() {
     loadTask();
   }
 
-  async function handlePublishUpdate() {
-    if (!newUpdate.trim()) return;
-    await post(`/api/projects/${projectId}/tasks/${taskId}/updates`, { content: newUpdate });
-    setNewUpdate('');
+  async function handlePostComment({ targetType = 'task', targetId = taskId } = {}) {
+    const isTask = targetType === 'task';
+    const content = isTask ? newTaskComment.trim() : String(commentDrafts[targetId] || '').trim();
+    if (!content) return;
+    const res = await post(`/api/projects/${projectId}/tasks/${taskId}/comments`, { content, targetType, targetId });
+    if (res.ok) {
+      if (isTask) setNewTaskComment('');
+      else setCommentDrafts((drafts) => ({ ...drafts, [targetId]: '' }));
+      loadTask();
+    } else {
+      toast.error(res.error || '发送失败');
+    }
+  }
+
+  async function handleDeleteComment(comment) {
+    const res = await del(`/api/projects/${projectId}/tasks/${taskId}/comments/${comment.id}`);
+    if (!res.ok) toast.error(res.error || '删除失败');
     loadTask();
   }
 
@@ -425,6 +438,79 @@ export function Subproject() {
   const canManage = task.owner_id === currentUser?.id || isReviewer;
   const isLocked = task.status === '审核中' || task.status === '已完成';
   const assignmentMembers = project?.teamMembers || project?.members || [];
+
+  function formatCommentTime(value) {
+    if (!value) return '';
+    const date = new Date(`${String(value).replace(' ', 'T')}Z`);
+    if (Number.isNaN(date.getTime())) return value;
+    return date.toLocaleString('zh-CN', {
+      month: '2-digit',
+      day: '2-digit',
+      hour: '2-digit',
+      minute: '2-digit',
+      hour12: false,
+    });
+  }
+
+  function canDeleteComment(comment) {
+    return comment.user_id === currentUser?.id || canManage || isReviewer;
+  }
+
+  function renderCommentList(comments = []) {
+    if (!comments.length) {
+      return <p className="rounded-md border border-dashed border-white/10 bg-[#0c0f16] px-3 py-4 text-sm text-slate-500">还没有讨论，发第一条。</p>;
+    }
+    return (
+      <div className="space-y-3">
+        {comments.map((comment) => (
+          <div key={comment.id} className="group flex items-start gap-3">
+            <Avatar member={{ name: comment.user_name, avatar_url: comment.user_avatar }} size="xs" />
+            <div className="min-w-0 flex-1">
+              <div className="flex flex-wrap items-baseline gap-2">
+                <span className="text-sm font-medium text-white">{comment.user_name}</span>
+                <span className="text-[11px] text-slate-600">{formatCommentTime(comment.created_at)}</span>
+                {canDeleteComment(comment) ? (
+                  <button onClick={() => handleDeleteComment(comment)} className="opacity-0 text-[11px] text-slate-500 transition hover:text-red-300 group-hover:opacity-100">删除</button>
+                ) : null}
+              </div>
+              <p className="mt-1 whitespace-pre-wrap rounded-md bg-white/[0.04] px-3 py-2 text-sm leading-6 text-slate-300">{comment.content}</p>
+            </div>
+          </div>
+        ))}
+      </div>
+    );
+  }
+
+  function renderCommentComposer({ targetType = 'task', targetId = taskId, compact = false } = {}) {
+    const isTask = targetType === 'task';
+    const value = isTask ? newTaskComment : commentDrafts[targetId] || '';
+    const setValue = (next) => {
+      if (isTask) setNewTaskComment(next);
+      else setCommentDrafts((drafts) => ({ ...drafts, [targetId]: next }));
+    };
+    return (
+      <div className={`flex items-start gap-2 ${compact ? '' : 'mt-4'}`}>
+        <Avatar member={currentUser} size="xs" />
+        <div className="min-w-0 flex-1 rounded-md border border-white/10 bg-[#0c0f16] focus-within:border-violet-400/60">
+          <textarea
+            value={value}
+            onChange={(e) => setValue(e.target.value)}
+            onKeyDown={(e) => {
+              if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') handlePostComment({ targetType, targetId });
+            }}
+            placeholder={compact ? '回复这个子任务...' : '发一条讨论，按 Cmd/Ctrl + Enter 发送'}
+            className="h-20 w-full resize-none bg-transparent px-3 py-2 text-sm text-slate-200 outline-none placeholder:text-slate-600"
+          />
+          <div className="flex items-center justify-between border-t border-white/10 px-2 py-2">
+            <span className="text-[11px] text-slate-600">Slack 式讨论，之后可接飞书群同步</span>
+            <button onClick={() => handlePostComment({ targetType, targetId })} disabled={!value.trim()} className="inline-flex items-center gap-1 rounded-md bg-white px-2.5 py-1.5 text-xs font-semibold text-[#0f1117] disabled:opacity-50">
+              <Send size={12} />发送
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   // Deliverable file list — visible to everyone; delete only for owner when not locked.
   function renderFiles() {
@@ -808,6 +894,14 @@ export function Subproject() {
 	                    <div className="mt-3 space-y-3 border-t border-white/10 pt-3">
                           {renderSteps(sub, canManage && editable)}
                           {renderAgentConfig(sub, canManage && editable)}
+                          <div className="rounded-md border border-white/10 bg-[#0c0f16] p-3">
+                            <div className="mb-3 flex items-center justify-between">
+                              <p className="flex items-center gap-1.5 text-xs font-medium text-slate-400"><MessageSquarePlus size={13} />子任务讨论</p>
+                              <span className="text-[11px] text-slate-600">{(sub.comments || []).length} 条</span>
+                            </div>
+                            {renderCommentList(sub.comments || [])}
+                            <div className="mt-3">{renderCommentComposer({ targetType: 'subtask', targetId: sub.id, compact: true })}</div>
+                          </div>
 	                      {sub.status === '已提交' || sub.status === '已完成' ? (
 	                        <div className="space-y-2">
 	                          {sub.submission_description ? (
@@ -941,10 +1035,14 @@ export function Subproject() {
 
       <aside className="space-y-5">
         <div className="rounded-lg border border-white/10 bg-white/[0.03] p-5">
-          <PanelTitle icon={MessageSquarePlus} title="进度更新" />
-          <textarea value={newUpdate} onChange={(e) => setNewUpdate(e.target.value)} placeholder="发布一条更新..." className="mt-4 h-24 w-full resize-none rounded-md border border-white/10 bg-[#0c0f16] p-3 text-sm text-slate-200 outline-none" />
-          <button onClick={handlePublishUpdate} className="mt-3 inline-flex items-center gap-2 rounded-md bg-white px-3 py-2 text-sm font-semibold text-[#0f1117]"><Send size={15} />发布</button>
-          <FeedList updates={(task.updates || []).map((u) => typeof u === 'string' ? u : `${u.user_name}: ${u.content}`)} />
+          <div className="flex items-center justify-between">
+            <PanelTitle icon={MessageSquarePlus} title="讨论" />
+            <span className="rounded-md bg-white/[0.04] px-2 py-1 text-xs text-slate-500">{(task.comments || []).length} 条</span>
+          </div>
+          <div className="mt-4">
+            {renderCommentList(task.comments || [])}
+            {renderCommentComposer()}
+          </div>
         </div>
       </aside>
     </section>
