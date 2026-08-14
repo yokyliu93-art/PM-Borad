@@ -46,15 +46,24 @@ async function feishuRequest(path, { token, method = 'GET', body } = {}) {
 }
 
 async function refreshAccessToken(userId, refreshToken) {
-  const data = await feishuRequest('/authen/v1/refresh_access_token', {
-    method: 'POST',
-    body: {
-      app_id: config.feishuAppId,
-      app_secret: config.feishuAppSecret,
-      refresh_token: refreshToken,
-      grant_type: 'refresh_token',
-    },
-  });
+  let data;
+  try {
+    data = await feishuRequest('/authen/v1/refresh_access_token', {
+      method: 'POST',
+      body: {
+        app_id: config.feishuAppId,
+        app_secret: config.feishuAppSecret,
+        refresh_token: refreshToken,
+        grant_type: 'refresh_token',
+      },
+    });
+  } catch (err) {
+    if (/refresh token/i.test(err.message || '')) {
+      db.prepare('DELETE FROM user_feishu_tokens WHERE user_id = ?').run(userId);
+      throw new FeishuError('NOT_BOUND', '飞书授权已过期，请点击重新授权后再解析文档');
+    }
+    throw err;
+  }
   saveUserTokens(userId, {
     accessToken: data.data.access_token,
     refreshToken: data.data.refresh_token,

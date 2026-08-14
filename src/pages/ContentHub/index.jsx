@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useParams } from 'react-router-dom';
 import toast from 'react-hot-toast';
-import { BookOpenText, CalendarDays, FilePlus2, FlaskConical, MessageSquareText, Sparkles, ThumbsUp, UserCheck, Vote } from 'lucide-react';
+import { BookOpenText, CalendarDays, FilePlus2, FlaskConical, LogIn, MessageSquareText, Sparkles, ThumbsUp, UserCheck, Vote } from 'lucide-react';
 import { get, post, del } from '../../lib/api';
 import { useStore } from '../../store';
 import { Avatar } from '../../components/ui/Avatar';
@@ -35,6 +35,7 @@ export function ContentHub({ mode = 'all', initialTopicType = 'daily' }) {
   const [creating, setCreating] = useState(false);
   const [importing, setImporting] = useState(false);
   const [parsingTopics, setParsingTopics] = useState(false);
+  const [topicParseError, setTopicParseError] = useState('');
   const [form, setForm] = useState({ kind: mode === 'topics' ? 'topic' : mode === 'demo' ? 'demo' : mode === 'eval' ? 'eval' : 'memo', subKind: mode === 'topics' ? 'daily' : '', title: '', body: '', sourceUrl: '', timelineText: '', ownerText: '', progress: 0, meetingDocUrl: '', meetingMinutesUrl: '' });
   const [minutes, setMinutes] = useState({ title: '', meetingDocUrl: '', meetingMinutesUrl: '', transcript: '' });
   const [experienceDrafts, setExperienceDrafts] = useState({});
@@ -128,6 +129,7 @@ export function ContentHub({ mode = 'all', initialTopicType = 'daily' }) {
       toast.error('请同时填写周会文档链接和周会妙记链接');
       return;
     }
+    setTopicParseError('');
     if (isTopics) setParsingTopics(true);
     else setImporting(true);
     const res = await post(`/api/projects/${targetProjectId}/content/${endpoint}`, minutes);
@@ -145,6 +147,7 @@ export function ContentHub({ mode = 'all', initialTopicType = 'daily' }) {
       setMinutes({ title: '', meetingDocUrl: '', meetingMinutesUrl: '', transcript: '' });
       loadItems();
     } else {
+      if (isTopics) setTopicParseError(res.error || '解析失败');
       toast.error(res.error || '导入失败');
     }
   }
@@ -175,22 +178,44 @@ export function ContentHub({ mode = 'all', initialTopicType = 'daily' }) {
   }
 
   const topicParserPanel = isTopics ? (
-    <div className="rounded-xl border border-emerald-100 bg-white p-5 shadow-sm shadow-emerald-950/5">
-      <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
-        <div>
-          <p className="flex items-center gap-2 text-sm font-semibold text-emerald-700"><CalendarDays size={16} />周会选题解析台</p>
-          <h2 className="mt-2 text-2xl font-semibold tracking-normal text-slate-950">先放周会文档和妙记，再自动生成选题板块</h2>
-          <p className="mt-2 max-w-3xl text-sm leading-6 text-slate-600">
-            DeepSeek 会从两个飞书链接里抽取日常选题、负责人和初稿时间；深度选题会沉淀成长 timeline，后续像 Build 项目一样持续推进。
+    <div className="rounded-xl border border-emerald-100 bg-white p-6 shadow-sm shadow-emerald-950/5">
+      <div className="grid gap-5 xl:grid-cols-[360px_1fr] xl:items-start">
+        <div className="min-w-0">
+          <p className="flex items-center gap-2 text-sm font-semibold text-emerald-700">
+            <CalendarDays size={16} />周会选题解析台
+          </p>
+          <h2 className="mt-2 max-w-sm text-2xl font-semibold leading-tight tracking-normal text-slate-950">
+            连接周会文档和妙记，自动生成选题板块
+          </h2>
+          <p className="mt-3 max-w-md text-sm leading-7 text-slate-600">
+            系统会先读取飞书文档，再调用 DeepSeek 解析日常选题、负责人和初稿时间。深度选题会生成长 timeline，后续像 Build 项目一样推进。
           </p>
         </div>
-        <form onSubmit={importMinutes} className="grid w-full gap-2 lg:max-w-3xl lg:grid-cols-[1fr_1fr_120px]">
-          <input value={minutes.meetingDocUrl} onChange={(event) => setMinutes({ ...minutes, meetingDocUrl: event.target.value })} placeholder="周会文档链接" className="rounded-md border border-slate-200 px-3 py-2 text-sm outline-none focus:border-emerald-400" />
-          <input value={minutes.meetingMinutesUrl} onChange={(event) => setMinutes({ ...minutes, meetingMinutesUrl: event.target.value })} placeholder="周会妙记/速记链接" className="rounded-md border border-slate-200 px-3 py-2 text-sm outline-none focus:border-emerald-400" />
-          <button disabled={parsingTopics} className="rounded-md bg-emerald-600 px-3 py-2 text-sm font-semibold text-white transition hover:bg-emerald-500 disabled:opacity-60">
-            {parsingTopics ? '解析中' : '解析'}
-          </button>
-        </form>
+        <div className="space-y-3">
+          <form onSubmit={importMinutes} className="grid w-full gap-3 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_120px]">
+            <label className="block">
+              <span className="mb-1.5 block text-xs font-medium text-slate-500">周会文档链接</span>
+              <input value={minutes.meetingDocUrl} onChange={(event) => setMinutes({ ...minutes, meetingDocUrl: event.target.value })} placeholder="https://xxx.feishu.cn/docx/..." className="w-full rounded-md border border-slate-200 px-3 py-2.5 text-sm outline-none focus:border-emerald-400" />
+            </label>
+            <label className="block">
+              <span className="mb-1.5 block text-xs font-medium text-slate-500">周会妙记 / 速记链接</span>
+              <input value={minutes.meetingMinutesUrl} onChange={(event) => setMinutes({ ...minutes, meetingMinutesUrl: event.target.value })} placeholder="https://xxx.feishu.cn/minutes/..." className="w-full rounded-md border border-slate-200 px-3 py-2.5 text-sm outline-none focus:border-emerald-400" />
+            </label>
+            <button disabled={parsingTopics} className="mt-5 rounded-md bg-emerald-600 px-3 py-2.5 text-sm font-semibold text-white transition hover:bg-emerald-500 disabled:opacity-60">
+              {parsingTopics ? '解析中' : '解析'}
+            </button>
+          </form>
+          {topicParseError ? (
+            <div className="flex flex-col gap-3 rounded-md border border-red-100 bg-red-50 px-3 py-3 text-sm text-red-700 sm:flex-row sm:items-center sm:justify-between">
+              <span>{topicParseError}</span>
+              {/飞书|授权|token|refresh/i.test(topicParseError) ? (
+                <button type="button" onClick={() => { window.location.href = '/api/auth/login'; }} className="inline-flex shrink-0 items-center justify-center gap-1.5 rounded-md bg-white px-3 py-1.5 text-xs font-semibold text-red-700 shadow-sm ring-1 ring-red-100 hover:bg-red-50">
+                  <LogIn size={13} />重新飞书授权
+                </button>
+              ) : null}
+            </div>
+          ) : null}
+        </div>
       </div>
     </div>
   ) : null;
