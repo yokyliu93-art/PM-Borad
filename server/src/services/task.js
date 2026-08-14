@@ -33,6 +33,8 @@ export function create({ projectId, title, summary, cycle, docUrl, sortOrder, pu
   const maxSort = db.prepare('SELECT MAX(sort_order) as m FROM tasks WHERE project_id = ?').get(projectId);
   const order = sortOrder ?? (maxSort?.m ?? -1) + 1;
   const normalizedModule = normalizeModule(module || moduleName || moduleKey, `${title || ''} ${summary || ''}`);
+  if (moduleKey) normalizedModule.moduleKey = String(moduleKey).trim();
+  if (moduleName) normalizedModule.moduleName = String(moduleName).trim();
   db.prepare(`
     INSERT INTO tasks (id, project_id, module_key, module_name, title, summary, cycle, doc_url, status, sort_order, is_published, idea_text, execution_plan, resource_plan)
     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)

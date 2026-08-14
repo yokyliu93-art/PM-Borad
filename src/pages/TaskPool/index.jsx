@@ -7,7 +7,7 @@ import { useSocket } from '../../hooks/useSocket';
 import { TaskCard } from '../../components/ui/TaskCard';
 import { EmptyState } from '../../components/ui/EmptyState';
 import { Avatar } from '../../components/ui/Avatar';
-import { AlertTriangle, ArrowLeft, BookOpen, Boxes, CalendarDays, Copy, KeyRound, Loader2, RefreshCw, Trash2, UserPlus } from 'lucide-react';
+import { AlertTriangle, ArrowLeft, BookOpen, Boxes, CalendarDays, Copy, KeyRound, Loader2, Plus, RefreshCw, Trash2, UserPlus } from 'lucide-react';
 
 export function TaskPool() {
   const { projectId } = useParams();
@@ -21,6 +21,8 @@ export function TaskPool() {
   const [isProjectPM, setIsProjectPM] = useState(false);
   const [selectedModule, setSelectedModule] = useState(null);
   const [selectedTimelineIndex, setSelectedTimelineIndex] = useState(null);
+  const [editingModuleKey, setEditingModuleKey] = useState('');
+  const [newTaskDrafts, setNewTaskDrafts] = useState({});
   const navigate = useNavigate();
 
   useSocket(projectId);
@@ -118,6 +120,39 @@ export function TaskPool() {
     } catch {
       toast.error('删除失败，请确认后端已启动');
     }
+  }
+
+  async function handleCreateModuleTask(module) {
+    const draft = newTaskDrafts[module.key] || {};
+    const title = String(draft.title || '').trim();
+    if (!title) {
+      toast.error('请先填写二级任务标题');
+      return;
+    }
+    const res = await post(`/api/projects/${projectId}/tasks`, {
+      title,
+      summary: draft.summary || '',
+      cycle: draft.cycle || '',
+      moduleKey: module.key,
+      moduleName: module.name,
+      publishNow: true,
+    });
+    if (res.ok) {
+      toast.success('二级任务已新增');
+      setNewTaskDrafts((drafts) => ({ ...drafts, [module.key]: { title: '', summary: '', cycle: '' } }));
+      setEditingModuleKey('');
+      loadTasks();
+      loadProject();
+    } else {
+      toast.error(res.error || '新增失败');
+    }
+  }
+
+  function updateNewTaskDraft(moduleKey, patch) {
+    setNewTaskDrafts((drafts) => ({
+      ...drafts,
+      [moduleKey]: { ...(drafts[moduleKey] || {}), ...patch },
+    }));
   }
 
   async function handleClaimModule(module) {
@@ -442,6 +477,14 @@ export function TaskPool() {
           </button>
           {getModuleTasks(currentModule.key).length ? (
             <div className="grid gap-4 xl:grid-cols-2">
+              {isProjectPM ? (
+                <ModuleTaskComposer
+                  module={currentModule}
+                  draft={newTaskDrafts[currentModule.key] || {}}
+                  onChange={(patch) => updateNewTaskDraft(currentModule.key, patch)}
+                  onSubmit={() => handleCreateModuleTask(currentModule)}
+                />
+              ) : null}
               {getModuleTasks(currentModule.key).map((task) => (
                 <TaskCard
                   key={task.id}
@@ -457,12 +500,22 @@ export function TaskPool() {
               ))}
             </div>
           ) : (
-            <EmptyState
-              title={`${currentModule.name}模块还没有二级任务`}
-              detail="等总PM Agent 回传这个模块下的任务后，再进入具体任务继续拆执行。"
-              action="回到项目总览"
-              onClick={() => setSelectedModule(null)}
-            />
+            <div className="space-y-4">
+              {isProjectPM ? (
+                <ModuleTaskComposer
+                  module={currentModule}
+                  draft={newTaskDrafts[currentModule.key] || {}}
+                  onChange={(patch) => updateNewTaskDraft(currentModule.key, patch)}
+                  onSubmit={() => handleCreateModuleTask(currentModule)}
+                />
+              ) : null}
+              <EmptyState
+                title={`${currentModule.name}模块还没有二级任务`}
+                detail="总PM可以先手动新增二级任务；也可以等 Agent 回传这个模块下的任务。"
+                action="回到项目总览"
+                onClick={() => setSelectedModule(null)}
+              />
+            </div>
           )}
         </div>
       ) : (
@@ -548,12 +601,31 @@ export function TaskPool() {
                     {moduleTasks.length ? '进入查看二级任务' : '查看一级菜单'}
                   </button>
                   {isProjectPM ? (
-                    <button
-                      onClick={() => handleDeleteModule(module)}
-                      className="ml-2 mt-5 inline-flex items-center gap-1 rounded-md border border-rose-200 bg-white px-3 py-2 text-sm font-medium text-rose-600 transition hover:bg-rose-50"
-                    >
-                      <Trash2 size={14} /> 删除
-                    </button>
+                    <>
+                      <button
+                        onClick={() => setEditingModuleKey(editingModuleKey === module.key ? '' : module.key)}
+                        className="ml-2 mt-5 inline-flex items-center gap-1 rounded-md border border-slate-200 bg-white px-3 py-2 text-sm font-medium text-slate-700 transition hover:bg-slate-50"
+                      >
+                        <Plus size={14} /> 新增二级任务
+                      </button>
+                      <button
+                        onClick={() => handleDeleteModule(module)}
+                        className="ml-2 mt-5 inline-flex items-center gap-1 rounded-md border border-rose-200 bg-white px-3 py-2 text-sm font-medium text-rose-600 transition hover:bg-rose-50"
+                      >
+                        <Trash2 size={14} /> 删除
+                      </button>
+                      {editingModuleKey === module.key ? (
+                        <div className="mt-4 rounded-md border border-slate-200 bg-white p-3">
+                          <ModuleTaskComposer
+                            module={module}
+                            draft={newTaskDrafts[module.key] || {}}
+                            compact
+                            onChange={(patch) => updateNewTaskDraft(module.key, patch)}
+                            onSubmit={() => handleCreateModuleTask(module)}
+                          />
+                        </div>
+                      ) : null}
+                    </>
                   ) : null}
                 </div>
               );
@@ -591,6 +663,48 @@ function makeModuleKey(name = '') {
   let hash = 0;
   for (const ch of source || '主模块') hash = ((hash << 5) - hash + ch.charCodeAt(0)) | 0;
   return `module-${Math.abs(hash).toString(36)}`;
+}
+
+function ModuleTaskComposer({ module, draft, onChange, onSubmit, compact = false }) {
+  return (
+    <div className={compact ? 'space-y-2' : 'rounded-lg border border-white/10 bg-white/[0.03] p-4'}>
+      {!compact ? (
+        <div className="mb-3">
+          <p className="text-sm font-semibold text-white">给「{module.name}」新增二级任务</p>
+          <p className="mt-1 text-xs text-slate-500">总 PM 可以直接补任务，也可以之后继续让 Agent 回传更新。</p>
+        </div>
+      ) : null}
+      <div className="grid gap-2">
+        <input
+          value={draft.title || ''}
+          onChange={(event) => onChange({ title: event.target.value })}
+          placeholder="二级任务标题"
+          className="rounded-md border border-slate-200 bg-white px-3 py-2 text-sm text-slate-950 outline-none focus:border-emerald-400"
+        />
+        <textarea
+          value={draft.summary || ''}
+          onChange={(event) => onChange({ summary: event.target.value })}
+          placeholder="任务说明、目标或交付物"
+          rows={compact ? 2 : 3}
+          className="resize-none rounded-md border border-slate-200 bg-white px-3 py-2 text-sm text-slate-950 outline-none focus:border-emerald-400"
+        />
+        <div className="flex gap-2">
+          <input
+            value={draft.cycle || ''}
+            onChange={(event) => onChange({ cycle: event.target.value })}
+            placeholder="周期，比如 W1 / 本周"
+            className="min-w-0 flex-1 rounded-md border border-slate-200 bg-white px-3 py-2 text-sm text-slate-950 outline-none focus:border-emerald-400"
+          />
+          <button
+            onClick={onSubmit}
+            className="inline-flex shrink-0 items-center gap-1 rounded-md bg-emerald-500 px-3 py-2 text-sm font-semibold text-white transition hover:bg-emerald-400"
+          >
+            <Plus size={14} /> 添加
+          </button>
+        </div>
+      </div>
+    </div>
+  );
 }
 
 function TimelinePanel({ timeline, selectedTimelineIndex, onSelect }) {
