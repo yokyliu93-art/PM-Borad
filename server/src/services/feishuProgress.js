@@ -1,3 +1,4 @@
+import { v4 as uuid } from 'uuid';
 import db from '../db/connection.js';
 import { config } from '../config.js';
 import * as feishuPushService from './feishuPush.js';
@@ -6,17 +7,15 @@ function pct(value) {
   return `${Math.round(Number(value || 0))}%`;
 }
 
-const BOSS_REPORT_PROMPT = `你是总 PM 办公室的项目管理顾问。请根据 PM Board 的部门大盘数据，写一份发给老板的飞书进度简报。
+const BOSS_REPORT_PROMPT = `你是总 PM 办公室的项目管理顾问。请根据 PM Board 的部门大盘数据，写一份发给指定读者的飞书进度简报。
 要求：
 1. 用中文，语气专业、直接、少废话。
 2. 不要写成机械列表，要先给整体判断，再讲关键进展、风险/阻塞、需要老板拍板或协调的事项。
 3. 必须基于输入数据，不要编造不存在的人、金额、日期或结论。
 4. 控制在 500 字以内，适合直接发到飞书群。
-5. 最后给出 3 条以内的下一步建议。`;
-
-function todayKey() {
-  return new Date().toISOString().slice(0, 10);
-}
+5. 如果读者是老板，重点写判断、风险、资源协调和需要拍板的事项。
+6. 如果读者是主编，重点写选题/内容/发布节奏/跨团队配合。
+7. 最后给出 3 条以内的下一步建议。`;
 
 function currentWeekKey() {
   const now = new Date();
@@ -25,15 +24,89 @@ function currentWeekKey() {
   return `${now.getUTCFullYear()}-W${Math.ceil((((now - oneJan) / dayMs) + oneJan.getUTCDay() + 1) / 7)}`;
 }
 
-function alreadySent(lastSentAt, frequency) {
+function shanghaiNow() {
+  const parts = new Intl.DateTimeFormat('en-CA', {
+    timeZone: 'Asia/Shanghai',
+    weekday: 'short',
+    hour: '2-digit',
+    minute: '2-digit',
+    hourCycle: 'h23',
+  }).formatToParts(new Date());
+  const values = Object.fromEntries(parts.map((part) => [part.type, part.value]));
+  const weekMap = { Mon: 1, Tue: 2, Wed: 3, Thu: 4, Fri: 5, Sat: 6, Sun: 7 };
+  return {
+    weekday: weekMap[values.weekday] || 1,
+    hour: Number(values.hour || 0),
+    minute: Number(values.minute || 0),
+  };
+}
+
+function isFridayReportWindow() {
+  const now = shanghaiNow();
+  return now.weekday === 5 && (now.hour > 15 || (now.hour === 15 && now.minute >= 0));
+}
+
+function alreadySentThisWeek(lastSentAt) {
   if (!lastSentAt) return false;
   const sent = new Date(lastSentAt);
   if (Number.isNaN(sent.getTime())) return false;
-  if (frequency === 'daily') return lastSentAt.slice(0, 10) === todayKey();
   const oneJan = new Date(Date.UTC(sent.getUTCFullYear(), 0, 1));
   const dayMs = 24 * 60 * 60 * 1000;
   const sentWeek = `${sent.getUTCFullYear()}-W${Math.ceil((((sent - oneJan) / dayMs) + oneJan.getUTCDay() + 1) / 7)}`;
   return sentWeek === currentWeekKey();
+}
+
+function normalizeAudience(value = '') {
+  const text = String(value || '').trim().toLowerCase();
+  if (text.includes('主编') || text.includes('editor')) return 'editor';
+  return 'boss';
+}
+
+function audienceLabel(audience) {
+  return audience === 'editor' ? '主编' : '老板';
+}
+
+export function subscribeReport({ chatId, audience = 'boss', label = '', createdBy = '' }) {
+  const cleanChatId = String(chatId || '').trim();
+  if (!cleanChatId) throw new Error('缺少飞书群 chat_id');
+  const cleanAudience = normalizeAudience(audience);
+  db.prepare(`
+    INSERT INTO feishu_report_subscriptions (id, chat_id, audience, label, created_by, updated_at)
+    VALUES (?, ?, ?, ?, ?, datetime('now'))
+    ON CONFLICT(chat_id, audience) DO UPDATE SET
+      label = excluded.label,
+      created_by = excluded.created_by,
+      updated_at = datetime('now')
+  `).run(uuid(), cleanChatId, cleanAudience, String(label || '').trim(), String(createdBy || '').trim());
+  return getSubscription(cleanChatId, cleanAudience);
+}
+
+export function unsubscribeReport({ chatId, audience = '' }) {
+  const cleanChatId = String(chatId || '').trim();
+  if (!cleanChatId) throw new Error('缺少飞书群 chat_id');
+  const cleanAudience = String(audience || '').trim();
+  if (cleanAudience) {
+    db.prepare('DELETE FROM feishu_report_subscriptions WHERE chat_id = ? AND audience = ?')
+      .run(cleanChatId, normalizeAudience(cleanAudience));
+  } else {
+    db.prepare('DELETE FROM feishu_report_subscriptions WHERE chat_id = ?').run(cleanChatId);
+  }
+}
+
+export function listSubscriptions() {
+  return db.prepare(`
+    SELECT * FROM feishu_report_subscriptions
+    ORDER BY audience, created_at
+  `).all();
+}
+
+export async function sendSubscriptionReply(chatId, text) {
+  return feishuPushService.sendTextToChat(chatId, text);
+}
+
+function getSubscription(chatId, audience) {
+  return db.prepare('SELECT * FROM feishu_report_subscriptions WHERE chat_id = ? AND audience = ?')
+    .get(chatId, audience);
 }
 
 export function updateProjectFeishuSync(projectId, fields = {}) {
@@ -129,13 +202,13 @@ export function buildProjectProgressReport(projectId) {
   ].join('\n');
 }
 
-export function buildBossDashboardReport(chatId = '') {
-  const snapshot = getBossDashboardSnapshot(chatId);
+export function buildBossDashboardReport(chatId = '', audience = 'boss') {
+  const snapshot = getBossDashboardSnapshot(chatId, audience);
   if (!snapshot.projects.length) return '';
   return formatBossDashboardFallback(snapshot);
 }
 
-function getBossDashboardSnapshot(chatId = '') {
+function getBossDashboardSnapshot(chatId = '', audience = 'boss') {
   const targetChatId = String(chatId || config.feishuBossChatId || '').trim();
   const projects = db.prepare(`
     SELECT p.*, u.name as pm_name
@@ -195,6 +268,7 @@ function getBossDashboardSnapshot(chatId = '') {
   return {
     generatedAt: new Date().toLocaleString('zh-CN', { hour12: false }),
     chatId: targetChatId,
+    audience: audienceLabel(normalizeAudience(audience)),
     projects: enrichedProjects,
     boardUrl: enrichedProjects[0] ? `${config.clientUrl}/projects/${enrichedProjects[0].id}/boss` : '',
   };
@@ -207,7 +281,7 @@ function formatBossDashboardFallback(snapshot) {
 
   return [
     'PM Board 老板看板',
-    `项目数：${snapshot.projects.length}｜更新时间：${snapshot.generatedAt}`,
+    `订阅读者：${snapshot.audience}｜项目数：${snapshot.projects.length}｜更新时间：${snapshot.generatedAt}`,
     '',
     ...lines,
     '',
@@ -265,9 +339,14 @@ export async function sendProjectProgress(projectId, chatId) {
 }
 
 export async function sendBossDashboard(chatId) {
+  return sendAudienceDashboard({ chatId, audience: 'boss' });
+}
+
+export async function sendAudienceDashboard({ chatId, audience = 'boss', subscriptionId = '' }) {
   const targetChatId = String(chatId || config.feishuBossChatId || '').trim();
   if (!targetChatId) throw new Error('缺少老板看板飞书群 chat_id');
-  const snapshot = getBossDashboardSnapshot(targetChatId);
+  const cleanAudience = normalizeAudience(audience);
+  const snapshot = getBossDashboardSnapshot(targetChatId, cleanAudience);
   if (!snapshot.projects.length) return '';
   let text;
   try {
@@ -278,16 +357,22 @@ export async function sendBossDashboard(chatId) {
   }
   if (!text) return '';
   await feishuPushService.sendTextToChat(targetChatId, text);
-  db.prepare(`
-    UPDATE projects
-    SET feishu_boss_last_sent_at = datetime('now')
-    WHERE feishu_boss_enabled = 1
-      AND COALESCE(NULLIF(feishu_boss_chat_id, ''), ?) = ?
-  `).run(config.feishuBossChatId, targetChatId);
+  if (subscriptionId) {
+    db.prepare("UPDATE feishu_report_subscriptions SET last_sent_at = datetime('now'), updated_at = datetime('now') WHERE id = ?")
+      .run(subscriptionId);
+  } else {
+    db.prepare(`
+      UPDATE projects
+      SET feishu_boss_last_sent_at = datetime('now')
+      WHERE feishu_boss_enabled = 1
+        AND COALESCE(NULLIF(feishu_boss_chat_id, ''), ?) = ?
+    `).run(config.feishuBossChatId, targetChatId);
+  }
   return text;
 }
 
 async function sendDueProjectProgressOnce() {
+  if (!isFridayReportWindow()) return;
   const rows = db.prepare(`
     SELECT id, feishu_progress_chat_id, feishu_progress_frequency, feishu_progress_last_sent_at
     FROM projects
@@ -296,7 +381,7 @@ async function sendDueProjectProgressOnce() {
   `).all();
 
   for (const row of rows) {
-    if (alreadySent(row.feishu_progress_last_sent_at, row.feishu_progress_frequency)) continue;
+    if (alreadySentThisWeek(row.feishu_progress_last_sent_at)) continue;
     try {
       await sendProjectProgress(row.id, row.feishu_progress_chat_id);
     } catch (err) {
@@ -306,6 +391,7 @@ async function sendDueProjectProgressOnce() {
 }
 
 async function sendDueBossDashboardOnce() {
+  if (!isFridayReportWindow()) return;
   const rows = db.prepare(`
     SELECT DISTINCT COALESCE(NULLIF(feishu_boss_chat_id, ''), ?) as chat_id, MAX(feishu_boss_last_sent_at) as last_sent_at
     FROM projects
@@ -315,17 +401,31 @@ async function sendDueBossDashboardOnce() {
   `).all(config.feishuBossChatId, config.feishuBossChatId);
 
   for (const row of rows) {
-    if (alreadySent(row.last_sent_at, 'weekly')) continue;
+    if (alreadySentThisWeek(row.last_sent_at)) continue;
     try {
       await sendBossDashboard(row.chat_id);
     } catch (err) {
       console.error('[feishu-progress] Boss dashboard push failed:', err.userMessage || err.message);
     }
   }
+
+  const subscriptions = listSubscriptions();
+  for (const sub of subscriptions) {
+    if (alreadySentThisWeek(sub.last_sent_at)) continue;
+    try {
+      await sendAudienceDashboard({
+        chatId: sub.chat_id,
+        audience: sub.audience,
+        subscriptionId: sub.id,
+      });
+    } catch (err) {
+      console.error('[feishu-progress] Subscription push failed:', err.userMessage || err.message);
+    }
+  }
 }
 
 export function startProjectProgressSyncWorker() {
-  const intervalMs = 30 * 60 * 1000;
+  const intervalMs = 10 * 60 * 1000;
   const tick = async () => {
     await sendDueProjectProgressOnce();
     await sendDueBossDashboardOnce();

@@ -221,7 +221,36 @@ export function migrate() {
       created_at TEXT DEFAULT (datetime('now')),
       updated_at TEXT DEFAULT (datetime('now'))
     );
+
+    CREATE TABLE IF NOT EXISTS feishu_report_subscriptions (
+      id TEXT PRIMARY KEY,
+      chat_id TEXT NOT NULL,
+      audience TEXT NOT NULL DEFAULT 'boss',
+      label TEXT DEFAULT '',
+      created_by TEXT DEFAULT '',
+      last_sent_at TEXT,
+      created_at TEXT DEFAULT (datetime('now')),
+      updated_at TEXT DEFAULT (datetime('now')),
+      UNIQUE(chat_id, audience)
+    );
   `);
+
+  const userCols = db.prepare('PRAGMA table_info(users)').all().map((c) => c.name);
+  if (!userCols.includes('job_title')) {
+    db.exec("ALTER TABLE users ADD COLUMN job_title TEXT DEFAULT ''");
+  }
+  if (!userCols.includes('job_level_id')) {
+    db.exec("ALTER TABLE users ADD COLUMN job_level_id TEXT DEFAULT ''");
+  }
+  if (!userCols.includes('job_level_name')) {
+    db.exec("ALTER TABLE users ADD COLUMN job_level_name TEXT DEFAULT ''");
+  }
+  if (!userCols.includes('employee_type')) {
+    db.exec("ALTER TABLE users ADD COLUMN employee_type TEXT DEFAULT ''");
+  }
+  if (!userCols.includes('leader_user_id')) {
+    db.exec("ALTER TABLE users ADD COLUMN leader_user_id TEXT DEFAULT ''");
+  }
 
   const projectCols = db.prepare('PRAGMA table_info(projects)').all().map((c) => c.name);
   if (!projectCols.includes('agent_api_key_hash')) {

@@ -2,6 +2,7 @@ import { Router } from 'express';
 import { authRequired, requireProjectMember, requireProjectPM } from '../middleware/auth.js';
 import * as feishuService from '../services/feishu.js';
 import * as feishuProgressService from '../services/feishuProgress.js';
+import * as feishuOrgService from '../services/feishuOrg.js';
 
 function sendError(res, err) {
   res.status(400).json({ ok: false, error: err.userMessage || err.message });
@@ -10,6 +11,17 @@ function sendError(res, err) {
 // --- Global (used during project creation, before a project exists) ---
 
 export const feishuRouter = Router();
+
+function getFeishuMessageText(event = {}) {
+  const raw = event.message?.content || event.content || '';
+  if (!raw) return '';
+  try {
+    const parsed = typeof raw === 'string' ? JSON.parse(raw) : raw;
+    return String(parsed.text || parsed.content || raw || '').trim();
+  } catch {
+    return String(raw || '').trim();
+  }
+}
 
 feishuRouter.post('/events', (req, res) => {
   const body = req.body || {};
@@ -22,11 +34,72 @@ feishuRouter.post('/events', (req, res) => {
 
   const header = body.header || {};
   const event = body.event || {};
+  const chatId = event.message?.chat_id || event.chat_id || '';
+  const text = getFeishuMessageText(event);
   console.log('[feishu] event received:', {
     eventType: header.event_type || body.type || '',
-    chatId: event.message?.chat_id || event.chat_id || '',
+    chatId,
   });
+
+  try {
+    if (chatId && /订阅/.test(text) && /(老板|主编|周报|看板)/.test(text)) {
+      const audience = /主编|editor/i.test(text) ? 'editor' : 'boss';
+      feishuProgressService.subscribeReport({
+        chatId,
+        audience,
+        label: audience === 'editor' ? '主编周报' : '老板周报',
+        createdBy: event.sender?.sender_id?.open_id || event.operator?.operator_id?.open_id || '',
+      });
+      feishuProgressService.sendSubscriptionReply(chatId, `已订阅${audience === 'editor' ? '主编' : '老板'}周报。之后每周五 15:00 会推送 DeepSeek 生成的 PM Board 进展总结。`)
+        .catch((err) => console.error('[feishu] subscription reply failed:', err.userMessage || err.message));
+    } else if (chatId && /取消订阅|退订/.test(text)) {
+      feishuProgressService.unsubscribeReport({ chatId });
+      feishuProgressService.sendSubscriptionReply(chatId, '已取消这个飞书会话里的 PM Board 周报订阅。')
+        .catch((err) => console.error('[feishu] unsubscribe reply failed:', err.userMessage || err.message));
+    }
+  } catch (err) {
+    console.error('[feishu] subscription command failed:', err.userMessage || err.message);
+  }
   res.json({ code: 0, msg: 'success' });
+});
+
+feishuRouter.get('/report-subscriptions', authRequired, (req, res) => {
+  res.json({ ok: true, data: feishuProgressService.listSubscriptions() });
+});
+
+feishuRouter.post('/report-subscriptions', authRequired, (req, res) => {
+  try {
+    const data = feishuProgressService.subscribeReport({
+      chatId: req.body?.chatId || req.body?.chat_id,
+      audience: req.body?.audience || req.body?.role,
+      label: req.body?.label,
+      createdBy: req.user.id,
+    });
+    res.status(201).json({ ok: true, data });
+  } catch (err) {
+    sendError(res, err);
+  }
+});
+
+feishuRouter.delete('/report-subscriptions', authRequired, (req, res) => {
+  try {
+    feishuProgressService.unsubscribeReport({
+      chatId: req.body?.chatId || req.body?.chat_id || req.query.chatId || req.query.chat_id,
+      audience: req.body?.audience || req.query.audience || '',
+    });
+    res.json({ ok: true });
+  } catch (err) {
+    sendError(res, err);
+  }
+});
+
+feishuRouter.post('/org/sync-me', authRequired, async (req, res) => {
+  try {
+    const data = await feishuOrgService.syncUserOrgProfile(req.user.id);
+    res.json({ ok: true, data });
+  } catch (err) {
+    sendError(res, err);
+  }
 });
 
 // Fetch a Feishu doc's content by URL and return it so the client can fill the
