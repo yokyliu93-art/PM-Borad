@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useParams } from 'react-router-dom';
 import toast from 'react-hot-toast';
-import { BookOpenText, CalendarDays, FilePlus2, FlaskConical, LogIn, MessageSquareText, Sparkles, ThumbsUp, UserCheck, Vote } from 'lucide-react';
+import { BookOpenText, CalendarDays, Copy, FilePlus2, FlaskConical, LogIn, MessageSquareText, Sparkles, ThumbsUp, UserCheck, Vote } from 'lucide-react';
 import { get, post, del } from '../../lib/api';
 import { useStore } from '../../store';
 import { Avatar } from '../../components/ui/Avatar';
@@ -220,6 +220,26 @@ export function ContentHub({ mode = 'all', initialTopicType = 'daily' }) {
     }
   }
 
+  async function copyText(text, message = '已复制') {
+    try {
+      await navigator.clipboard.writeText(text || '');
+      toast.success(message);
+    } catch {
+      toast.error('复制失败，请手动选择文本复制');
+    }
+  }
+
+  function evalQuestionCopy(question) {
+    return [
+      `# ${question.title || '测试题'}`,
+      question.prompt_text ? `## Prompt\n${question.prompt_text}` : '',
+      question.input_text ? `## 输入 / 素材\n${question.input_text}` : '',
+      question.expected_output ? `## 期望输出\n${question.expected_output}` : '',
+      question.evaluation_criteria ? `## 评测标准\n${question.evaluation_criteria}` : '',
+      question.reference_answer ? `## 参考答案\n${question.reference_answer}` : '',
+    ].filter(Boolean).join('\n\n');
+  }
+
   const topicParserPanel = isTopics ? (
     <div className="rounded-xl border border-emerald-100 bg-white p-6 shadow-sm shadow-emerald-950/5">
       <div className="grid gap-5 xl:grid-cols-[minmax(420px,0.9fr)_1.1fr] xl:items-start">
@@ -410,6 +430,7 @@ export function ContentHub({ mode = 'all', initialTopicType = 'daily' }) {
                     {item.sub_kind === 'deep' ? <span className="rounded-md bg-slate-100 px-2 py-1 text-xs font-medium text-slate-700">深度选题</span> : null}
                     {item.sub_kind === 'daily' ? <span className="rounded-md bg-slate-100 px-2 py-1 text-xs font-medium text-slate-700">日常选题</span> : null}
                     {item.project_name ? <span className="rounded-md bg-slate-100 px-2 py-1 text-xs font-medium text-slate-500">{item.project_name}</span> : null}
+                    {item.kind === 'eval' ? <span className="rounded-md bg-violet-50 px-2 py-1 text-xs font-medium text-violet-700">{item.eval_questions?.length || 0} 道题</span> : null}
                     {item.demo_ready ? <span className="rounded-md bg-slate-950 px-2 py-1 text-xs font-medium text-white">已达 Demo 条件</span> : null}
                   </div>
                   <h3 className="mt-3 text-xl font-semibold tracking-normal text-slate-950">{item.title}</h3>
@@ -437,6 +458,50 @@ export function ContentHub({ mode = 'all', initialTopicType = 'daily' }) {
                 <div className="mt-4 rounded-md border border-emerald-100 bg-emerald-50/70 p-3">
                   <p className="text-xs font-semibold text-emerald-800">{item.kind === 'eval' ? 'Eval 计划' : item.sub_kind === 'deep' ? '深度选题长 timeline' : '选题执行计划'}</p>
                   <p className="mt-1 whitespace-pre-wrap text-sm leading-6 text-emerald-900">{item.timeline_text}</p>
+                </div>
+              ) : null}
+
+              {item.kind === 'eval' && item.eval_questions?.length ? (
+                <div className="mt-4 space-y-3">
+                  <p className="text-xs font-semibold text-slate-500">测试题模块</p>
+                  {item.eval_questions.map((question, index) => (
+                    <div key={question.id} className="rounded-lg border border-violet-100 bg-violet-50/40 p-3">
+                      <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+                        <div className="min-w-0">
+                          <p className="text-xs font-semibold text-violet-700">第 {index + 1} 题</p>
+                          <h4 className="mt-1 text-sm font-semibold text-slate-950">{question.title}</h4>
+                        </div>
+                        <div className="flex shrink-0 flex-wrap gap-2">
+                          <button onClick={() => copyText(question.prompt_text, 'Prompt 已复制')} className="inline-flex items-center gap-1 rounded-md border border-violet-100 bg-white px-2 py-1.5 text-xs font-semibold text-violet-700 hover:bg-violet-50">
+                            <Copy size={12} />复制 Prompt
+                          </button>
+                          <button onClick={() => copyText(evalQuestionCopy(question), '完整题包已复制')} className="inline-flex items-center gap-1 rounded-md bg-violet-600 px-2 py-1.5 text-xs font-semibold text-white hover:bg-violet-500">
+                            <Copy size={12} />复制题包
+                          </button>
+                        </div>
+                      </div>
+                      {question.prompt_text ? (
+                        <div className="mt-3 rounded-md bg-white p-3">
+                          <p className="text-xs font-semibold text-slate-500">Prompt</p>
+                          <p className="mt-1 line-clamp-4 whitespace-pre-wrap text-sm leading-6 text-slate-700">{question.prompt_text}</p>
+                        </div>
+                      ) : null}
+                      <div className="mt-3 grid gap-2 md:grid-cols-2">
+                        {question.input_text ? (
+                          <div className="rounded-md bg-white p-3">
+                            <p className="text-xs font-semibold text-slate-500">输入 / 素材</p>
+                            <p className="mt-1 line-clamp-3 whitespace-pre-wrap text-xs leading-5 text-slate-600">{question.input_text}</p>
+                          </div>
+                        ) : null}
+                        {question.evaluation_criteria ? (
+                          <div className="rounded-md bg-white p-3">
+                            <p className="text-xs font-semibold text-slate-500">评测标准</p>
+                            <p className="mt-1 line-clamp-3 whitespace-pre-wrap text-xs leading-5 text-slate-600">{question.evaluation_criteria}</p>
+                          </div>
+                        ) : null}
+                      </div>
+                    </div>
+                  ))}
                 </div>
               ) : null}
 

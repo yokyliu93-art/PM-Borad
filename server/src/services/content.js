@@ -45,6 +45,12 @@ function hydrateMemo(row, totalMembers) {
       WHERE e.memo_id = ?
       ORDER BY e.created_at DESC
     `).all(row.id),
+    eval_questions: row.kind === 'eval' ? db.prepare(`
+      SELECT *
+      FROM content_eval_questions
+      WHERE memo_id = ?
+      ORDER BY sort_order ASC, created_at ASC
+    `).all(row.id) : [],
   };
 }
 
@@ -248,6 +254,50 @@ function evalTimelineText(evalSet) {
   return '待补充：评测范围、样本集、执行方式和验收标准。';
 }
 
+function saveEvalQuestions(memoId, questions = [], fallbackDocContent = '') {
+  const list = Array.isArray(questions) ? questions : [];
+  const normalized = list.length ? list : [{
+    title: '测试题 1',
+    prompt: fallbackDocContent,
+    input: '',
+    expectedOutput: '',
+    evaluationCriteria: '根据测试集文档要求判断模型输出是否满足任务目标。',
+    referenceAnswer: '',
+  }];
+  const stmt = db.prepare(`
+    INSERT INTO content_eval_questions (
+      id, memo_id, title, prompt_text, input_text, expected_output,
+      evaluation_criteria, reference_answer, sort_order
+    )
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+  `);
+  const insertMany = db.transaction(() => {
+    normalized.forEach((question, index) => {
+      const title = String(question.title || `第 ${index + 1} 题`).trim();
+      const payload = {
+        title,
+        prompt: String(question.prompt || question.promptText || '').trim(),
+        input: String(question.input || question.inputText || '').trim(),
+        expectedOutput: String(question.expectedOutput || question.expected_output || '').trim(),
+        evaluationCriteria: String(question.evaluationCriteria || question.evaluation_criteria || '').trim(),
+        referenceAnswer: String(question.referenceAnswer || question.reference_answer || '').trim(),
+      };
+      stmt.run(
+        uuid(),
+        memoId,
+        payload.title,
+        payload.prompt,
+        payload.input,
+        payload.expectedOutput,
+        payload.evaluationCriteria,
+        payload.referenceAnswer,
+        index
+      );
+    });
+  });
+  insertMany();
+}
+
 export async function importEvalDoc(projectId, userId, fields = {}) {
   const docUrl = String(fields.docUrl || fields.doc_url || fields.sourceUrl || fields.source_url || '').trim();
   if (!docUrl) throw new Error('请提供测试集飞书文档链接');
@@ -256,14 +306,18 @@ export async function importEvalDoc(projectId, userId, fields = {}) {
   const memo = create(projectId, userId, {
     kind: 'eval',
     title: parsed.title || doc.title || '未命名测试集',
-    body: parsed.summary || '已从飞书文档生成测试集，等待补充评测说明。',
+    body: [
+      parsed.summary || '已从飞书文档生成测试集。',
+      parsed.questions?.length ? `共解析出 ${parsed.questions.length} 道测试题。` : '',
+    ].filter(Boolean).join('\n'),
     sourceUrl: docUrl,
     ownerText: fields.ownerText || fields.owner_text || parsed.owner || '待分配',
     progress: fields.progress ?? parsed.progress ?? 0,
     timelineText: evalTimelineText(parsed),
   });
+  saveEvalQuestions(memo.id, parsed.questions, doc.content);
   return {
-    evalSet: memo,
+    evalSet: get(projectId, memo.id, userId),
     source: { title: doc.title, url: docUrl },
   };
 }

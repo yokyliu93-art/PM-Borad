@@ -16,9 +16,9 @@ const TOPIC_PARSE_PROMPT = `你是硅星人内容编辑部的选题统筹助手�
 只输出 JSON 对象，不要输出解释或 Markdown。格式：
 {"dailyTopics":[{"title":"日常选题标题","owner":"负责人姓名","firstDraftAt":"初稿时间，如 8月16日/下周三/待定","summary":"当前进展和需要做什么"}],"deepTopics":[{"title":"深度选题标题","owner":"负责人姓名","firstDraftAt":"首稿或阶段稿时间","summary":"选题背景和当前阶段","timeline":[{"week":"W1","detail":"目标、动作、负责人和交付物"}],"resources":"需要谁配合、需要什么资料"}]}`;
 
-const EVAL_PARSE_PROMPT = `你是硅星人 Eval 测试集整理助手。请根据飞书文档内容，整理成 PM Board 里的共享测试集模块。
+const EVAL_PARSE_PROMPT = `你是硅星人 Eval 测试集整理助手。请根据飞书文档内容，整理成 PM Board 里的共享测试集模块，并把测试集拆成一道一道可复制给模型测试的问题。
 只输出 JSON 对象，不要输出解释或 Markdown。格式：
-{"title":"测试集名称","owner":"负责人姓名或待分配","progress":0,"summary":"测试目标、覆盖范围、使用方式和当前状态","timeline":[{"phase":"阶段或时间","detail":"要做什么、负责人、交付物或验收标准"}]}`;
+{"title":"测试集名称","owner":"负责人姓名或待分配","progress":0,"summary":"测试目标、覆盖范围、使用方式和当前状态","timeline":[{"phase":"阶段或时间","detail":"要做什么、负责人、交付物或验收标准"}],"questions":[{"title":"第 1 题标题","prompt":"可直接复制给模型的完整 prompt","input":"题目所需素材、上下文、链接或变量","expectedOutput":"期望输出格式或交付物","evaluationCriteria":"评分标准、通过条件、扣分点","referenceAnswer":"可选参考答案或标杆输出"}]}`;
 
 export async function splitTasks({ name, description, planMarkdown }) {
   const provider = getAIProvider();
@@ -132,6 +132,14 @@ export async function parseEvalDoc({ doc }) {
     progress: Math.min(100, Math.max(0, Math.round(Number(parsed.progress || 0)))),
     summary: String(parsed.summary || doc?.content || '').trim(),
     timeline: Array.isArray(parsed.timeline) ? parsed.timeline : [],
+    questions: Array.isArray(parsed.questions) ? parsed.questions.map((question, index) => ({
+      title: String(question.title || `第 ${index + 1} 题`).trim(),
+      prompt: String(question.prompt || question.promptText || '').trim(),
+      input: String(question.input || question.inputText || question.material || '').trim(),
+      expectedOutput: String(question.expectedOutput || question.expected_output || '').trim(),
+      evaluationCriteria: String(question.evaluationCriteria || question.evaluation_criteria || question.criteria || '').trim(),
+      referenceAnswer: String(question.referenceAnswer || question.reference_answer || '').trim(),
+    })).filter((question) => question.title || question.prompt || question.input) : [],
   };
 }
 

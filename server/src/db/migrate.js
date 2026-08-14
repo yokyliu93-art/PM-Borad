@@ -325,6 +325,20 @@ export function migrate() {
       created_at TEXT DEFAULT (datetime('now')),
       updated_at TEXT DEFAULT (datetime('now'))
     );
+
+    CREATE TABLE IF NOT EXISTS content_eval_questions (
+      id TEXT PRIMARY KEY,
+      memo_id TEXT NOT NULL REFERENCES content_memos(id),
+      title TEXT NOT NULL,
+      prompt_text TEXT DEFAULT '',
+      input_text TEXT DEFAULT '',
+      expected_output TEXT DEFAULT '',
+      evaluation_criteria TEXT DEFAULT '',
+      reference_answer TEXT DEFAULT '',
+      sort_order INTEGER DEFAULT 0,
+      created_at TEXT DEFAULT (datetime('now')),
+      updated_at TEXT DEFAULT (datetime('now'))
+    );
   `);
 
   const userCols = db.prepare('PRAGMA table_info(users)').all().map((c) => c.name);
