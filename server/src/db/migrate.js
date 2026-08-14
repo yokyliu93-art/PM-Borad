@@ -272,6 +272,7 @@ export function migrate() {
       id TEXT PRIMARY KEY,
       project_id TEXT NOT NULL REFERENCES projects(id),
       kind TEXT NOT NULL DEFAULT 'memo',
+      sub_kind TEXT DEFAULT '',
       title TEXT NOT NULL,
       body TEXT DEFAULT '',
       source_url TEXT DEFAULT '',
@@ -356,6 +357,11 @@ export function migrate() {
   }
   if (!projectCols.includes('feishu_boss_last_sent_at')) {
     db.exec('ALTER TABLE projects ADD COLUMN feishu_boss_last_sent_at TEXT');
+  }
+
+  const memoCols = db.prepare('PRAGMA table_info(content_memos)').all().map((c) => c.name);
+  if (!memoCols.includes('sub_kind')) {
+    db.exec("ALTER TABLE content_memos ADD COLUMN sub_kind TEXT DEFAULT ''");
   }
 
   const moduleCols = db.prepare('PRAGMA table_info(project_modules)').all().map((c) => c.name);

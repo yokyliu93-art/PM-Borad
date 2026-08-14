@@ -18,6 +18,7 @@ import templateRoutes from './routes/templates.js';
 import dashboardRoutes from './routes/dashboard.js';
 import agentRoutes from './routes/agent.js';
 import contentRoutes from './routes/content.js';
+import teamContentRoutes from './routes/teamContent.js';
 import { feishuRouter, projectFeishuRouter } from './routes/feishu.js';
 import { startReminderWorker } from './services/reminder.js';
 import { startProjectProgressSyncWorker } from './services/feishuProgress.js';
@@ -51,6 +52,7 @@ app.use('/api/projects/:projectId/content', contentRoutes);
 app.use('/api/templates', templateRoutes);
 app.use('/api/dashboard', dashboardRoutes);
 app.use('/api/agent', agentRoutes);
+app.use('/api/content', teamContentRoutes);
 app.use('/api/feishu', feishuRouter);
 app.use('/api/projects/:projectId/feishu', projectFeishuRouter);
 

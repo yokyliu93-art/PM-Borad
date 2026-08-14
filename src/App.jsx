@@ -12,6 +12,7 @@ import { Subproject } from './pages/Subproject';
 import { Dashboard } from './pages/Dashboard';
 import { BossBoard } from './pages/BossBoard';
 import { ContentHub } from './pages/ContentHub';
+import { MyWorkspace } from './pages/MyWorkspace';
 import { ArrowRight, Check, FileText, LayoutDashboard, Loader2, ShieldCheck, UsersRound } from 'lucide-react';
 
 const landingFlow = [
@@ -260,8 +261,12 @@ export default function App() {
   return (
     <Routes>
       <Route element={<AuthGate />}>
-        <Route element={<Shell />}>
-          <Route index element={<Navigate to="/projects" replace />} />
+          <Route element={<Shell />}>
+          <Route index element={<Navigate to="/board" replace />} />
+          <Route path="/board" element={<BossBoard />} />
+          <Route path="/topics" element={<ContentHub mode="topics" />} />
+          <Route path="/demo" element={<ContentHub mode="demo" />} />
+          <Route path="/my-work" element={<MyWorkspace />} />
           <Route path="/projects" element={<ProjectList />} />
           <Route path="/projects/create" element={<ProjectCreate />} />
           <Route path="/projects/:projectId/*" element={<ErrorBoundary><ProjectRoutes /></ErrorBoundary>} />

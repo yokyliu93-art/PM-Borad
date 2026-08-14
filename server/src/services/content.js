@@ -10,6 +10,13 @@ function normalizeKind(kind = '') {
   return 'memo';
 }
 
+function normalizeSubKind(subKind = '') {
+  const value = String(subKind || '').trim();
+  if (['daily', 'deep'].includes(value)) return value;
+  if (value.includes('深度')) return 'deep';
+  return value ? 'daily' : '';
+}
+
 function teamSize(projectId) {
   const project = db.prepare('SELECT team_id FROM projects WHERE id = ?').get(projectId);
   if (!project) return 0;
@@ -46,12 +53,14 @@ export function listByProject(projectId, userId, kind = '') {
   const rows = db.prepare(`
     SELECT
       m.*,
+      p.name as project_name,
       u.name as created_by_name,
       u.avatar_url as created_by_avatar,
       COUNT(DISTINCT v.user_id) as vote_count,
       COUNT(DISTINCT e.id) as experience_count,
       MAX(CASE WHEN myv.user_id IS NOT NULL THEN 1 ELSE 0 END) as my_vote
     FROM content_memos m
+    JOIN projects p ON p.id = m.project_id
     JOIN users u ON u.id = m.created_by
     LEFT JOIN content_memo_votes v ON v.memo_id = m.id AND v.vote = 'demo'
     LEFT JOIN content_memo_votes myv ON myv.memo_id = m.id AND myv.vote = 'demo' AND myv.user_id = ?
@@ -63,17 +72,54 @@ export function listByProject(projectId, userId, kind = '') {
   return rows.map((row) => hydrateMemo(row, totalMembers));
 }
 
+export function listByTeam(teamId, userId, filters = {}) {
+  const kind = filters.kind ? normalizeKind(filters.kind) : '';
+  const subKind = filters.subKind || filters.sub_kind ? normalizeSubKind(filters.subKind || filters.sub_kind) : '';
+  const totalMembers = Number(db.prepare('SELECT COUNT(*) as c FROM team_members WHERE team_id = ?').get(teamId)?.c || 0);
+  const params = [userId || '', teamId];
+  const where = [];
+  if (kind) {
+    where.push('m.kind = ?');
+    params.push(kind);
+  }
+  if (subKind) {
+    where.push('m.sub_kind = ?');
+    params.push(subKind);
+  }
+  const rows = db.prepare(`
+    SELECT
+      m.*,
+      p.name as project_name,
+      u.name as created_by_name,
+      u.avatar_url as created_by_avatar,
+      COUNT(DISTINCT v.user_id) as vote_count,
+      COUNT(DISTINCT e.id) as experience_count,
+      MAX(CASE WHEN myv.user_id IS NOT NULL THEN 1 ELSE 0 END) as my_vote
+    FROM content_memos m
+    JOIN projects p ON p.id = m.project_id
+    JOIN users u ON u.id = m.created_by
+    LEFT JOIN content_memo_votes v ON v.memo_id = m.id AND v.vote = 'demo'
+    LEFT JOIN content_memo_votes myv ON myv.memo_id = m.id AND myv.vote = 'demo' AND myv.user_id = ?
+    LEFT JOIN content_memo_experiences e ON e.memo_id = m.id
+    WHERE p.team_id = ? ${where.length ? `AND ${where.join(' AND ')}` : ''}
+    GROUP BY m.id
+    ORDER BY m.updated_at DESC, m.created_at DESC
+  `).all(...params);
+  return rows.map((row) => hydrateMemo(row, totalMembers));
+}
+
 export function create(projectId, userId, fields = {}) {
   const title = String(fields.title || '').trim();
   if (!title) throw new Error('标题不能为空');
   const id = uuid();
   db.prepare(`
-    INSERT INTO content_memos (id, project_id, kind, title, body, source_url, timeline_text, status, created_by)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+    INSERT INTO content_memos (id, project_id, kind, sub_kind, title, body, source_url, timeline_text, status, created_by)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `).run(
     id,
     projectId,
     normalizeKind(fields.kind),
+    normalizeSubKind(fields.subKind || fields.sub_kind),
     title,
     fields.body || '',
     fields.sourceUrl || fields.source_url || '',
@@ -97,6 +143,11 @@ export function voteDemo(projectId, memoId, userId) {
   `).run(memoId, userId);
   db.prepare("UPDATE content_memos SET updated_at = datetime('now') WHERE id = ?").run(memoId);
   return get(projectId, memoId, userId);
+}
+
+export function getMemoProjectId(memoId) {
+  const row = db.prepare('SELECT project_id FROM content_memos WHERE id = ?').get(memoId);
+  return row?.project_id || '';
 }
 
 export function unvoteDemo(projectId, memoId, userId) {
