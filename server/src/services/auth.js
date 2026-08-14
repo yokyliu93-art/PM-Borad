@@ -7,7 +7,7 @@ import db from '../db/connection.js';
 // Scopes requested during Feishu OAuth. Doc read scopes let the app import
 // document content on the user's behalf; keep them in sync with the scopes
 // granted in the Feishu console.
-export const FEISHU_SCOPES = 'docx:document:readonly wiki:wiki:readonly drive:drive:readonly';
+export const FEISHU_SCOPES = 'docx:document:readonly wiki:wiki:readonly drive:drive:readonly minutes:minute:readonly';
 
 export function getLoginUrl(state) {
   const redirectUri = `${config.clientUrl}/api/auth/callback`;

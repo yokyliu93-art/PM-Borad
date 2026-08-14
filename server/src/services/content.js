@@ -1,5 +1,9 @@
 import { v4 as uuid } from 'uuid';
 import db from '../db/connection.js';
+import { config } from '../config.js';
+import * as aiService from './ai.js';
+import * as feishuService from './feishu.js';
+import * as feishuPushService from './feishuPush.js';
 
 function normalizeKind(kind = '') {
   const value = String(kind || '').trim();
@@ -210,4 +214,140 @@ export function importMinutes(projectId, userId, fields = {}) {
     meetingMinutesUrl,
   }));
   return { meeting: memo, topics };
+}
+
+function topicTimelineText(topic, deep = false) {
+  if (Array.isArray(topic.timeline) && topic.timeline.length) {
+    return topic.timeline
+      .map((item, index) => {
+        if (Array.isArray(item)) return `${item[0] || `W${index + 1}`}：${item[1] || ''}`.trim();
+        return `${item.week || item.time || `W${index + 1}`}：${item.detail || item.plan || item.summary || ''}`.trim();
+      })
+      .join('\n');
+  }
+  if (deep) {
+    return [
+      'W1：确认角度、资料和采访对象',
+      'W2-W3：采访、试用、资料整理',
+      'W4：成稿、编辑、发布与复盘',
+    ].join('\n');
+  }
+  return topic.firstDraftAt ? `初稿时间：${topic.firstDraftAt}` : '初稿时间：待定';
+}
+
+function findUserByName(name = '', projectId = '') {
+  const clean = String(name || '').trim();
+  if (!clean || clean === '待定' || clean === '待分配') return null;
+  const exact = db.prepare(`
+    SELECT u.*
+    FROM users u
+    JOIN team_members tm ON tm.user_id = u.id
+    JOIN projects p ON p.team_id = tm.team_id
+    WHERE p.id = ? AND u.name = ?
+    LIMIT 1
+  `).get(projectId, clean);
+  if (exact) return exact;
+  return db.prepare(`
+    SELECT u.*
+    FROM users u
+    JOIN team_members tm ON tm.user_id = u.id
+    JOIN projects p ON p.team_id = tm.team_id
+    WHERE p.id = ? AND (u.name LIKE ? OR ? LIKE '%' || u.name || '%')
+    ORDER BY LENGTH(u.name) DESC
+    LIMIT 1
+  `).get(projectId, `%${clean}%`, clean);
+}
+
+async function notifyTopicOwner({ ownerName, projectId, title, firstDraftAt, summary, boardUrl }) {
+  const user = findUserByName(ownerName, projectId);
+  if (!user) return { ownerName, pushed: false, reason: '未匹配到成员' };
+  try {
+    await feishuPushService.sendTextToUser(
+      user.id,
+      [
+        `PM Board 选题负责人提醒：${title}`,
+        ownerName ? `负责人：${ownerName}` : '',
+        firstDraftAt ? `初稿时间：${firstDraftAt}` : '',
+        summary ? `说明：${summary}` : '',
+        boardUrl ? `打开看板：${boardUrl}` : '',
+      ].filter(Boolean).join('\n')
+    );
+    return { ownerName, userId: user.id, pushed: true };
+  } catch (err) {
+    return { ownerName, userId: user.id, pushed: false, reason: err.userMessage || err.message };
+  }
+}
+
+export async function parseWeeklyTopics(projectId, userId, fields = {}) {
+  const meetingDocUrl = String(fields.meetingDocUrl || fields.meeting_doc_url || '').trim();
+  const meetingMinutesUrl = String(fields.meetingMinutesUrl || fields.meeting_minutes_url || fields.minutesUrl || '').trim();
+  if (!meetingDocUrl || !meetingMinutesUrl) throw new Error('请同时提供周会文档链接和周会妙记链接');
+
+  const [meetingDoc, meetingMinutes] = await Promise.all([
+    feishuService.fetchDocContent(userId, meetingDocUrl),
+    feishuService.fetchDocContent(userId, meetingMinutesUrl),
+  ]);
+  const parsed = await aiService.parseWeeklyTopics({ meetingDoc, meetingMinutes });
+  const meeting = create(projectId, userId, {
+    kind: 'meeting',
+    title: fields.title || meetingDoc.title || '周会选题解析',
+    body: [
+      `周会文档：${meetingDoc.title || meetingDocUrl}`,
+      `周会妙记：${meetingMinutes.title || meetingMinutesUrl}`,
+      `DeepSeek 已解析出 ${parsed.dailyTopics.length} 个日常选题、${parsed.deepTopics.length} 个深度选题。`,
+    ].join('\n'),
+    sourceUrl: meetingDocUrl,
+    meetingDocUrl,
+    meetingMinutesUrl,
+  });
+
+  const createdDaily = parsed.dailyTopics.map((topic) => create(projectId, userId, {
+    kind: 'topic',
+    subKind: 'daily',
+    title: topic.title || '未命名日常选题',
+    body: topic.summary || '',
+    ownerText: topic.owner || '待分配',
+    progress: topic.progress || 0,
+    timelineText: topicTimelineText(topic, false),
+    sourceUrl: meetingDocUrl,
+    meetingDocUrl,
+    meetingMinutesUrl,
+  }));
+  const createdDeep = parsed.deepTopics.map((topic) => create(projectId, userId, {
+    kind: 'topic',
+    subKind: 'deep',
+    title: topic.title || '未命名深度选题',
+    body: [topic.summary || '', topic.resources ? `资源配合：${topic.resources}` : ''].filter(Boolean).join('\n\n'),
+    ownerText: topic.owner || '待分配',
+    progress: topic.progress || 0,
+    timelineText: topicTimelineText(topic, true),
+    sourceUrl: meetingDocUrl,
+    meetingDocUrl,
+    meetingMinutesUrl,
+  }));
+
+  const boardUrl = `${config.clientUrl}/topics/daily`;
+  const notifications = [];
+  for (const topic of [...parsed.dailyTopics, ...parsed.deepTopics]) {
+    if (!topic.owner) continue;
+    notifications.push(await notifyTopicOwner({
+      ownerName: topic.owner,
+      projectId,
+      title: topic.title,
+      firstDraftAt: topic.firstDraftAt,
+      summary: topic.summary,
+      boardUrl,
+    }));
+  }
+
+  return {
+    meeting,
+    dailyTopics: createdDaily,
+    deepTopics: createdDeep,
+    notifications,
+    source: {
+      meetingDoc: { title: meetingDoc.title, url: meetingDocUrl },
+      meetingMinutes: { title: meetingMinutes.title, url: meetingMinutesUrl },
+    },
+  };
 }

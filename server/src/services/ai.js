@@ -12,6 +12,10 @@ const AUDIT_PROMPT = `你是总 PM 的审核 Agent。请审核子 PM 或执行 A
 只输出 JSON 对象，不要输出解释或 Markdown。格式：
 {"decision":"通过/需要修改/风险较高","score":0-100,"issues":["问题"],"suggestions":["建议"],"missingResources":["缺少的资源"],"nextQuestions":["需要追问的问题"]}`;
 
+const TOPIC_PARSE_PROMPT = `你是硅星人内容编辑部的选题统筹助手。请根据周会文档和周会妙记，抽取选题并归类。
+只输出 JSON 对象，不要输出解释或 Markdown。格式：
+{"dailyTopics":[{"title":"日常选题标题","owner":"负责人姓名","firstDraftAt":"初稿时间，如 8月16日/下周三/待定","summary":"当前进展和需要做什么"}],"deepTopics":[{"title":"深度选题标题","owner":"负责人姓名","firstDraftAt":"首稿或阶段稿时间","summary":"选题背景和当前阶段","timeline":[{"week":"W1","detail":"目标、动作、负责人和交付物"}],"resources":"需要谁配合、需要什么资料"}]}`;
+
 export async function splitTasks({ name, description, planMarkdown }) {
   const provider = getAIProvider();
   if (!provider.apiKey || !provider.baseUrl) {
@@ -87,6 +91,24 @@ export async function auditAgentFile({ project, task, payload }) {
     `待审核内容：\n${typeof payload === 'string' ? payload : JSON.stringify(payload || {}, null, 2)}`,
   ].filter(Boolean).join('\n\n');
   return callAIJson({ systemPrompt: AUDIT_PROMPT, userContent, fallbackError: 'AI 审核失败' });
+}
+
+export async function parseWeeklyTopics({ meetingDoc, meetingMinutes }) {
+  const userContent = [
+    `周会文档链接：${meetingDoc?.url || ''}`,
+    meetingDoc?.content ? `周会文档内容：\n${meetingDoc.content}` : '',
+    `周会妙记链接：${meetingMinutes?.url || ''}`,
+    meetingMinutes?.content ? `周会妙记内容：\n${meetingMinutes.content}` : '',
+  ].filter(Boolean).join('\n\n').slice(0, 60000);
+  const parsed = await callAIJson({
+    systemPrompt: TOPIC_PARSE_PROMPT,
+    userContent,
+    fallbackError: 'DeepSeek 解析周会选题失败',
+  });
+  return {
+    dailyTopics: Array.isArray(parsed.dailyTopics) ? parsed.dailyTopics : [],
+    deepTopics: Array.isArray(parsed.deepTopics) ? parsed.deepTopics : [],
+  };
 }
 
 async function callAIJson({ systemPrompt, userContent, fallbackError }) {

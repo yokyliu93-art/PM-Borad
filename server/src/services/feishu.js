@@ -75,7 +75,7 @@ export async function getUserAccessToken(userId) {
 }
 
 // Extract the doc token + type from a Feishu doc URL.
-// Supports 新版云文档 /docx/<token>, 知识库 /wiki/<token>, 旧版 /docs/<token>.
+// Supports 新版云文档 /docx/<token>, 知识库 /wiki/<token>, 旧版 /docs/<token>, 妙记 /minutes/<token>.
 export function parseDocUrl(url) {
   let u;
   try {
@@ -83,7 +83,7 @@ export function parseDocUrl(url) {
   } catch {
     return null;
   }
-  const match = u.pathname.match(/^\/(docx|wiki|docs)\/([A-Za-z0-9_-]+)/);
+  const match = u.pathname.match(/^\/(docx|wiki|docs|minutes)\/([A-Za-z0-9_-]+)/);
   if (!match) return null;
   return { type: match[1], token: match[2], url: u.toString() };
 }
@@ -163,7 +163,7 @@ async function fetchFileContent(userId, fileToken, url, fallbackTitle = '') {
 // Resolve a wiki node URL to its underlying doc and fetch it.
 export async function fetchDocContent(userId, url) {
   const parsed = parseDocUrl(url);
-  if (!parsed) throw new FeishuError('BAD_URL', '无法识别的飞书文档链接，请粘贴 /docx/ 或 /wiki/ 链接');
+  if (!parsed) throw new FeishuError('BAD_URL', '无法识别的飞书链接，请粘贴 /docx/、/wiki/ 或 /minutes/ 链接');
 
   if (parsed.type === 'wiki') {
     const token = await getUserAccessToken(userId);
@@ -181,7 +181,42 @@ export async function fetchDocContent(userId, url) {
   if (parsed.type === 'docx') {
     return fetchDocx(userId, parsed.token, url);
   }
+  if (parsed.type === 'minutes') {
+    return fetchMinuteTranscript(userId, parsed.token, url);
+  }
   throw new FeishuError('UNSUPPORTED_TYPE', '旧版云文档暂不支持导入，请在飞书中转存为新版文档（docx）或使用知识库文档');
+}
+
+function transcriptToMarkdown(data) {
+  const items = data?.data?.items || data?.data?.transcripts || data?.data?.transcript || data?.items || [];
+  if (Array.isArray(items)) {
+    return items.map((item) => {
+      const speaker = item.speaker_name || item.speaker?.name || item.user_name || item.name || '';
+      const text = item.text || item.content || item.sentence || item.paragraph || '';
+      return [speaker, text].filter(Boolean).join('：');
+    }).filter(Boolean).join('\n');
+  }
+  if (typeof items === 'string') return items;
+  return JSON.stringify(data?.data || data || {}, null, 2);
+}
+
+async function fetchMinuteTranscript(userId, minuteToken, url) {
+  const token = await getUserAccessToken(userId);
+  let title = '飞书妙记';
+  try {
+    const info = await feishuRequest(`/minutes/v1/minutes/${minuteToken}`, { token });
+    title = info.data?.title || info.data?.minute?.title || title;
+  } catch { /* transcript may still be readable; title is cosmetic */ }
+  const data = await feishuRequest(`/minutes/v1/minutes/${minuteToken}/transcript`, { token });
+  const content = transcriptToMarkdown(data);
+  if (!content.trim()) throw new FeishuError('EMPTY', '妙记转写内容为空或暂未生成');
+  return {
+    title,
+    docToken: minuteToken,
+    docType: 'minutes',
+    url,
+    content,
+  };
 }
 
 // Persist an imported doc against a project.

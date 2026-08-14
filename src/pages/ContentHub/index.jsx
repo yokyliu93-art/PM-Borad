@@ -34,6 +34,7 @@ export function ContentHub({ mode = 'all', initialTopicType = 'daily' }) {
   const [loading, setLoading] = useState(true);
   const [creating, setCreating] = useState(false);
   const [importing, setImporting] = useState(false);
+  const [parsingTopics, setParsingTopics] = useState(false);
   const [form, setForm] = useState({ kind: mode === 'topics' ? 'topic' : mode === 'demo' ? 'demo' : mode === 'eval' ? 'eval' : 'memo', subKind: mode === 'topics' ? 'daily' : '', title: '', body: '', sourceUrl: '', timelineText: '', ownerText: '', progress: 0, meetingDocUrl: '', meetingMinutesUrl: '' });
   const [minutes, setMinutes] = useState({ title: '', meetingDocUrl: '', meetingMinutesUrl: '', transcript: '' });
   const [experienceDrafts, setExperienceDrafts] = useState({});
@@ -122,11 +123,25 @@ export function ContentHub({ mode = 'all', initialTopicType = 'daily' }) {
       toast.error('请先在 Build 里创建一个项目，用来承载例会记录');
       return;
     }
-    setImporting(true);
-    const res = await post(`/api/projects/${targetProjectId}/content/import-minutes`, minutes);
-    setImporting(false);
+    const endpoint = isTopics ? 'parse-weekly-topics' : 'import-minutes';
+    if (isTopics && (!minutes.meetingDocUrl || !minutes.meetingMinutesUrl)) {
+      toast.error('请同时填写周会文档链接和周会妙记链接');
+      return;
+    }
+    if (isTopics) setParsingTopics(true);
+    else setImporting(true);
+    const res = await post(`/api/projects/${targetProjectId}/content/${endpoint}`, minutes);
+    if (isTopics) setParsingTopics(false);
+    else setImporting(false);
     if (res.ok) {
-      toast.success(`已导入例会，并生成 ${res.data?.topics?.length || 0} 条候选选题`);
+      if (isTopics) {
+        const daily = res.data?.dailyTopics?.length || 0;
+        const deep = res.data?.deepTopics?.length || 0;
+        const pushed = (res.data?.notifications || []).filter((item) => item.pushed).length;
+        toast.success(`已解析 ${daily} 个日常选题、${deep} 个深度选题，已推送 ${pushed} 位负责人`);
+      } else {
+        toast.success(`已导入例会，并生成 ${res.data?.topics?.length || 0} 条候选选题`);
+      }
       setMinutes({ title: '', meetingDocUrl: '', meetingMinutesUrl: '', transcript: '' });
       loadItems();
     } else {
@@ -159,9 +174,32 @@ export function ContentHub({ mode = 'all', initialTopicType = 'daily' }) {
     }
   }
 
+  const topicParserPanel = isTopics ? (
+    <div className="rounded-xl border border-emerald-100 bg-white p-5 shadow-sm shadow-emerald-950/5">
+      <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+        <div>
+          <p className="flex items-center gap-2 text-sm font-semibold text-emerald-700"><CalendarDays size={16} />周会选题解析台</p>
+          <h2 className="mt-2 text-2xl font-semibold tracking-normal text-slate-950">先放周会文档和妙记，再自动生成选题板块</h2>
+          <p className="mt-2 max-w-3xl text-sm leading-6 text-slate-600">
+            DeepSeek 会从两个飞书链接里抽取日常选题、负责人和初稿时间；深度选题会沉淀成长 timeline，后续像 Build 项目一样持续推进。
+          </p>
+        </div>
+        <form onSubmit={importMinutes} className="grid w-full gap-2 lg:max-w-3xl lg:grid-cols-[1fr_1fr_120px]">
+          <input value={minutes.meetingDocUrl} onChange={(event) => setMinutes({ ...minutes, meetingDocUrl: event.target.value })} placeholder="周会文档链接" className="rounded-md border border-slate-200 px-3 py-2 text-sm outline-none focus:border-emerald-400" />
+          <input value={minutes.meetingMinutesUrl} onChange={(event) => setMinutes({ ...minutes, meetingMinutesUrl: event.target.value })} placeholder="周会妙记/速记链接" className="rounded-md border border-slate-200 px-3 py-2 text-sm outline-none focus:border-emerald-400" />
+          <button disabled={parsingTopics} className="rounded-md bg-emerald-600 px-3 py-2 text-sm font-semibold text-white transition hover:bg-emerald-500 disabled:opacity-60">
+            {parsingTopics ? '解析中' : '解析'}
+          </button>
+        </form>
+      </div>
+    </div>
+  ) : null;
+
   return (
     <section className="space-y-6">
-      <div className="grid gap-4 xl:grid-cols-[1fr_380px]">
+      {topicParserPanel}
+
+      <div className={`grid gap-4 ${isTopics ? 'xl:grid-cols-1' : 'xl:grid-cols-[1fr_380px]'}`}>
         <div className="rounded-xl border border-emerald-100 bg-white p-5 shadow-sm shadow-emerald-950/5">
           <p className="text-sm font-medium text-emerald-700">{isTopics ? '硅星人选题' : isDemo ? '硅星人 Demo 模块' : isEval ? '硅星人 Eval' : '硅星人内容池'}</p>
           <h2 className="mt-2 text-3xl font-semibold tracking-normal text-slate-950">{isTopics ? '从周会进入选题推进' : isDemo ? '从 memo 到 Demo 决策' : isEval ? '测试集和评测进度' : '把零散 memo 变成可协作的板块'}</h2>
@@ -180,7 +218,7 @@ export function ContentHub({ mode = 'all', initialTopicType = 'daily' }) {
             <Stat label="试用体验" value={stats.experiences} />
           </div>
         </div>
-        <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm shadow-slate-950/5">
+        {!isTopics ? <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm shadow-slate-950/5">
           <p className="flex items-center gap-2 text-sm font-semibold text-slate-950"><FilePlus2 size={16} />{isTopics ? '新增一个选题' : isEval ? '新增测试集' : '扔一个 memo 进来'}</p>
           <form onSubmit={createMemo} className="mt-4 space-y-3">
             {isGlobal ? (
@@ -226,14 +264,14 @@ export function ContentHub({ mode = 'all', initialTopicType = 'daily' }) {
               {creating ? '正在保存...' : isTopics ? '放进选题池' : isEval ? '加入 Eval' : '放进内容池'}
             </button>
           </form>
-        </div>
+        </div> : null}
       </div>
 
-      {!isDemo && !isEval ? <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm shadow-slate-950/5">
+      {!isDemo && !isEval && !isTopics ? <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm shadow-slate-950/5">
         <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
           <div>
-            <p className="flex items-center gap-2 text-sm font-semibold text-slate-950"><CalendarDays size={16} />{isTopics ? '周会文档 + 周会妙记' : '飞书妙记导入'}</p>
-            <p className="mt-1 text-sm text-slate-500">{isTopics ? '把两个飞书链接和妙记文本放进来，系统会先沉淀周会记录，并按关键词拆出日常/深度选题候选。' : '现在先支持粘贴妙记转写。后续接飞书妙记 API 后，会自动拉例会、整理选题和 Demo 候选。'}</p>
+            <p className="flex items-center gap-2 text-sm font-semibold text-slate-950"><CalendarDays size={16} />飞书妙记导入</p>
+            <p className="mt-1 text-sm text-slate-500">现在先支持粘贴妙记转写。后续接飞书妙记 API 后，会自动拉例会、整理选题和 Demo 候选。</p>
           </div>
           <form onSubmit={importMinutes} className="grid w-full gap-2 lg:max-w-3xl lg:grid-cols-[180px_1fr_1fr_120px]">
             <input value={minutes.title} onChange={(event) => setMinutes({ ...minutes, title: event.target.value })} placeholder="例会标题" className="rounded-md border border-slate-200 px-3 py-2 text-sm outline-none focus:border-emerald-400" />
