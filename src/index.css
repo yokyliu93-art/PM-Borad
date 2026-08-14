@@ -1390,3 +1390,35 @@ body {
     linear-gradient(135deg, rgb(16 185 129 / 0.09), transparent 62%),
     #ffffff !important;
 }
+
+.gxr-logo-mark {
+  display: block;
+  overflow: hidden;
+  border: 1px solid rgb(16 185 129 / 0.18);
+  border-radius: 12px;
+  background: #08111f;
+  object-fit: cover;
+  box-shadow:
+    0 0 0 4px rgb(16 185 129 / 0.07),
+    0 12px 28px rgb(15 23 42 / 0.08);
+}
+
+.gxr-brand-tag {
+  width: fit-content;
+  border: 1px solid rgb(16 185 129 / 0.2);
+  border-radius: 999px;
+  background:
+    linear-gradient(90deg, rgb(16 185 129 / 0.1), rgb(56 189 248 / 0.08)),
+    #ffffff;
+  padding: 6px 10px;
+  color: #047857;
+  font-size: 11px;
+  font-weight: 650;
+}
+
+.pm-brand .gxr-logo-mark,
+.pm-panel-head .gxr-logo-mark {
+  width: 40px;
+  height: 40px;
+  flex: 0 0 auto;
+}

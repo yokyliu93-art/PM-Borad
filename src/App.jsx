@@ -11,7 +11,7 @@ import { PersonalPanel } from './pages/PersonalPanel';
 import { Subproject } from './pages/Subproject';
 import { Dashboard } from './pages/Dashboard';
 import { BossBoard } from './pages/BossBoard';
-import { ArrowRight, Check, FileText, LayoutDashboard, Loader2, ShieldCheck, Sparkles, UsersRound } from 'lucide-react';
+import { ArrowRight, Check, FileText, LayoutDashboard, Loader2, ShieldCheck, UsersRound } from 'lucide-react';
 
 const landingFlow = [
   { title: '看清项目', detail: '把目标、时间线和关键事项放在同一个入口' },
@@ -45,10 +45,10 @@ function LandingPage() {
       <div className="pm-landing-field" />
       <header className="pm-landing-nav">
         <a className="pm-brand" href="/">
-          <span><Sparkles size={17} /></span>
+          <img className="gxr-logo-mark" src="/guixingren-logo.jpg" alt="硅星人" />
           <div>
-            <strong>PM Board</strong>
-            <small>人人都是 PM 的协作空间</small>
+            <strong>硅星人 PM Board</strong>
+            <small>给 Agent 协作项目用的内部工作台</small>
           </div>
         </a>
         <a className="pm-nav-login" href="/api/auth/login">飞书登录</a>
@@ -56,9 +56,9 @@ function LandingPage() {
 
       <section className="pm-hero">
         <div className="pm-hero-copy">
-          <p className="pm-badge"><ShieldCheck size={15} />组织授权后进入项目空间</p>
+          <p className="pm-badge"><ShieldCheck size={15} />硅星人项目协作实验</p>
           <h1>让项目计划变成可认领的责任网络</h1>
-          <p>总 PM 把项目计划交给自己的 Agent 拆解。Agent 确认后回传模块，PM Board 再承接认领、进展和交付记录。</p>
+          <p>总 PM 把项目计划交给自己的 Agent 拆解。Agent 确认后回传模块，硅星人 PM Board 再承接认领、进展和交付记录。</p>
           <div className="pm-actions">
             <a href="/api/auth/login" className="pm-primary">
               使用飞书登录
@@ -68,6 +68,7 @@ function LandingPage() {
             <a href="/api/auth/dev-login" className="pm-secondary">本地开发进入</a>
           </div>
           <div className="pm-signal-strip" aria-label="PM Board 核心流程">
+            <span>硅星人</span>
             <span>组织授权</span>
             <span>Agent 包</span>
             <span>模块回传</span>
@@ -77,9 +78,9 @@ function LandingPage() {
 
         <section className="pm-product-panel">
           <div className="pm-panel-head">
-            <span className="pm-icon-tile"><LayoutDashboard size={19} /></span>
+            <img className="gxr-logo-mark" src="/guixingren-logo.jpg" alt="硅星人" />
             <div>
-              <strong>PM Board</strong>
+              <strong>硅星人 PM Board</strong>
               <small>从 Agent 拆解到进度沉淀</small>
             </div>
           </div>
@@ -124,7 +125,7 @@ function LandingPage() {
         <div className="pm-showcase-board">
           <div className="pm-showcase-header">
             <div>
-              <p>PM Board</p>
+              <p>硅星人 PM Board</p>
               <h2>一个项目如何跑起来</h2>
             </div>
             <span>进行中</span>

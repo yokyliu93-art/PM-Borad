@@ -1,5 +1,4 @@
 import { Toaster } from 'react-hot-toast';
-import { Bot } from 'lucide-react';
 import { ErrorBoundary } from '../ui/ErrorBoundary';
 import { NavLink, Outlet, useLocation } from 'react-router-dom';
 import { useStore } from '../../store';
@@ -47,14 +46,13 @@ export function Shell() {
         <aside className="border-b border-slate-200 bg-white/90 lg:sticky lg:top-0 lg:h-screen lg:w-72 lg:border-b-0 lg:border-r">
           <div className="px-5 py-5">
             <div className="flex items-center gap-3">
-              <div className="grid h-10 w-10 place-items-center rounded-md bg-emerald-50 text-emerald-600 ring-1 ring-emerald-100">
-                <Bot size={21} />
-              </div>
+              <img className="gxr-logo-mark h-11 w-11" src="/guixingren-logo.jpg" alt="硅星人" />
               <div>
-                <p className="text-sm font-semibold text-slate-950">PM Board</p>
+                <p className="text-sm font-semibold text-slate-950">硅星人 PM Board</p>
                 <p className="text-xs text-slate-500">Agent 驱动协作面板</p>
               </div>
             </div>
+            <div className="gxr-brand-tag mt-5">Powered by 硅星人</div>
             <div className="mt-6 space-y-1">
               {nav.map(([path, label, Icon]) => (
                 <NavLink
