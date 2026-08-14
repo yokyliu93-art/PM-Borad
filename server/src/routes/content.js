@@ -1,0 +1,63 @@
+import { Router } from 'express';
+import { authRequired, requireProjectMember } from '../middleware/auth.js';
+import * as contentService from '../services/content.js';
+
+const router = Router({ mergeParams: true });
+
+router.use(authRequired, requireProjectMember);
+
+router.get('/', (req, res) => {
+  try {
+    const data = contentService.listByProject(req.params.projectId, req.user.id, req.query.kind || '');
+    res.json({ ok: true, data });
+  } catch (err) {
+    res.status(400).json({ ok: false, error: err.message });
+  }
+});
+
+router.post('/', (req, res) => {
+  try {
+    const data = contentService.create(req.params.projectId, req.user.id, req.body || {});
+    res.status(201).json({ ok: true, data });
+  } catch (err) {
+    res.status(400).json({ ok: false, error: err.message });
+  }
+});
+
+router.post('/import-minutes', (req, res) => {
+  try {
+    const data = contentService.importMinutes(req.params.projectId, req.user.id, req.body || {});
+    res.status(201).json({ ok: true, data });
+  } catch (err) {
+    res.status(400).json({ ok: false, error: err.message });
+  }
+});
+
+router.post('/:memoId/vote-demo', (req, res) => {
+  try {
+    const data = contentService.voteDemo(req.params.projectId, req.params.memoId, req.user.id);
+    res.json({ ok: true, data });
+  } catch (err) {
+    res.status(400).json({ ok: false, error: err.message });
+  }
+});
+
+router.delete('/:memoId/vote-demo', (req, res) => {
+  try {
+    const data = contentService.unvoteDemo(req.params.projectId, req.params.memoId, req.user.id);
+    res.json({ ok: true, data });
+  } catch (err) {
+    res.status(400).json({ ok: false, error: err.message });
+  }
+});
+
+router.post('/:memoId/experiences', (req, res) => {
+  try {
+    const data = contentService.addExperience(req.params.projectId, req.params.memoId, req.user.id, req.body?.content || '');
+    res.status(201).json({ ok: true, data });
+  } catch (err) {
+    res.status(400).json({ ok: false, error: err.message });
+  }
+});
+
+export default router;

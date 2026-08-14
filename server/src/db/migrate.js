@@ -267,6 +267,37 @@ export function migrate() {
       updated_at TEXT DEFAULT (datetime('now')),
       UNIQUE(loop_id, user_id, week_key)
     );
+
+    CREATE TABLE IF NOT EXISTS content_memos (
+      id TEXT PRIMARY KEY,
+      project_id TEXT NOT NULL REFERENCES projects(id),
+      kind TEXT NOT NULL DEFAULT 'memo',
+      title TEXT NOT NULL,
+      body TEXT DEFAULT '',
+      source_url TEXT DEFAULT '',
+      timeline_text TEXT DEFAULT '',
+      status TEXT DEFAULT 'open',
+      created_by TEXT NOT NULL REFERENCES users(id),
+      created_at TEXT DEFAULT (datetime('now')),
+      updated_at TEXT DEFAULT (datetime('now'))
+    );
+
+    CREATE TABLE IF NOT EXISTS content_memo_votes (
+      memo_id TEXT NOT NULL REFERENCES content_memos(id),
+      user_id TEXT NOT NULL REFERENCES users(id),
+      vote TEXT NOT NULL DEFAULT 'demo',
+      created_at TEXT DEFAULT (datetime('now')),
+      PRIMARY KEY (memo_id, user_id, vote)
+    );
+
+    CREATE TABLE IF NOT EXISTS content_memo_experiences (
+      id TEXT PRIMARY KEY,
+      memo_id TEXT NOT NULL REFERENCES content_memos(id),
+      user_id TEXT NOT NULL REFERENCES users(id),
+      content TEXT NOT NULL,
+      created_at TEXT DEFAULT (datetime('now')),
+      updated_at TEXT DEFAULT (datetime('now'))
+    );
   `);
 
   const userCols = db.prepare('PRAGMA table_info(users)').all().map((c) => c.name);

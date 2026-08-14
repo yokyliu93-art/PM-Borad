@@ -3,7 +3,7 @@ import { ErrorBoundary } from '../ui/ErrorBoundary';
 import { NavLink, Outlet, useLocation } from 'react-router-dom';
 import { useStore } from '../../store';
 import { UserSwitcher } from '../UserSwitcher';
-import { Boxes, UserCheck, LayoutDashboard, BarChart3, List, Plus, Settings } from 'lucide-react';
+import { Boxes, UserCheck, LayoutDashboard, BarChart3, List, Plus, Settings, NotebookTabs } from 'lucide-react';
 
 export function Shell() {
   const { tasks, activeProject, currentUser } = useStore();
@@ -18,6 +18,7 @@ export function Shell() {
     ? [
         ['/projects', '项目大厅', List],
         [`/projects/${projectId}/pool`, 'Agent 回传', Boxes],
+        [`/projects/${projectId}/content`, '内容池', NotebookTabs],
         [`/projects/${projectId}/mine`, '我的任务', UserCheck],
         [`/projects/${projectId}/commander`, '项目PM面板', LayoutDashboard],
         [`/projects/${projectId}/boss`, '部门大盘', BarChart3],

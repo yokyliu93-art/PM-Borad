@@ -11,6 +11,7 @@ import { PersonalPanel } from './pages/PersonalPanel';
 import { Subproject } from './pages/Subproject';
 import { Dashboard } from './pages/Dashboard';
 import { BossBoard } from './pages/BossBoard';
+import { ContentHub } from './pages/ContentHub';
 import { ArrowRight, Check, FileText, LayoutDashboard, Loader2, ShieldCheck, UsersRound } from 'lucide-react';
 
 const landingFlow = [
@@ -245,6 +246,7 @@ function ProjectRoutes() {
     <Routes>
       <Route index element={<Navigate to="pool" replace />} />
       <Route path="pool" element={<TaskPool />} />
+      <Route path="content" element={<ContentHub />} />
       <Route path="edit" element={<ProjectCreate />} />
       <Route path="mine" element={<PersonalPanel />} />
       <Route path="tasks/:taskId" element={<Subproject />} />
