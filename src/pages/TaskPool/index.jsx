@@ -34,6 +34,7 @@ export function TaskPool() {
   const [projectAgentInstructions, setProjectAgentInstructions] = useState('');
   const [isProjectPM, setIsProjectPM] = useState(false);
   const [selectedModule, setSelectedModule] = useState(null);
+  const [selectedTimelineIndex, setSelectedTimelineIndex] = useState(null);
   const navigate = useNavigate();
 
   useSocket(projectId);
@@ -179,6 +180,13 @@ export function TaskPool() {
     return Math.round(total / moduleTasks.length);
   }
 
+  function getWeekPlanLines(detail = '') {
+    return String(detail || '')
+      .split(/\n|；|;/)
+      .map((line) => line.replace(/^[-*]\s*/, '').trim())
+      .filter(Boolean);
+  }
+
   if (loading) return <div className="grid place-items-center h-64"><Loader2 className="animate-spin text-slate-400" size={32} /></div>;
 
   if (error) return (
@@ -193,22 +201,27 @@ export function TaskPool() {
 
   const timeline = getTimeline();
   const currentModule = MODULES.find((module) => module.key === selectedModule);
+  const currentTimeline = Number.isInteger(selectedTimelineIndex) ? timeline[selectedTimelineIndex] : null;
 
   return (
     <section className="space-y-5">
       <div>
         <p className="text-sm font-medium text-violet-200">Agent 回传模块</p>
         <h2 className="mt-2 text-3xl font-semibold tracking-normal text-white">
-          {currentModule ? `${currentModule.name}模块 · 二级任务` : '项目总览 · 产品 / 运营 / 内容'}
+          {currentTimeline
+            ? `${currentTimeline[0] || `阶段 ${selectedTimelineIndex + 1}`} · 周计划`
+            : currentModule ? `${currentModule.name}模块 · 二级任务` : '项目总览 · 产品 / 运营 / 内容'}
         </h2>
         <p className="mt-2 max-w-2xl text-sm leading-6 text-slate-400">
-          {currentModule
+          {currentTimeline
+            ? '这里展开这一周的具体计划。后续可以由总PM Agent 回传更详细的目标、动作、负责人和交付物。'
+            : currentModule
             ? '这里展示该一级模块下面的二级任务。进入任务后，子PM 再继续拆执行步骤、周计划和阶段交付。'
             : '发起项目后先形成需求说明书和 API Key。总PM把它交给自己的 Agent，Agent 回传产品、运营、内容三个一级模块下的二级任务。'}
         </p>
       </div>
 
-      {!currentModule && isProjectPM && (
+      {!currentTimeline && !currentModule && isProjectPM && (
         <div className="space-y-4 rounded-lg border border-white/10 bg-white/[0.03] p-4">
           <div className="rounded-md border border-emerald-400/20 bg-emerald-500/[0.06] p-3">
             <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
@@ -229,7 +242,45 @@ export function TaskPool() {
         </div>
       )}
 
-      {currentModule ? (
+      {currentTimeline ? (
+        <div className="grid gap-5 xl:grid-cols-[1fr_340px]">
+          <div className="space-y-4">
+            <button
+              onClick={() => setSelectedTimelineIndex(null)}
+              className="inline-flex items-center gap-2 rounded-md border border-white/10 px-3 py-2 text-sm text-slate-300 transition hover:bg-white/8"
+            >
+              <ArrowLeft size={15} /> 回到项目总览
+            </button>
+            <div className="rounded-lg border border-white/10 bg-[#151925] p-5">
+              <p className="flex items-center gap-2 text-sm font-medium text-violet-100"><CalendarDays size={15} />{currentTimeline[0] || `阶段 ${selectedTimelineIndex + 1}`}</p>
+              <h3 className="mt-3 text-2xl font-semibold text-white">本周详细计划</h3>
+              {getWeekPlanLines(currentTimeline[1]).length ? (
+                <div className="mt-5 space-y-3">
+                  {getWeekPlanLines(currentTimeline[1]).map((line, index) => (
+                    <div key={`${line}-${index}`} className="rounded-md border border-white/10 bg-white/[0.03] p-3">
+                      <p className="text-xs text-slate-500">计划 {index + 1}</p>
+                      <p className="mt-1 text-sm leading-6 text-slate-200">{line}</p>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="mt-5 rounded-md border border-dashed border-white/10 bg-[#0c0f16] p-5">
+                  <p className="text-sm font-medium text-white">这一周还没有详细计划</p>
+                  <p className="mt-2 text-sm leading-6 text-slate-500">让总PM Agent 拆 Timeline 时，把这一周的目标、关键动作、需要配合的人和交付物回传到这里。</p>
+                </div>
+              )}
+            </div>
+          </div>
+
+          <aside className="xl:sticky xl:top-28 xl:self-start">
+            <TimelinePanel
+              timeline={timeline}
+              selectedTimelineIndex={selectedTimelineIndex}
+              onSelect={setSelectedTimelineIndex}
+            />
+          </aside>
+        </div>
+      ) : currentModule ? (
         <div className="space-y-4">
           <button
             onClick={() => setSelectedModule(null)}
@@ -306,25 +357,46 @@ export function TaskPool() {
           </div>
 
           <aside className="xl:sticky xl:top-28 xl:self-start">
-            <div className="rounded-lg border border-emerald-400/20 bg-white/[0.03] p-4">
-              <p className="flex items-center gap-2 text-sm font-medium text-violet-100"><CalendarDays size={15} />项目 Timeline</p>
-              <p className="mt-2 text-xs leading-5 text-slate-500">这里固定展示项目节奏，不重复展示需求说明书。需求说明书在上方总PM Agent 包里维护。</p>
-              {timeline.length ? (
-                <div className="mt-5 space-y-4">
-                  {timeline.map(([time, detail], index) => (
-                    <div key={`${time}-${index}`} className="border-l border-emerald-400/40 pl-4">
-                      <p className="text-sm font-semibold text-white">{time || `阶段 ${index + 1}`}</p>
-                      <p className="mt-1 text-xs leading-5 text-slate-500">{detail || '待拆解阶段目标'}</p>
-                    </div>
-                  ))}
-                </div>
-              ) : (
-                <p className="mt-4 text-sm leading-6 text-slate-500">项目设置里可以补充按周或阶段划分的时间线。</p>
-              )}
-            </div>
+            <TimelinePanel
+              timeline={timeline}
+              selectedTimelineIndex={selectedTimelineIndex}
+              onSelect={setSelectedTimelineIndex}
+            />
           </aside>
         </div>
       )}
     </section>
+  );
+}
+
+function TimelinePanel({ timeline, selectedTimelineIndex, onSelect }) {
+  return (
+    <div className="rounded-lg border border-emerald-400/20 bg-white/[0.03] p-4">
+      <p className="flex items-center gap-2 text-sm font-medium text-violet-100"><CalendarDays size={15} />项目 Timeline</p>
+      <p className="mt-2 text-xs leading-5 text-slate-500">按周拆项目节奏。点开某一周查看具体计划。</p>
+      {timeline.length ? (
+        <div className="mt-5 space-y-2">
+          {timeline.map(([time, detail], index) => {
+            const selected = selectedTimelineIndex === index;
+            return (
+              <button
+                key={`${time}-${index}`}
+                onClick={() => onSelect(index)}
+                className={`w-full rounded-md border p-3 text-left transition ${
+                  selected
+                    ? 'border-emerald-400/50 bg-emerald-500/10'
+                    : 'border-white/10 bg-[#0c0f16] hover:border-emerald-400/30 hover:bg-white/[0.04]'
+                }`}
+              >
+                <p className="text-sm font-semibold text-white">{time || `阶段 ${index + 1}`}</p>
+                <p className="mt-1 line-clamp-2 text-xs leading-5 text-slate-500">{detail || '待拆解阶段目标'}</p>
+              </button>
+            );
+          })}
+        </div>
+      ) : (
+        <p className="mt-4 text-sm leading-6 text-slate-500">项目设置里可以补充按周或阶段划分的时间线。</p>
+      )}
+    </div>
   );
 }
