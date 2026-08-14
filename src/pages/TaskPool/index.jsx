@@ -152,9 +152,11 @@ export function TaskPool() {
       '',
       'API 使用方式：',
       `GET ${origin}/api/agent/project 读取项目需求文档和已有任务块。`,
+      `POST ${origin}/api/agent/project/timeline 回传按周拆好的项目 Timeline。`,
       `POST ${origin}/api/agent/project/tasks 回传你拆好的模块，PM Board 会把它们显示为项目模块。`,
       '请求头：Authorization: Bearer <API_KEY>',
       '一级模块只能是：产品、运营、内容。',
+      'Timeline 示例：{"timeline":[{"week":"W1","detail":"第一周目标；关键动作；负责人/配合方；交付物"}]}',
       '创建示例：{"tasks":[{"module":"产品","title":"任务块标题","summary":"目标","cycle":"第1周","idea":"核心想法","executionPlan":"执行方案","resourcePlan":"资源配合","subtasks":[{"title":"子任务","note":"说明"}]}],"publishNow":true}',
     ].join('\n');
   }

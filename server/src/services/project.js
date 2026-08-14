@@ -139,8 +139,9 @@ export function buildDefaultProjectAgentInstructions(project) {
     '你的权限边界：只能管理这个项目下的任务块，不能越权到其他项目。',
     '项目第一层固定只有三个一级模块：产品、运营、内容。PM Board 第一屏只展示这三个大模块。',
     '你需要基于飞书文档/项目计划书，生成总项目需求说明书，然后在三个一级模块下面拆二级任务。',
+    '你也可以回传项目 Timeline。Timeline 按周组织，W1 表示第一周，W2 表示第二周；每周要写清目标、关键动作、负责人/配合方和交付物。',
     '回传每个二级任务时请带 module 字段，只能写「产品」「运营」「内容」之一。每个二级任务要有标题、目标说明、周期和建议子任务。',
-    '当总 PM 说“传到 PM Board”时，请调用项目 Agent API 回传任务模块。PM Board 会以你回传的模块为主视图。',
+    '当总 PM 说“传到 PM Board”时，请调用项目 Agent API 回传 Timeline 和任务模块。PM Board 会以你回传的内容为主视图。',
   ].filter(Boolean).join('\n');
 }
 
@@ -215,6 +216,42 @@ export function createTasksFromAgent(apiKey, payload = {}) {
     created,
     package: getProjectAgentPackageByProjectId(pkg.project.id),
   };
+}
+
+function normalizeTimelineItem(item, index) {
+  if (Array.isArray(item)) {
+    return [String(item[0] || `W${index + 1}`).trim(), String(item[1] || '').trim()];
+  }
+  if (item && typeof item === 'object') {
+    const week = item.week || item.time || item.label || item.title || `W${index + 1}`;
+    const detail = item.detail || item.plan || item.summary || item.goal || item.description || '';
+    return [String(week).trim(), String(detail).trim()];
+  }
+  return [`W${index + 1}`, String(item || '').trim()];
+}
+
+export function updateTimelineFromAgent(apiKey, payload = {}) {
+  const pkg = getProjectAgentPackageByKey(apiKey);
+  const rows = Array.isArray(payload.timeline)
+    ? payload.timeline
+    : Array.isArray(payload.weeks)
+      ? payload.weeks
+      : [];
+  if (rows.length === 0) throw new Error('请提供 timeline 数组');
+  const timeline = rows
+    .map((item, index) => normalizeTimelineItem(item, index))
+    .filter(([week, detail]) => week || detail);
+  if (timeline.length === 0) throw new Error('Timeline 内容为空');
+  db.prepare(`
+    UPDATE projects
+    SET timeline_json = ?, agent_last_update_at = datetime('now'), updated_at = datetime('now')
+    WHERE id = ?
+  `).run(JSON.stringify(timeline), pkg.project.id);
+  db.prepare(`
+    INSERT INTO project_agent_events (id, project_id, action, progress_note, payload_json)
+    VALUES (?, ?, ?, ?, ?)
+  `).run(uuid(), pkg.project.id, 'update_timeline', payload.progressNote || payload.progress_note || '', JSON.stringify(payload));
+  return getProjectAgentPackageByProjectId(pkg.project.id);
 }
 
 export function remove(id) {
