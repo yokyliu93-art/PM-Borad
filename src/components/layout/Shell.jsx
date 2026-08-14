@@ -65,7 +65,7 @@ export function Shell() {
               <NavLink to="/board" className={({ isActive }) => navClass(isActive)}>
                 <BarChart3 size={16} />
                 <span>部门大盘</span>
-                <span className="ml-auto text-xs text-slate-400">老板视角</span>
+                <span className="ml-auto text-xs text-slate-400">统帅视角</span>
               </NavLink>
 
               <NavGroup icon={NotebookTabs} title="选题" defaultOpen={location.pathname.startsWith('/topics')}>
