@@ -264,7 +264,7 @@ export default function App() {
           <Route element={<Shell />}>
           <Route index element={<Navigate to="/board" replace />} />
           <Route path="/board" element={<BossBoard />} />
-          <Route path="/topics" element={<Navigate to="/topics/daily" replace />} />
+          <Route path="/topics" element={<ContentHub mode="topics" initialTopicType="daily" />} />
           <Route path="/topics/daily" element={<ContentHub mode="topics" initialTopicType="daily" />} />
           <Route path="/topics/deep" element={<ContentHub mode="topics" initialTopicType="deep" />} />
           <Route path="/demo" element={<ContentHub mode="demo" />} />

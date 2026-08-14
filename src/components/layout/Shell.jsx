@@ -68,10 +68,10 @@ export function Shell() {
                 <span className="ml-auto text-xs text-slate-400">统帅视角</span>
               </NavLink>
 
-              <NavGroup icon={NotebookTabs} title="选题" defaultOpen={location.pathname.startsWith('/topics')}>
-                <SubNavLink to="/topics/daily" label="日常选题" />
-                <SubNavLink to="/topics/deep" label="深度选题" />
-              </NavGroup>
+              <NavLink to="/topics" className={({ isActive }) => navClass(isActive || location.pathname.startsWith('/topics'))}>
+                <NotebookTabs size={16} />
+                <span>选题</span>
+              </NavLink>
 
               <NavGroup icon={Presentation} title="Demo" defaultOpen={location.pathname.startsWith('/demo')}>
                 <SubNavLink to="/demo" label="Memo 与评价" />
