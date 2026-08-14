@@ -133,7 +133,9 @@ export function ProjectCreate() {
     setCreating(true);
 
     try {
-      const timelineJson = form.timeline.filter(([t]) => t.trim());
+      const timelineJson = form.timeline
+        .map(([time, detail]) => [String(time || '').trim(), String(detail || '').trim()])
+        .filter(([time, detail]) => time && detail);
 
       if (isEditing) {
         const res = await put(`/api/projects/${projectId}`, {

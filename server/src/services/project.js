@@ -87,6 +87,7 @@ export function update(id, fields) {
   const values = [];
   for (const key of allowed) {
     if (fields[key] !== undefined) {
+      if (key === 'timeline_json' && isBlankTimeline(fields[key])) continue;
       sets.push(`${key} = ?`);
       values.push(key === 'timeline_json' ? JSON.stringify(fields[key]) : fields[key]);
     }
@@ -117,6 +118,18 @@ export function update(id, fields) {
 
   tx();
   return getById(id);
+}
+
+function isBlankTimeline(value) {
+  if (!Array.isArray(value)) return false;
+  if (value.length === 0) return false;
+  return value.every((item) => {
+    if (Array.isArray(item)) return !String(item[1] || '').trim();
+    if (item && typeof item === 'object') {
+      return !String(item.detail || item.plan || item.summary || item.goal || item.description || '').trim();
+    }
+    return !String(item || '').trim();
+  });
 }
 
 function hashAgentKey(apiKey) {
