@@ -52,16 +52,16 @@ export function Shell() {
       </ErrorBoundary>
       <div className="flex min-h-screen flex-col lg:flex-row">
         <aside className="border-b border-slate-200 bg-white/90 lg:sticky lg:top-0 lg:h-screen lg:w-72 lg:border-b-0 lg:border-r">
-          <div className="flex min-h-full flex-col px-5 py-5">
+          <div className="flex min-h-full flex-col px-4 py-4">
             <div className="flex items-center gap-3">
-              <img className="gxr-logo-mark h-11 w-11" src="/guixingren-logo.jpg" alt="硅星人" />
+              <img className="gxr-logo-mark h-10 w-10" src="/guixingren-logo.jpg" alt="硅星人" />
               <div>
                 <p className="text-sm font-semibold text-slate-950">硅星人 PM Board</p>
                 <p className="text-xs text-slate-500">Agent 驱动协作面板</p>
               </div>
             </div>
-            <div className="gxr-brand-tag mt-5">Powered by 硅星人</div>
-            <div className="mt-6 flex-1 space-y-2">
+            <div className="gxr-brand-tag mt-3">Powered by 硅星人</div>
+            <div className="mt-4 flex-1 space-y-1.5">
               <NavLink to="/board" className={({ isActive }) => navClass(isActive)}>
                 <BarChart3 size={16} />
                 <span>部门大盘</span>
@@ -85,36 +85,19 @@ export function Shell() {
                 <SubNavLink to="/projects/create" label="新增项目" icon={Plus} />
               </NavGroup>
 
-              <NavLink to="/my-work" className={({ isActive }) => navClass(isActive)}>
-                <UserCheck size={16} />
-                <span>我的任务</span>
-              </NavLink>
-            </div>
-            {isInProject ? <div className="mt-6 border-t border-slate-100 pt-4">
-              <p className="px-3 text-xs font-medium text-slate-400">当前 Build</p>
-              <div className="mt-2 space-y-1">
-                {projectNav.map(([path, label, Icon]) => (
-                  <NavLink
+              <NavGroup icon={UserCheck} title="我的任务" defaultOpen={location.pathname.startsWith('/my-work') || isInProject}>
+                <SubNavLink to="/my-work" label="全部我的任务" icon={UserCheck} />
+                {isInProject ? projectNav.map(([path, label, Icon]) => (
+                  <SubNavLink
                     key={path}
                     to={path}
-                    className={({ isActive }) =>
-                      `flex w-full items-center gap-3 rounded-md px-3 py-2 text-left text-sm transition ${
-                        isActive
-                          ? 'bg-emerald-50 text-emerald-700 ring-1 ring-emerald-100'
-                          : 'text-slate-500 hover:bg-slate-100 hover:text-slate-950'
-                      }`
-                    }
-                  >
-                    <Icon size={16} />
-                    <span>{label}</span>
-                    {path.endsWith('/pool') && tasks.length > 0 ? (
-                      <span className="ml-auto rounded bg-emerald-50 px-1.5 py-0.5 text-[10px] text-emerald-700">{tasks.length}</span>
-                    ) : null}
-                  </NavLink>
-                ))}
-              </div>
-            </div> : null}
-            <div className="mt-auto pt-5">
+                    label={path.endsWith('/pool') && tasks.length > 0 ? `${label} · ${tasks.length}` : label}
+                    icon={Icon}
+                  />
+                )) : null}
+              </NavGroup>
+            </div>
+            <div className="mt-auto pt-4">
               <AgentAccountMenu />
             </div>
           </div>
@@ -140,7 +123,7 @@ export function Shell() {
 }
 
 function navClass(isActive) {
-  return `flex w-full items-center gap-3 rounded-md px-3 py-2 text-left text-sm transition ${
+  return `flex w-full items-center gap-3 rounded-md px-3 py-1.5 text-left text-sm transition ${
     isActive
       ? 'bg-emerald-50 text-emerald-700 ring-1 ring-emerald-100'
       : 'text-slate-600 hover:bg-slate-100 hover:text-slate-950'
@@ -150,12 +133,12 @@ function navClass(isActive) {
 function NavGroup({ icon: Icon, title, children, defaultOpen = false }) {
   return (
     <details open={defaultOpen} className="group rounded-md">
-      <summary className="flex cursor-pointer list-none items-center gap-3 rounded-md px-3 py-2 text-sm text-slate-600 transition hover:bg-slate-100 hover:text-slate-950">
+      <summary className="flex cursor-pointer list-none items-center gap-3 rounded-md px-3 py-1.5 text-sm text-slate-600 transition hover:bg-slate-100 hover:text-slate-950">
         <Icon size={16} />
         <span>{title}</span>
         <ChevronDown size={14} className="ml-auto text-slate-400 transition group-open:rotate-180" />
       </summary>
-      <div className="mt-1 space-y-1 pl-6">{children}</div>
+      <div className="mt-1 space-y-0.5 pl-6">{children}</div>
     </details>
   );
 }
@@ -165,7 +148,7 @@ function SubNavLink({ to, label, icon: Icon = Circle }) {
     <NavLink
       to={to}
       className={({ isActive }) =>
-        `flex items-center gap-2 rounded-md px-3 py-2 text-sm transition ${
+        `flex items-center gap-2 rounded-md px-3 py-1.5 text-sm transition ${
           isActive ? 'bg-emerald-50 text-emerald-700' : 'text-slate-500 hover:bg-slate-50 hover:text-slate-950'
         }`
       }
