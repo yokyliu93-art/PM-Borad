@@ -53,6 +53,7 @@ export function ContentHub({ mode = 'all', initialTopicType = 'daily' }) {
   const [topicEditorNotes, setTopicEditorNotes] = useState({});
   const [topicDocLinkDrafts, setTopicDocLinkDrafts] = useState({});
   const [selectedTopicId, setSelectedTopicId] = useState('');
+  const [topicOverview, setTopicOverview] = useState(null);
   const [form, setForm] = useState({ kind: isInitialTopicLike ? 'topic' : mode === 'demo' ? 'demo' : mode === 'eval' ? 'eval' : 'memo', subKind: isInitialTopicLike ? initialTopicType : '', title: '', body: '', sourceUrl: '', timelineText: '', ownerText: '', progress: 0, meetingDocUrl: '', meetingMinutesUrl: '' });
   const [minutes, setMinutes] = useState({ title: '', meetingDocUrl: '', meetingMinutesUrl: '', transcript: '' });
   const [experienceDrafts, setExperienceDrafts] = useState({});
@@ -76,6 +77,10 @@ export function ContentHub({ mode = 'all', initialTopicType = 'daily' }) {
   useEffect(() => {
     loadItems();
   }, [projectId, currentTeamId, mode, topicType]);
+
+  useEffect(() => {
+    if (isTopics) loadTopicOverview();
+  }, [projectId, currentTeamId, mode]);
 
   useEffect(() => {
     setTopicType(initialTopicType);
@@ -127,6 +132,38 @@ export function ContentHub({ mode = 'all', initialTopicType = 'daily' }) {
     setLoading(false);
   }
 
+  async function loadTopicOverview() {
+    if (isGlobal && !currentTeamId) return;
+    const fetchList = async (query) => {
+      const path = isGlobal
+        ? `/api/content?${new URLSearchParams({ teamId: currentTeamId, ...query }).toString()}`
+        : `/api/projects/${projectId}/content${query.kind ? `?kind=${query.kind}` : ''}`;
+      const res = await get(path);
+      const list = res.ok ? res.data || [] : [];
+      return query.subKind ? list.filter((item) => item.sub_kind === query.subKind) : list;
+    };
+    const [daily, business, deep, weekly, memo, demo] = await Promise.all([
+      fetchList({ kind: 'topic', subKind: 'daily' }),
+      fetchList({ kind: 'topic', subKind: 'business' }),
+      fetchList({ kind: 'topic', subKind: 'deep' }),
+      fetchList({ kind: 'topic', subKind: 'weekly_recommendation' }),
+      fetchList({ kind: 'memo' }),
+      fetchList({ kind: 'demo' }),
+    ]);
+    const allTopics = [...daily, ...business, ...deep, ...weekly];
+    setTopicOverview({
+      daily: daily.length + weekly.length,
+      dailyPure: daily.length,
+      weekly: weekly.length,
+      business: business.length,
+      deep: deep.length,
+      withMemo: allTopics.filter((item) => hasTopicMemo(item)).length,
+      demoReady: demo.filter((item) => item.demo_ready).length,
+      memo: memo.length,
+      experiences: [...memo, ...demo].reduce((sum, item) => sum + Number(item.experience_count || 0), 0),
+    });
+  }
+
   const filteredItems = useMemo(() => (
     isGlobal ? items : activeTab === 'all' ? items : items.filter((item) => item.kind === activeTab)
   ), [items, activeTab, isGlobal]);
@@ -141,6 +178,16 @@ export function ContentHub({ mode = 'all', initialTopicType = 'daily' }) {
     topics: items.filter((item) => item.kind === 'topic').length,
     experiences: items.reduce((sum, item) => sum + Number(item.experience_count || 0), 0),
   }), [items]);
+
+  const displayStats = isTopics ? {
+    daily: topicOverview?.daily || 0,
+    business: topicOverview?.business || 0,
+    deep: topicOverview?.deep || 0,
+    withMemo: topicOverview?.withMemo || 0,
+    demoReady: topicOverview?.demoReady || 0,
+    memo: topicOverview?.memo || 0,
+    experiences: topicOverview?.experiences || 0,
+  } : stats;
 
   async function createMemo(event) {
     event.preventDefault();
@@ -389,6 +436,17 @@ export function ContentHub({ mode = 'all', initialTopicType = 'daily' }) {
     }
   }
 
+  function hasTopicMemo(item) {
+    const links = topicDocLinks(item);
+    return Boolean(
+      item.source_url ||
+      item.meeting_doc_url ||
+      item.meeting_minutes_url ||
+      item.draft_doc_url ||
+      Object.values(links).some((value) => String(value || '').trim())
+    );
+  }
+
   function topicOwnerText(item) {
     const owner = String(item.owner_text || '').trim();
     if (owner && owner !== '待定' && owner !== '待分配') return owner;
@@ -520,12 +578,23 @@ export function ContentHub({ mode = 'all', initialTopicType = 'daily' }) {
               <UserCheck size={15} />选题面板：按负责人推进
             </div>
           ) : null}
-          <div className="mt-5 grid gap-3 md:grid-cols-4">
-            <Stat label="池内 memo" value={stats.memos} />
-            <Stat label="可 Demo" value={stats.demoReady} />
-            <Stat label="选题" value={stats.topics} />
-            <Stat label="试用体验" value={stats.experiences} />
-          </div>
+          {isTopics ? (
+            <div className="mt-5 grid gap-3 md:grid-cols-3 xl:grid-cols-6">
+              <Stat label="日常选题" value={displayStats.daily} detail={`含本周推荐 ${topicOverview?.weekly || 0}`} />
+              <Stat label="深度选题" value={displayStats.deep} detail="按二级页面推进" />
+              <Stat label="商务选题" value={displayStats.business} detail="来自周会其他事项" />
+              <Stat label="有 memo / 文档" value={displayStats.withMemo} detail="已挂飞书入口" />
+              <Stat label="可 Demo" value={displayStats.demoReady} detail="Demo 池已达条件" />
+              <Stat label="试用体验" value={displayStats.experiences} detail={`${displayStats.memo} 个普通 memo`} />
+            </div>
+          ) : (
+            <div className="mt-5 grid gap-3 md:grid-cols-4">
+              <Stat label="池内 memo" value={stats.memos} />
+              <Stat label="可 Demo" value={stats.demoReady} />
+              <Stat label="选题" value={stats.topics} />
+              <Stat label="试用体验" value={stats.experiences} />
+            </div>
+          )}
         </div>
         {!isTopicLike ? <div className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm shadow-slate-950/5">
           <p className="flex items-center gap-2 text-sm font-semibold text-slate-950"><FilePlus2 size={16} />{isTopics ? '新增一个选题' : isEval ? '新增测试集' : '扔一个 memo 进来'}</p>
@@ -755,6 +824,7 @@ export function ContentHub({ mode = 'all', initialTopicType = 'daily' }) {
                     <span className="rounded-md bg-emerald-50 px-2 py-1 text-xs font-medium text-emerald-700">{topicTypeLabels[item.sub_kind] || kindLabels[item.kind] || 'Memo'}</span>
                     {item.project_name ? <span className="rounded-md bg-slate-100 px-2 py-1 text-xs font-medium text-slate-500">{item.project_name}</span> : null}
                     {item.kind === 'eval' ? <span className="rounded-md bg-violet-50 px-2 py-1 text-xs font-medium text-violet-700">{item.eval_questions?.length || 0} 道题</span> : null}
+                    {item.kind === 'topic' && hasTopicMemo(item) ? <span className="rounded-md bg-sky-50 px-2 py-1 text-xs font-medium text-sky-700">有 memo / 文档</span> : null}
                     {item.kind !== 'topic' && item.demo_ready ? <span className="rounded-md bg-slate-950 px-2 py-1 text-xs font-medium text-white">已达 Demo 条件</span> : null}
                   </div>
                   <h3 className="mt-3 text-xl font-semibold tracking-normal text-slate-950">{item.title}</h3>
@@ -981,11 +1051,12 @@ export function ContentHub({ mode = 'all', initialTopicType = 'daily' }) {
   );
 }
 
-function Stat({ label, value }) {
+function Stat({ label, value, detail = '' }) {
   return (
     <div className="rounded-lg border border-slate-100 bg-slate-50 p-3">
       <p className="text-2xl font-semibold text-slate-950">{value}</p>
       <p className="mt-1 text-xs text-slate-500">{label}</p>
+      {detail ? <p className="mt-1 text-[11px] leading-4 text-slate-400">{detail}</p> : null}
     </div>
   );
 }
