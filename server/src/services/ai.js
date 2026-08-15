@@ -14,7 +14,7 @@ const AUDIT_PROMPT = `你是总 PM 的审核 Agent。请审核子 PM 或执行 A
 
 const TOPIC_PARSE_PROMPT = `你是硅星人内容编辑部的选题统筹助手。请根据周会文档和周会速记文档，抽取选题并归类。
 只输出 JSON 对象，不要输出解释或 Markdown。格式：
-{"dailyTopics":[{"title":"日常选题标题","owner":"负责人姓名","firstDraftAt":"交稿日期，如 8月16日/下周三/待定","summary":"当前进展和需要做什么"}],"deepTopics":[{"title":"深度选题标题","owner":"负责人姓名","firstDraftAt":"首稿或阶段稿时间","summary":"选题背景和当前阶段","timeline":[{"week":"W1","detail":"目标、动作、负责人和交付物"}],"resources":"需要谁配合、需要什么资料"}]}`;
+{"dailyTopics":[{"title":"日常选题标题","owner":"负责人姓名","firstDraftAt":"交稿日期，如 8月16日/下周三/待定","summary":"当前进展和需要做什么"}],"deepTopics":[{"title":"深度选题标题","owner":"负责人姓名","firstDraftAt":"首稿或阶段稿时间","summary":"选题背景和当前阶段","timeline":[{"week":"W1","detail":"目标、动作、负责人和交付物"}],"resources":"需要谁配合、需要什么资料"}],"frontierTopics":[{"title":"Frontier 研究/项目/产品名称","owner":"负责人姓名","summary":"一句话介绍","reason":"人们为什么必须关注","resources":"链接、memo 或下一步操作"}],"promptTopics":[{"title":"Prompt 项目或主题","owner":"负责人姓名","firstDraftAt":"交稿日期或待定","summary":"当前要做什么、需要谁配合"}]}`;
 
 const EVAL_PARSE_PROMPT = `你是硅星人 Eval 测试集整理助手。请根据飞书文档内容，整理成 PM Board 里的共享测试集模块，并把测试集拆成一道一道可复制给模型测试的问题。
 只输出 JSON 对象，不要输出解释或 Markdown。格式：
@@ -107,6 +107,8 @@ export async function parseWeeklyTopics({ meetingDoc, meetingNotes }) {
   return {
     dailyTopics: Array.isArray(parsed.dailyTopics) ? parsed.dailyTopics : [],
     deepTopics: Array.isArray(parsed.deepTopics) ? parsed.deepTopics : [],
+    frontierTopics: Array.isArray(parsed.frontierTopics) ? parsed.frontierTopics : [],
+    promptTopics: Array.isArray(parsed.promptTopics) ? parsed.promptTopics : [],
   };
 }
 
@@ -123,7 +125,7 @@ function buildTopicParseInput({ meetingDoc, meetingNotes }) {
   ].filter(Boolean).join('\n\n').slice(0, 42000);
 }
 
-const TOPIC_KEYWORDS = /选题|题目|主题|负责人|负责|初稿|截稿|稿|文章|报道|采访|约访|试用|体验|Demo|demo|深度|日常|专题|系列|发布|上线|推荐|Builder|GAI|GenAI|下周|本周|时间|进度|排期|timeline|讨论|确定|待定|王兆洋|刘雨琦|樊雅婷|孙芮|董道力|潘仁浩|饶上|温新炮/i;
+const TOPIC_KEYWORDS = /选题|题目|主题|负责人|负责|初稿|截稿|稿|文章|报道|采访|约访|试用|体验|Demo|demo|深度|日常|Frontier|Prompt|PR|专题|系列|发布|上线|推荐|Builder|GAI|GenAI|下周|本周|时间|进度|排期|timeline|讨论|确定|待定|王兆洋|刘雨琦|樊雅婷|孙芮|董道力|潘仁浩|饶上|温新炮|周一笑|李楠/i;
 
 function topicRelevantExcerpt(content = '', limit = 20000) {
   const text = String(content || '').replace(/\r/g, '\n').replace(/\n{3,}/g, '\n\n').trim();

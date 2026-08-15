@@ -18,8 +18,11 @@ function normalizeKind(kind = '') {
 
 function normalizeSubKind(subKind = '') {
   const value = String(subKind || '').trim();
-  if (['daily', 'deep'].includes(value)) return value;
+  const lower = value.toLowerCase();
+  if (['daily', 'deep', 'frontier', 'prompt'].includes(lower)) return lower;
   if (value.includes('深度')) return 'deep';
+  if (/frontier|前沿/i.test(value)) return 'frontier';
+  if (/prompt|提示词|提示/i.test(value)) return 'prompt';
   return value ? 'daily' : '';
 }
 
@@ -577,17 +580,16 @@ export async function parseWeeklyTopics(projectId, userId, fields = {}) {
   const meetingDocUrl = String(fields.meetingDocUrl || fields.meeting_doc_url || '').trim();
   const meetingNotesUrl = String(fields.meetingNotesUrl || fields.meeting_notes_url || fields.meetingMinutesUrl || fields.meeting_minutes_url || '').trim();
   if (!meetingDocUrl) throw new Error('请提供周会文档链接');
-  if (!meetingNotesUrl) throw new Error('请提供周会速记文档链接');
 
   const [meetingDoc, meetingNotes] = await Promise.all([
     feishuService.fetchDocContent(userId, meetingDocUrl),
-    feishuService.fetchDocContent(userId, meetingNotesUrl),
+    meetingNotesUrl ? feishuService.fetchDocContent(userId, meetingNotesUrl) : Promise.resolve({ title: '', url: '', content: '' }),
   ]);
   let parsed;
   let aiError = '';
   try {
     parsed = await aiService.parseWeeklyTopics({ meetingDoc, meetingNotes });
-    if (!parsed.dailyTopics.length && !parsed.deepTopics.length) {
+    if (!parsed.dailyTopics.length && !parsed.deepTopics.length && !parsed.frontierTopics?.length && !parsed.promptTopics?.length) {
       aiError = 'DeepSeek 返回了空选题列表';
       parsed = fallbackWeeklyTopics({ meetingDoc, meetingNotes, aiError });
     }
@@ -601,11 +603,11 @@ export async function parseWeeklyTopics(projectId, userId, fields = {}) {
     title: fields.title || meetingDoc.title || '周会选题解析',
     body: [
       `周会文档：${meetingDoc.title || meetingDocUrl}`,
-      `周会速记文档：${meetingNotes.title || meetingNotesUrl}`,
+      meetingNotesUrl ? `周会速记文档：${meetingNotes.title || meetingNotesUrl}` : '',
       parsed.fallback
         ? `DeepSeek 解析失败，已先回传飞书文档内容，生成 ${parsed.dailyTopics.length} 个待整理选题。`
-        : `DeepSeek 已解析出 ${parsed.dailyTopics.length} 个日常选题、${parsed.deepTopics.length} 个深度选题。`,
-    ].join('\n'),
+        : `DeepSeek 已解析出 ${parsed.dailyTopics.length} 个日常选题、${parsed.deepTopics.length} 个深度选题、${parsed.frontierTopics?.length || 0} 个 Frontier、${parsed.promptTopics?.length || 0} 个 Prompt。`,
+    ].filter(Boolean).join('\n'),
     sourceUrl: meetingDocUrl,
     meetingDocUrl,
     meetingMinutesUrl: meetingNotesUrl,
@@ -635,10 +637,38 @@ export async function parseWeeklyTopics(projectId, userId, fields = {}) {
     meetingDocUrl,
     meetingMinutesUrl: meetingNotesUrl,
   }));
+  const createdFrontier = (parsed.frontierTopics || []).map((topic) => create(projectId, userId, {
+    kind: 'topic',
+    subKind: 'frontier',
+    title: topic.title || '未命名 Frontier',
+    body: [
+      topic.summary || '',
+      topic.reason ? `为什么关注：${topic.reason}` : '',
+      topic.resources ? `资料 / 下一步：${topic.resources}` : '',
+    ].filter(Boolean).join('\n\n'),
+    ownerText: topic.owner || '待分配',
+    progress: topic.progress || 0,
+    timelineText: topicTimelineText(topic, false),
+    sourceUrl: meetingDocUrl,
+    meetingDocUrl,
+    meetingMinutesUrl: meetingNotesUrl,
+  }));
+  const createdPrompt = (parsed.promptTopics || []).map((topic) => create(projectId, userId, {
+    kind: 'topic',
+    subKind: 'prompt',
+    title: topic.title || '未命名 Prompt',
+    body: topic.summary || '',
+    ownerText: topic.owner || '待分配',
+    progress: topic.progress || 0,
+    timelineText: topicTimelineText(topic, false),
+    sourceUrl: meetingDocUrl,
+    meetingDocUrl,
+    meetingMinutesUrl: meetingNotesUrl,
+  }));
 
   const boardUrl = `${config.clientUrl}/topics/daily`;
   const notifications = [];
-  for (const topic of [...parsed.dailyTopics, ...parsed.deepTopics]) {
+  for (const topic of [...parsed.dailyTopics, ...parsed.deepTopics, ...(parsed.frontierTopics || []), ...(parsed.promptTopics || [])]) {
     if (!topic.owner) continue;
     notifications.push(await notifyTopicOwner({
       ownerName: topic.owner,
@@ -654,6 +684,8 @@ export async function parseWeeklyTopics(projectId, userId, fields = {}) {
     meeting,
     dailyTopics: createdDaily,
     deepTopics: createdDeep,
+    frontierTopics: createdFrontier,
+    promptTopics: createdPrompt,
     notifications,
     fallback: !!parsed.fallback,
     aiError,
