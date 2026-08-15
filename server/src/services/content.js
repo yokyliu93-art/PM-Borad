@@ -196,26 +196,22 @@ function canArchiveTopic(userId, memo) {
   const name = String(user?.name || '').trim();
   const jobTitle = String(user?.job_title || '').trim();
   const namedEditor = name && TOPIC_EDITORS.some((editor) => name === editor || name.includes(editor) || editor.includes(name));
-  return namedEditor || jobTitle.includes('编辑');
+  return userMatchesOwnerText(user, memo.owner_text) || namedEditor || jobTitle.includes('编辑');
 }
 
 function isTopicEditor(userId) {
   return canEditTopics(userId) || String(db.prepare('SELECT job_title FROM users WHERE id = ?').get(userId)?.job_title || '').includes('编辑');
 }
 
-function findEditorByName(name = '王兆洋') {
-  const clean = String(name || '').trim();
-  return db.prepare(`
-    SELECT *
-    FROM users
-    WHERE name = ? OR name LIKE ? OR ? LIKE '%' || name || '%'
-    ORDER BY LENGTH(name) DESC
-    LIMIT 1
-  `).get(clean, `%${clean}%`, clean);
-}
-
 function topicBoardUrl() {
   return `${config.clientUrl}/topics`;
+}
+
+function userMatchesOwnerText(user, ownerText = '') {
+  const name = String(user?.name || '').trim();
+  const owner = String(ownerText || '').trim();
+  if (!name || !owner || owner === '待定' || owner === '待分配') return false;
+  return owner === name || owner.includes(name) || name.includes(owner);
 }
 
 export function updateTopicFinalDoc(projectId, memoId, userId, fields = {}) {
@@ -247,7 +243,7 @@ export function updateTopicPublishDate(projectId, memoId, userId, fields = {}) {
 }
 
 export function archiveTopic(projectId, memoId, userId) {
-  const memo = db.prepare('SELECT id, kind, created_by FROM content_memos WHERE id = ? AND project_id = ?').get(memoId, projectId);
+  const memo = db.prepare('SELECT id, kind, created_by, owner_text FROM content_memos WHERE id = ? AND project_id = ?').get(memoId, projectId);
   if (!memo) throw new Error('选题不存在');
   if (memo.kind !== 'topic') throw new Error('只能归档选题');
   if (!canArchiveTopic(userId, memo)) throw new Error('只有作者、王兆洋、骆轶航和编辑可以归档选题');
@@ -268,7 +264,8 @@ export async function submitTopicDraft(projectId, memoId, userId, fields = {}) {
   `).get(memoId, projectId);
   if (!memo) throw new Error('选题不存在');
   if (memo.kind !== 'topic') throw new Error('只能提交选题初稿');
-  if (memo.created_by !== userId) throw new Error('只有选题创建者可以提交初稿');
+  const user = db.prepare('SELECT name FROM users WHERE id = ?').get(userId);
+  if (memo.created_by !== userId && !userMatchesOwnerText(user, memo.owner_text)) throw new Error('只有选题负责人可以提交初稿');
   const draftDocUrl = String(fields.draftDocUrl || fields.draft_doc_url || '').trim();
   if (!draftDocUrl) throw new Error('请填写初稿飞书链接');
   db.prepare(`
@@ -277,7 +274,7 @@ export async function submitTopicDraft(projectId, memoId, userId, fields = {}) {
     WHERE id = ? AND project_id = ?
   `).run(draftDocUrl, memoId, projectId);
 
-  const editor = findEditorByName('王兆洋');
+  const editor = findUserByName('王兆洋', projectId);
   let pushed = false;
   let pushError = '';
   if (editor?.id) {
@@ -286,7 +283,7 @@ export async function submitTopicDraft(projectId, memoId, userId, fields = {}) {
         editor.id,
         [
           `PM Board 初稿待编辑：${memo.title}`,
-          `作者：${memo.created_by_name || ''}`,
+          `作者：${memo.owner_text || memo.created_by_name || ''}`,
           `初稿链接：${draftDocUrl}`,
           `打开选题面板：${topicBoardUrl()}`,
         ].filter(Boolean).join('\n')
@@ -321,10 +318,12 @@ export async function updateTopicEditorNotes(projectId, memoId, userId, fields =
 
   let pushed = false;
   let pushError = '';
-  if (memo.created_by) {
+  const owner = findUserByName(memo.owner_text, projectId);
+  const recipientId = owner?.id || memo.created_by;
+  if (recipientId) {
     try {
       await feishuPushService.sendTextToUser(
-        memo.created_by,
+        recipientId,
         [
           `PM Board 编辑建议：${memo.title}`,
           editorNotes,
@@ -536,6 +535,15 @@ export async function importEvalDoc(projectId, userId, fields = {}) {
 function findUserByName(name = '', projectId = '') {
   const clean = String(name || '').trim();
   if (!clean || clean === '待定' || clean === '待分配') return null;
+  if (!projectId) {
+    return db.prepare(`
+      SELECT *
+      FROM users
+      WHERE name = ? OR name LIKE ? OR ? LIKE '%' || name || '%'
+      ORDER BY LENGTH(name) DESC
+      LIMIT 1
+    `).get(clean, `%${clean}%`, clean);
+  }
   const exact = db.prepare(`
     SELECT u.*
     FROM users u

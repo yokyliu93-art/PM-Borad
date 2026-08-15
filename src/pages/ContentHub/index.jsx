@@ -285,18 +285,27 @@ export function ContentHub({ mode = 'all', initialTopicType = 'daily' }) {
   }
 
   function topicOwnerText(item) {
+    const owner = String(item.owner_text || '').trim();
+    if (owner && owner !== '待定' && owner !== '待分配') return owner;
     return item.created_by_name || currentUser?.name || '我';
+  }
+
+  function currentUserMatchesOwner(item) {
+    const owner = String(item.owner_text || '').trim();
+    const name = String(currentUser?.name || '').trim();
+    if (!owner || !name || owner === '待定' || owner === '待分配') return false;
+    return owner === name || owner.includes(name) || name.includes(owner);
   }
 
   function canArchiveTopic(item) {
     const currentName = currentUser?.name || '';
     const jobTitle = currentUser?.job_title || currentUser?.jobTitle || '';
     const namedEditor = currentName && ['王兆洋', '骆轶航'].some((name) => currentName === name || currentName.includes(name) || name.includes(currentName));
-    return item.created_by === currentUser?.id || namedEditor || String(jobTitle).includes('编辑');
+    return item.created_by === currentUser?.id || currentUserMatchesOwner(item) || namedEditor || String(jobTitle).includes('编辑');
   }
 
   function isTopicAuthor(item) {
-    return item.created_by === currentUser?.id;
+    return item.created_by === currentUser?.id || currentUserMatchesOwner(item);
   }
 
   function canEditTopicMeta() {
