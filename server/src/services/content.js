@@ -278,6 +278,21 @@ export function updateTopicDraftDate(projectId, memoId, userId, fields = {}) {
   return get(projectId, memoId, userId);
 }
 
+export function updateTopicOwner(projectId, memoId, userId, fields = {}) {
+  const memo = db.prepare('SELECT id, kind FROM content_memos WHERE id = ? AND project_id = ?').get(memoId, projectId);
+  if (!memo) throw new Error('选题不存在');
+  if (memo.kind !== 'topic') throw new Error('只能编辑选题负责人');
+  if (!isTopicEditor(userId)) throw new Error('只有选题编辑可以分配负责人');
+  const ownerText = String(fields.ownerText || fields.owner_text || '').trim();
+  if (!ownerText) throw new Error('请选择负责人');
+  db.prepare(`
+    UPDATE content_memos
+    SET owner_text = ?, updated_at = datetime('now')
+    WHERE id = ? AND project_id = ?
+  `).run(ownerText, memoId, projectId);
+  return get(projectId, memoId, userId);
+}
+
 export function updateTopicDocLinks(projectId, memoId, userId, fields = {}) {
   const memo = db.prepare('SELECT id, kind, created_by, owner_text, doc_links_json FROM content_memos WHERE id = ? AND project_id = ?').get(memoId, projectId);
   if (!memo) throw new Error('选题不存在');

@@ -37,6 +37,7 @@ export function ContentHub({ mode = 'all', initialTopicType = 'daily' }) {
   const { currentTeamId, currentUser } = useStore();
   const [items, setItems] = useState([]);
   const [projects, setProjects] = useState([]);
+  const [teamMembers, setTeamMembers] = useState([]);
   const [selectedProjectId, setSelectedProjectId] = useState(projectId || '');
   const isInitialTopicLike = ['topics', 'frontier', 'prompt'].includes(mode);
   const [activeTab, setActiveTab] = useState(isInitialTopicLike ? 'topic' : mode === 'demo' ? 'demo' : mode === 'eval' ? 'eval' : 'all');
@@ -71,7 +72,10 @@ export function ContentHub({ mode = 'all', initialTopicType = 'daily' }) {
   });
 
   useEffect(() => {
-    if (currentTeamId) loadProjects();
+    if (currentTeamId) {
+      loadProjects();
+      loadTeamMembers();
+    }
   }, [currentTeamId]);
 
   useEffect(() => {
@@ -97,6 +101,11 @@ export function ContentHub({ mode = 'all', initialTopicType = 'daily' }) {
   async function loadProjects() {
     const res = await get(`/api/projects?teamId=${currentTeamId}`);
     if (res.ok) setProjects(res.data || []);
+  }
+
+  async function loadTeamMembers() {
+    const res = await get(`/api/teams/${currentTeamId}`);
+    if (res.ok) setTeamMembers(res.data?.members || []);
   }
 
   async function loadItems() {
@@ -332,6 +341,17 @@ export function ContentHub({ mode = 'all', initialTopicType = 'daily' }) {
     }
   }
 
+  async function saveTopicOwner(item, ownerText) {
+    const targetProjectId = item.project_id || projectId;
+    const res = await put(`/api/projects/${targetProjectId}/content/${item.id}/topic-owner`, { ownerText });
+    if (res.ok) {
+      setItems((current) => current.map((memo) => (memo.id === item.id ? res.data : memo)));
+      toast.success('负责人已更新');
+    } else {
+      toast.error(res.error || '负责人更新失败');
+    }
+  }
+
   async function saveTopicDocLinks(item) {
     const targetProjectId = item.project_id || projectId;
     const docLinks = topicDocLinkDrafts[item.id] || topicDocLinks(item);
@@ -426,6 +446,10 @@ export function ContentHub({ mode = 'all', initialTopicType = 'daily' }) {
   }
 
   function topicProgressText(item) {
+    const timeline = String(item.timeline_text || '');
+    const body = String(item.body || '');
+    const explicit = `${timeline}\n${body}`.match(/当前进度[：:]\s*([^\n]+)/);
+    if (explicit?.[1]?.trim()) return explicit[1].trim();
     if (item.draft_doc_url) return item.editor_notes ? '编辑建议已返回' : '已提交初稿';
     if (Number(item.progress || 0) > 0) return '等待提交初稿';
     return '等待提交初稿';
@@ -501,6 +525,10 @@ export function ContentHub({ mode = 'all', initialTopicType = 'daily' }) {
 
   function canEditTopicDocLinks(item) {
     return isTopicAuthor(item) || canEditTopicMeta();
+  }
+
+  function teamMemberNames() {
+    return teamMembers.map((member) => member.name).filter(Boolean);
   }
 
   function topicDraftDateText(item) {
@@ -758,7 +786,18 @@ export function ContentHub({ mode = 'all', initialTopicType = 'daily' }) {
             </div>
             <div className="shrink-0 rounded-md border border-slate-200 bg-slate-50 p-3">
               <p className="text-xs font-semibold text-slate-500">执行人</p>
-              <p className="mt-1 text-sm font-semibold text-slate-950">{topicOwnerText(selectedTopic)}</p>
+              {canEditTopicMeta() ? (
+                <select
+                  value={topicOwnerText(selectedTopic)}
+                  onChange={(event) => saveTopicOwner(selectedTopic, event.target.value)}
+                  className="mt-1 w-full rounded-md border border-slate-200 bg-white px-2 py-1.5 text-sm font-semibold text-slate-950 outline-none transition focus:border-emerald-400"
+                >
+                  {!teamMemberNames().includes(topicOwnerText(selectedTopic)) ? <option value={topicOwnerText(selectedTopic)}>{topicOwnerText(selectedTopic)}</option> : null}
+                  {teamMemberNames().map((name) => <option key={name} value={name}>{name}</option>)}
+                </select>
+              ) : (
+                <p className="mt-1 text-sm font-semibold text-slate-950">{topicOwnerText(selectedTopic)}</p>
+              )}
             </div>
           </div>
 
@@ -882,7 +921,18 @@ export function ContentHub({ mode = 'all', initialTopicType = 'daily' }) {
                   <div className="mt-3 grid gap-3 md:grid-cols-2">
                     <div className="rounded-md border border-slate-200 bg-slate-50 p-3">
                       <p className="text-xs font-semibold text-slate-500">负责人</p>
-                      <p className="mt-1 text-sm font-semibold text-slate-950">{topicOwnerText(item)}</p>
+                      {canEditTopicMeta() ? (
+                        <select
+                          value={topicOwnerText(item)}
+                          onChange={(event) => saveTopicOwner(item, event.target.value)}
+                          className="mt-1 w-full rounded-md border border-slate-200 bg-white px-2 py-1.5 text-sm font-semibold text-slate-950 outline-none transition focus:border-emerald-400"
+                        >
+                          {!teamMemberNames().includes(topicOwnerText(item)) ? <option value={topicOwnerText(item)}>{topicOwnerText(item)}</option> : null}
+                          {teamMemberNames().map((name) => <option key={name} value={name}>{name}</option>)}
+                        </select>
+                      ) : (
+                        <p className="mt-1 text-sm font-semibold text-slate-950">{topicOwnerText(item)}</p>
+                      )}
                     </div>
                     <div className="rounded-md border border-slate-200 bg-slate-50 p-3">
                       <p className="text-xs font-semibold text-slate-500">当前进度</p>
