@@ -40,10 +40,12 @@ const deepTopicStages = [
   { key: '填成稿', progress: 90 },
   { key: '已发布', progress: 100 },
 ];
+const topicTypeKeys = ['daily', 'business', 'deep', 'weekly_recommendation', 'frontier', 'prompt'];
 
 export function ContentHub({ mode = 'all', initialTopicType = 'daily' }) {
   const { projectId } = useParams();
   const [searchParams, setSearchParams] = useSearchParams();
+  const topicTypeFromUrl = searchParams.get('topicType') || '';
   const { currentTeamId, currentUser } = useStore();
   const [items, setItems] = useState([]);
   const [projects, setProjects] = useState([]);
@@ -51,7 +53,7 @@ export function ContentHub({ mode = 'all', initialTopicType = 'daily' }) {
   const [selectedProjectId, setSelectedProjectId] = useState(projectId || '');
   const isInitialTopicLike = ['topics', 'frontier', 'prompt'].includes(mode);
   const [activeTab, setActiveTab] = useState(isInitialTopicLike ? 'topic' : mode === 'demo' ? 'demo' : mode === 'eval' ? 'eval' : 'all');
-  const [topicType, setTopicType] = useState(initialTopicType);
+  const [topicType, setTopicType] = useState(topicTypeKeys.includes(topicTypeFromUrl) ? topicTypeFromUrl : initialTopicType);
   const [loading, setLoading] = useState(true);
   const [creating, setCreating] = useState(false);
   const [importing, setImporting] = useState(false);
@@ -103,8 +105,9 @@ export function ContentHub({ mode = 'all', initialTopicType = 'daily' }) {
   }, [projectId, currentTeamId, mode]);
 
   useEffect(() => {
-    setTopicType(initialTopicType);
-  }, [initialTopicType]);
+    const nextTopicType = searchParams.get('topicType') || '';
+    setTopicType(topicTypeKeys.includes(nextTopicType) ? nextTopicType : initialTopicType);
+  }, [initialTopicType, searchParams]);
 
   useEffect(() => {
     if (!didInitSelectionRef.current) {
@@ -124,6 +127,8 @@ export function ContentHub({ mode = 'all', initialTopicType = 'daily' }) {
   useEffect(() => {
     const topicId = searchParams.get('topic') || '';
     const evalId = searchParams.get('eval') || '';
+    const nextTopicType = searchParams.get('topicType') || '';
+    if (topicTypeKeys.includes(nextTopicType)) setTopicType(nextTopicType);
     setSelectedTopicId(topicId);
     setSelectedEvalId(evalId);
   }, [searchParams]);
@@ -175,12 +180,15 @@ export function ContentHub({ mode = 'all', initialTopicType = 'daily' }) {
     setLoading(false);
   }
 
-  function openTopicDetail(id) {
+  function openTopicDetail(item) {
+    const id = typeof item === 'string' ? item : item.id;
+    const detailTopicType = typeof item === 'string' ? topicType : item.sub_kind || topicType;
     setSelectedTopicId(id);
     setSelectedEvalId('');
     setSearchParams((current) => {
       const next = new URLSearchParams(current);
       next.set('topic', id);
+      if (topicTypeKeys.includes(detailTopicType)) next.set('topicType', detailTopicType);
       next.delete('eval');
       return next;
     });
@@ -193,6 +201,7 @@ export function ContentHub({ mode = 'all', initialTopicType = 'daily' }) {
       const next = new URLSearchParams(current);
       next.set('eval', id);
       next.delete('topic');
+      next.delete('topicType');
       return next;
     });
   }
@@ -203,6 +212,7 @@ export function ContentHub({ mode = 'all', initialTopicType = 'daily' }) {
     setSearchParams((current) => {
       const next = new URLSearchParams(current);
       next.delete('topic');
+      next.delete('topicType');
       next.delete('eval');
       return next;
     });
@@ -1401,7 +1411,7 @@ export function ContentHub({ mode = 'all', initialTopicType = 'daily' }) {
                     </div>
                   </div>
                   <div className="mt-4 flex flex-wrap gap-2">
-                    <button onClick={() => openTopicDetail(item.id)} className="inline-flex items-center justify-center rounded-md bg-slate-950 px-4 py-2 text-sm font-semibold text-white transition hover:bg-slate-800">
+                    <button onClick={() => openTopicDetail(item)} className="inline-flex items-center justify-center rounded-md bg-slate-950 px-4 py-2 text-sm font-semibold text-white transition hover:bg-slate-800">
                       查看详情
                     </button>
                     {canArchiveTopic(item) ? (
