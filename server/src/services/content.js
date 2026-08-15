@@ -238,7 +238,7 @@ function topicTimelineText(topic, deep = false) {
       'W4：成稿、编辑、发布与复盘',
     ].join('\n');
   }
-  return topic.firstDraftAt ? `初稿时间：${topic.firstDraftAt}` : '初稿时间：待定';
+  return topic.firstDraftAt ? `交稿日期：${topic.firstDraftAt}` : '交稿日期：待定';
 }
 
 function evalTimelineText(evalSet) {
@@ -354,7 +354,7 @@ async function notifyTopicOwner({ ownerName, projectId, title, firstDraftAt, sum
       [
         `PM Board 选题负责人提醒：${title}`,
         ownerName ? `负责人：${ownerName}` : '',
-        firstDraftAt ? `初稿时间：${firstDraftAt}` : '',
+        firstDraftAt ? `交稿日期：${firstDraftAt}` : '',
         summary ? `说明：${summary}` : '',
         boardUrl ? `打开看板：${boardUrl}` : '',
       ].filter(Boolean).join('\n')

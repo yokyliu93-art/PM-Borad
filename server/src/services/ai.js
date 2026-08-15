@@ -14,7 +14,7 @@ const AUDIT_PROMPT = `你是总 PM 的审核 Agent。请审核子 PM 或执行 A
 
 const TOPIC_PARSE_PROMPT = `你是硅星人内容编辑部的选题统筹助手。请根据周会文档和周会速记文档，抽取选题并归类。
 只输出 JSON 对象，不要输出解释或 Markdown。格式：
-{"dailyTopics":[{"title":"日常选题标题","owner":"负责人姓名","firstDraftAt":"初稿时间，如 8月16日/下周三/待定","summary":"当前进展和需要做什么"}],"deepTopics":[{"title":"深度选题标题","owner":"负责人姓名","firstDraftAt":"首稿或阶段稿时间","summary":"选题背景和当前阶段","timeline":[{"week":"W1","detail":"目标、动作、负责人和交付物"}],"resources":"需要谁配合、需要什么资料"}]}`;
+{"dailyTopics":[{"title":"日常选题标题","owner":"负责人姓名","firstDraftAt":"交稿日期，如 8月16日/下周三/待定","summary":"当前进展和需要做什么"}],"deepTopics":[{"title":"深度选题标题","owner":"负责人姓名","firstDraftAt":"首稿或阶段稿时间","summary":"选题背景和当前阶段","timeline":[{"week":"W1","detail":"目标、动作、负责人和交付物"}],"resources":"需要谁配合、需要什么资料"}]}`;
 
 const EVAL_PARSE_PROMPT = `你是硅星人 Eval 测试集整理助手。请根据飞书文档内容，整理成 PM Board 里的共享测试集模块，并把测试集拆成一道一道可复制给模型测试的问题。
 只输出 JSON 对象，不要输出解释或 Markdown。格式：

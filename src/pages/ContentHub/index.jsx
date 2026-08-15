@@ -25,7 +25,7 @@ const kindLabels = {
 
 export function ContentHub({ mode = 'all', initialTopicType = 'daily' }) {
   const { projectId } = useParams();
-  const { currentTeamId } = useStore();
+  const { currentTeamId, currentUser } = useStore();
   const [items, setItems] = useState([]);
   const [projects, setProjects] = useState([]);
   const [selectedProjectId, setSelectedProjectId] = useState(projectId || '');
@@ -240,6 +240,19 @@ export function ContentHub({ mode = 'all', initialTopicType = 'daily' }) {
     ].filter(Boolean).join('\n\n');
   }
 
+  function topicOwnerText(item) {
+    return item.owner_text || item.created_by_name || currentUser?.name || '我';
+  }
+
+  function topicDateText(item) {
+    const text = String(item.timeline_text || '').trim();
+    if (!text) return '待王兆洋选择';
+    return text
+      .replace(/^初稿时间[:：]\s*/i, '')
+      .replace(/^交稿日期[:：]\s*/i, '')
+      .trim() || '待王兆洋选择';
+  }
+
   const topicParserPanel = isTopics ? (
     <div className="rounded-xl border border-emerald-100 bg-white p-6 shadow-sm shadow-emerald-950/5">
       <div className="grid gap-5 xl:grid-cols-[minmax(420px,0.9fr)_1.1fr] xl:items-start">
@@ -251,7 +264,7 @@ export function ContentHub({ mode = 'all', initialTopicType = 'daily' }) {
             连接周会文档和速记文档，自动生成选题板块
           </h2>
           <p className="mt-3 max-w-md text-sm leading-7 text-slate-600">
-            系统会读取两个飞书文档，再调用 DeepSeek 解析日常选题、负责人和初稿时间。深度选题会生成长 timeline，后续像 Build 项目一样推进。
+            系统会读取两个飞书文档，再调用 DeepSeek 解析日常选题、负责人和交稿日期。深度选题会生成长 timeline，后续像 Build 项目一样推进。
           </p>
         </div>
         <div className="space-y-3">
@@ -292,7 +305,7 @@ export function ContentHub({ mode = 'all', initialTopicType = 'daily' }) {
           <p className="text-sm font-medium text-emerald-700">{isTopics ? '硅星人选题' : isDemo ? '硅星人 Demo 模块' : isEval ? '硅星人 Eval' : '硅星人内容池'}</p>
           <h2 className="mt-2 text-3xl font-semibold tracking-normal text-slate-950">{isTopics ? '从周会进入选题推进' : isDemo ? '从 memo 到 Demo 决策' : isEval ? '测试集和评测进度' : '把零散 memo 变成可协作的板块'}</h2>
           <p className="mt-3 max-w-3xl text-sm leading-6 text-slate-600">
-            {isTopics ? '把周会文档和周会速记文档放进来，拆成日常选题和深度选题。日常选题看负责人和执行进度；深度选题按更长 timeline 协作推进。' : isDemo ? '这里都是大家扔上来的 Demo memo。试用后写体验，半数通过就进入 Demo。' : isEval ? '把测试集以飞书链接的方式放进来，记录负责人、评测进度和当前说明，部门大盘会同步显示 Eval 进度。' : 'Demo、每周例会和选题先放在这里。大家写试用体验、投 Demo 票，够半数通过后就可以进入 Demo 或沉淀成项目任务。'}
+            {isTopics ? '把周会文档和周会速记文档放进来，拆成日常选题和深度选题。日常选题看负责人、交稿日期和发布日期；深度选题按更长 timeline 协作推进。' : isDemo ? '这里都是大家扔上来的 Demo memo。试用后写体验，半数通过就进入 Demo。' : isEval ? '把测试集以飞书链接的方式放进来，记录负责人、评测进度和当前说明，部门大盘会同步显示 Eval 进度。' : 'Demo、每周例会和选题先放在这里。大家写试用体验、投 Demo 票，够半数通过后就可以进入 Demo 或沉淀成项目任务。'}
           </p>
           {isTopics ? (
             <div className="mt-4 inline-flex items-center gap-2 rounded-full border border-emerald-100 bg-emerald-50 px-3 py-1.5 text-sm font-medium text-emerald-800">
@@ -443,21 +456,30 @@ export function ContentHub({ mode = 'all', initialTopicType = 'daily' }) {
                 <div className="mt-4 grid gap-3 md:grid-cols-2">
                   <div className="rounded-md border border-slate-200 bg-slate-50 p-3">
                     <p className="text-xs font-semibold text-slate-500">负责人</p>
-                    <p className="mt-1 text-sm font-semibold text-slate-950">{item.owner_text || '待分配'}</p>
+                    <p className="mt-1 text-sm font-semibold text-slate-950">{item.kind === 'topic' ? topicOwnerText(item) : item.owner_text || '待分配'}</p>
                   </div>
                   <div className="rounded-md border border-slate-200 bg-slate-50 p-3">
-                    <div className="mb-2 flex items-center justify-between text-xs text-slate-500"><span>执行进度</span><span>{item.progress || 0}%</span></div>
-                    <div className="h-2 overflow-hidden rounded-full bg-slate-200">
-                      <div className="h-full rounded-full bg-emerald-500" style={{ width: `${item.progress || 0}%` }} />
-                    </div>
+                    {item.kind === 'topic' ? (
+                      <>
+                        <p className="text-xs font-semibold text-slate-500">交稿日期</p>
+                        <p className="mt-1 text-sm font-semibold text-slate-950">{topicDateText(item)}</p>
+                      </>
+                    ) : (
+                      <>
+                        <div className="mb-2 flex items-center justify-between text-xs text-slate-500"><span>执行进度</span><span>{item.progress || 0}%</span></div>
+                        <div className="h-2 overflow-hidden rounded-full bg-slate-200">
+                          <div className="h-full rounded-full bg-emerald-500" style={{ width: `${item.progress || 0}%` }} />
+                        </div>
+                      </>
+                    )}
                   </div>
                 </div>
               ) : null}
 
-              {item.timeline_text ? (
+              {item.timeline_text || item.kind === 'topic' ? (
                 <div className="mt-4 rounded-md border border-emerald-100 bg-emerald-50/70 p-3">
-                  <p className="text-xs font-semibold text-emerald-800">{item.kind === 'eval' ? 'Eval 计划' : item.sub_kind === 'deep' ? '深度选题长 timeline' : '选题执行计划'}</p>
-                  <p className="mt-1 whitespace-pre-wrap text-sm leading-6 text-emerald-900">{item.timeline_text}</p>
+                  <p className="text-xs font-semibold text-emerald-800">{item.kind === 'topic' ? '发布日期' : item.kind === 'eval' ? 'Eval 计划' : item.sub_kind === 'deep' ? '深度选题长 timeline' : '选题执行计划'}</p>
+                  <p className="mt-1 whitespace-pre-wrap text-sm leading-6 text-emerald-900">{item.kind === 'topic' ? '待王兆洋选择' : item.timeline_text}</p>
                 </div>
               ) : null}
 
