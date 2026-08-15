@@ -38,6 +38,7 @@ export function ContentHub({ mode = 'all', initialTopicType = 'daily' }) {
   const [parsingTopics, setParsingTopics] = useState(false);
   const [topicParseError, setTopicParseError] = useState('');
   const [topicDraftLinks, setTopicDraftLinks] = useState({});
+  const [topicDraftDates, setTopicDraftDates] = useState({});
   const [topicPublishDates, setTopicPublishDates] = useState({});
   const [topicEditorNotes, setTopicEditorNotes] = useState({});
   const [form, setForm] = useState({ kind: mode === 'topics' ? 'topic' : mode === 'demo' ? 'demo' : mode === 'eval' ? 'eval' : 'memo', subKind: mode === 'topics' ? 'daily' : '', title: '', body: '', sourceUrl: '', timelineText: '', ownerText: '', progress: 0, meetingDocUrl: '', meetingMinutesUrl: '' });
@@ -240,6 +241,18 @@ export function ContentHub({ mode = 'all', initialTopicType = 'daily' }) {
     }
   }
 
+  async function saveTopicDraftDate(item) {
+    const targetProjectId = item.project_id || projectId;
+    const draftDate = topicDraftDates[item.id] ?? topicDraftDateText(item) ?? '';
+    const res = await put(`/api/projects/${targetProjectId}/content/${item.id}/topic-draft-date`, { draftDate });
+    if (res.ok) {
+      setItems((current) => current.map((memo) => (memo.id === item.id ? res.data : memo)));
+      toast.success('交稿日期已保存');
+    } else {
+      toast.error(res.error || '保存失败');
+    }
+  }
+
   async function submitTopicDraft(item) {
     const targetProjectId = item.project_id || projectId;
     const draftDocUrl = topicDraftLinks[item.id] ?? item.draft_doc_url ?? '';
@@ -311,6 +324,10 @@ export function ContentHub({ mode = 'all', initialTopicType = 'daily' }) {
   function canEditTopicMeta() {
     const jobTitle = currentUser?.job_title || currentUser?.jobTitle || '';
     return canEditTopics || String(jobTitle).includes('编辑');
+  }
+
+  function canEditTopicDraftDate(item) {
+    return isTopicAuthor(item) || canEditTopicMeta();
   }
 
   function topicDraftDateText(item) {
@@ -548,7 +565,20 @@ export function ContentHub({ mode = 'all', initialTopicType = 'daily' }) {
                     {item.kind === 'topic' ? (
                       <>
                         <p className="text-xs font-semibold text-slate-500">交稿日期</p>
-                        <p className="mt-1 min-h-5 text-sm font-semibold text-slate-950">{topicDraftDateText(item)}</p>
+                        <div className="mt-2 flex flex-col gap-2 sm:flex-row sm:items-center">
+                          <input
+                            value={topicDraftDates[item.id] ?? topicDraftDateText(item)}
+                            onChange={(event) => setTopicDraftDates((drafts) => ({ ...drafts, [item.id]: event.target.value }))}
+                            disabled={!canEditTopicDraftDate(item)}
+                            placeholder={canEditTopicDraftDate(item) ? '负责人填写，比如 8月15日 / 下周三' : ''}
+                            className="min-w-0 flex-1 rounded-md border border-slate-200 bg-white px-3 py-2 text-sm text-slate-950 outline-none transition focus:border-emerald-400 disabled:bg-slate-50 disabled:text-slate-500"
+                          />
+                          {canEditTopicDraftDate(item) ? (
+                            <button onClick={() => saveTopicDraftDate(item)} className="rounded-md border border-slate-200 px-3 py-2 text-sm font-semibold text-slate-700 transition hover:bg-slate-50">
+                              保存
+                            </button>
+                          ) : null}
+                        </div>
                       </>
                     ) : (
                       <>

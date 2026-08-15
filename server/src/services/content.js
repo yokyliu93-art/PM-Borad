@@ -242,6 +242,32 @@ export function updateTopicPublishDate(projectId, memoId, userId, fields = {}) {
   return get(projectId, memoId, userId);
 }
 
+export function updateTopicDraftDate(projectId, memoId, userId, fields = {}) {
+  const memo = db.prepare('SELECT id, kind, created_by, owner_text, timeline_text FROM content_memos WHERE id = ? AND project_id = ?').get(memoId, projectId);
+  if (!memo) throw new Error('选题不存在');
+  if (memo.kind !== 'topic') throw new Error('只能编辑选题交稿日期');
+  const user = db.prepare('SELECT name, job_title FROM users WHERE id = ?').get(userId);
+  if (memo.created_by !== userId && !userMatchesOwnerText(user, memo.owner_text) && !isTopicEditor(userId)) {
+    throw new Error('只有选题负责人和编辑可以填写交稿日期');
+  }
+  const draftDate = String(fields.draftDate || fields.draft_date || '').trim();
+  const current = String(memo.timeline_text || '').trim();
+  let timelineText = current;
+  if (/交稿日期[：:]\s*[^\n]*/.test(current)) {
+    timelineText = draftDate
+      ? current.replace(/交稿日期[：:]\s*[^\n]*/, `交稿日期：${draftDate}`)
+      : current.replace(/交稿日期[：:]\s*[^\n]*\n?/g, '').trim();
+  } else if (draftDate) {
+    timelineText = current ? `交稿日期：${draftDate}\n${current}` : `交稿日期：${draftDate}`;
+  }
+  db.prepare(`
+    UPDATE content_memos
+    SET timeline_text = ?, updated_at = datetime('now')
+    WHERE id = ? AND project_id = ?
+  `).run(timelineText, memoId, projectId);
+  return get(projectId, memoId, userId);
+}
+
 export function archiveTopic(projectId, memoId, userId) {
   const memo = db.prepare('SELECT id, kind, created_by, owner_text FROM content_memos WHERE id = ? AND project_id = ?').get(memoId, projectId);
   if (!memo) throw new Error('选题不存在');
