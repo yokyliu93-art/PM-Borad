@@ -13,32 +13,33 @@ import { Dashboard } from './pages/Dashboard';
 import { BossBoard } from './pages/BossBoard';
 import { ContentHub } from './pages/ContentHub';
 import { MyWorkspace } from './pages/MyWorkspace';
-import { ArrowRight, Check, FileText, LayoutDashboard, Loader2, ShieldCheck, UsersRound } from 'lucide-react';
+import { ArrowRight, Check, FlaskConical, LayoutDashboard, Loader2, Microscope, Newspaper, ShieldCheck } from 'lucide-react';
 
 const landingFlow = [
-  { title: '看清项目', detail: '把目标、时间线和关键事项放在同一个入口' },
-  { title: '交给 Agent', detail: '总PM复制 API Key 和说明书，在自己的 Agent 里拆模块' },
-  { title: '回传模块', detail: 'Agent 确认后把模块、计划和资源配合传回 PM Board' },
-  { title: '提交复盘', detail: '交付物、进展和确认记录都沉淀下来' },
+  { title: '周会进来', detail: '周会文档、速记文档和 memo 作为来源，不再散落在群里' },
+  { title: '板块归位', detail: '选题、Demo、Eval、Build、Frontier、Prompt 各自沉淀' },
+  { title: '负责人推进', detail: '王兆洋分配选题，作者和 Agent 每天同步进度' },
+  { title: '统帅总览', detail: '老板授权后直接看全局进度、负责人和阻塞点' },
 ];
 
 const productTour = [
-  { title: '项目负责人发起项目', detail: '创建项目组、导入计划书，复制总PM Agent 包。', icon: FileText },
-  { title: 'Agent 回传模块', detail: '拆解在 Agent 里完成，PM Board 接收模块、计划和资源需求。', icon: UsersRound },
-  { title: '过程透明推进', detail: '进展更新、任务确认和复盘材料留在同一个工作台。', icon: LayoutDashboard },
+  { title: '选题推进', detail: '日常、商务、深度选题分开看。一级卡片只看重点，点进去看周会讨论、初稿和编辑建议。', icon: Newspaper },
+  { title: 'Demo 与 Memo', detail: '团队把体验和 memo 扔进池子，沉淀出可 demo 的项目候选。', icon: FlaskConical },
+  { title: 'Eval 测试集', detail: '飞书文档解析成一道一道可复制的 prompt，方便大家测新模型。', icon: Microscope },
+  { title: 'Build 项目', detail: '复杂项目单独进入 Build，用 Agent key 回传模块、timeline 和进度。', icon: LayoutDashboard },
 ];
 
 const scenarioCards = [
-  { title: '公司项目', detail: '飞书授权后自动进入组织空间，适合跨部门项目协同。' },
-  { title: '活动筹备', detail: '把嘉宾、赞助、物料、宣发拆成公开任务，成员自己认领。' },
-  { title: '开源团队', detail: '可以替换登录系统和数据库，让外部贡献者进入项目组。' },
+  { title: '每天更新', detail: '作者和自己的 Agent 同步今天完成了什么、明天推进什么。' },
+  { title: '每周复盘', detail: '周会文档和速记文档进入系统，形成本周选题、讨论纪要和后续动作。' },
+  { title: '给老板看', detail: '统帅视角聚合 Eval、Build、选题、Demo，不需要翻一堆群消息。' },
 ];
 
 const openSourceNotes = [
-  '可替换登录方式',
-  '可配置组织和项目组',
-  '可连接你自己的数据库',
-  '适合二次开发成内部工具',
+  '飞书授权登录',
+  '个人 Agent Key',
+  '飞书文档解析',
+  '可扩展到外部团队',
 ];
 
 function LandingPage() {
@@ -50,7 +51,7 @@ function LandingPage() {
           <img className="gxr-logo-mark" src="/guixingren-logo.jpg" alt="硅星人" />
           <div>
             <strong>硅星人 PM Board</strong>
-            <small>给 Agent 协作项目用的内部工作台</small>
+            <small>硅星人日常协作工作台</small>
           </div>
         </a>
         <a className="pm-nav-login" href="/api/auth/login">飞书登录</a>
@@ -58,9 +59,9 @@ function LandingPage() {
 
       <section className="pm-hero">
         <div className="pm-hero-copy">
-          <p className="pm-badge"><ShieldCheck size={15} />硅星人项目协作实验</p>
-          <h1>让项目计划变成可认领的责任网络</h1>
-          <p>总 PM 把项目计划交给自己的 Agent 拆解。Agent 确认后回传模块，硅星人 PM Board 再承接认领、进展和交付记录。</p>
+          <p className="pm-badge"><ShieldCheck size={15} />硅星人内部协作中枢</p>
+          <h1>把周会、选题、Demo、Eval 和 Build 放回一张板</h1>
+          <p>PM Board 是硅星人的日常协作入口。大家用飞书登录，让自己的 Agent 同步进度；老板授权后看统帅视角，直接知道每块事情谁在推进、卡在哪里。</p>
           <div className="pm-actions">
             <a href="/api/auth/login" className="pm-primary">
               使用飞书登录
@@ -71,10 +72,11 @@ function LandingPage() {
           </div>
           <div className="pm-signal-strip" aria-label="PM Board 核心流程">
             <span>硅星人</span>
-            <span>组织授权</span>
-            <span>Agent 包</span>
-            <span>模块回传</span>
-            <span>复盘记录</span>
+            <span>飞书授权</span>
+            <span>周会解析</span>
+            <span>选题推进</span>
+            <span>Agent 同步</span>
+            <span>统帅视角</span>
           </div>
         </div>
 
@@ -83,7 +85,7 @@ function LandingPage() {
             <img className="gxr-logo-mark" src="/guixingren-logo.jpg" alt="硅星人" />
             <div>
               <strong>硅星人 PM Board</strong>
-              <small>从 Agent 拆解到进度沉淀</small>
+              <small>从周会到日常推进</small>
             </div>
           </div>
           <div className="pm-flow-list">
@@ -98,16 +100,16 @@ function LandingPage() {
             ))}
           </div>
           <div className="pm-product-note">
-            <strong>登录后进入你的组织项目</strong>
-            <p>你会看到 Agent 回传的模块、自己负责的任务和交付进展。</p>
+            <strong>登录后进入硅星人协作面板</strong>
+            <p>你会看到部门大盘、选题池、Demo memo、Eval 测试集、Build 项目和自己的任务。</p>
           </div>
         </section>
       </section>
 
       <section id="tour" className="pm-section">
         <div className="pm-section-copy">
-          <h2>它不是再做一个任务列表</h2>
-          <p>它把 Agent 回传的模块、责任人和交付记录放在一条线上，让每个人都知道自己负责什么、需要推进什么。</p>
+          <h2>它不是旧版项目大厅</h2>
+          <p>现在的 PM Board 要服务硅星人编辑部的真实节奏：周会定方向，编辑分配选题，作者推进初稿，Agent 每天回传进度。</p>
         </div>
         <div className="pm-tour-grid">
           {productTour.map((item) => {
@@ -128,38 +130,38 @@ function LandingPage() {
           <div className="pm-showcase-header">
             <div>
               <p>硅星人 PM Board</p>
-              <h2>一个项目如何跑起来</h2>
+              <h2>一周工作如何沉淀</h2>
             </div>
             <span>进行中</span>
           </div>
           <div className="pm-showcase-lanes">
             <div>
-              <span>计划书</span>
-              <strong>赛事筹备总计划</strong>
-              <p>目标、预算、关键时间点</p>
+              <span>周会文档</span>
+              <strong>选题、复盘、速记</strong>
+              <p>飞书链接作为真实来源</p>
             </div>
             <div>
-              <span>Agent 回传模块</span>
-              <strong>24 个责任模块</strong>
-              <p>宣发、赞助、嘉宾、直播</p>
+              <span>内容板块</span>
+              <strong>选题 / Demo / Eval</strong>
+              <p>每块各自归档和推进</p>
             </div>
             <div className="pm-active-lane">
-              <span>责任人</span>
-              <strong>12 位成员推进中</strong>
-              <p>状态、进度、邀请记录同步</p>
+              <span>负责人</span>
+              <strong>9 位成员协作中</strong>
+              <p>状态、建议、初稿同步</p>
             </div>
           </div>
         </div>
         <div className="pm-section-copy">
-          <h2>给团队展示的不是页面，而是一套协作动作</h2>
-          <p>发起项目的人负责和 Agent 把模块拆清楚；成员进入项目组后认领对应模块；每次更新都会进入项目复盘记录。</p>
+          <h2>给团队看的不是页面，而是工作现场</h2>
+          <p>每一条飞书文档、每一次周会讨论、每个作者的初稿和编辑建议，都应该能找到位置。</p>
         </div>
       </section>
 
       <section className="pm-section">
         <div className="pm-section-copy">
-          <h2>适合这些项目组先用起来</h2>
-          <p>PM Board 更适合任务边界还在变化、但必须有人负责推进的项目。</p>
+          <h2>先服务硅星人的日常，再考虑开源</h2>
+          <p>内部先跑通流程：选题、Demo、Eval、Build 都能接 Agent；之后再把登录、权限和数据源做成可替换能力。</p>
         </div>
         <div className="pm-scenario-grid">
           {scenarioCards.map((item) => (
@@ -173,8 +175,8 @@ function LandingPage() {
 
       <section className="pm-open-section">
         <div>
-          <h2>以后开源给别人用，也说得通</h2>
-          <p>登录方式、组织权限和项目组模型都可以替换。公司可以接飞书，外部团队可以接 Google，开源部署可以继续扩展。</p>
+          <h2>未来给别人用，也要能换壳</h2>
+          <p>硅星人版先接飞书和内部权限。开源以后，别人可以替换登录、数据库、组织结构和消息推送。</p>
         </div>
         <div>
           {openSourceNotes.map((item) => (
@@ -184,8 +186,8 @@ function LandingPage() {
       </section>
 
       <section className="pm-final-cta">
-        <h2>先登录进去，看一遍完整流程</h2>
-        <p>等飞书权限开好，这里就会成为公司成员进入项目空间的正式入口。</p>
+        <h2>进入硅星人 PM Board</h2>
+        <p>飞书授权后进入内部协作面板。未授权的人只看到入口，不会直接进入工作区。</p>
         <a href="/api/auth/login" className="pm-primary">
           飞书登录
           <ArrowRight size={17} />

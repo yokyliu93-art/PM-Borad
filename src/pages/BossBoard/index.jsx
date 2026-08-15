@@ -60,6 +60,7 @@ export function BossBoard() {
 
   const sections = board?.sections || {};
   const teams = board?.teams || [];
+  const memberCount = teams.reduce((sum, team) => sum + Number(team.members_count || 0), 0);
 
   return (
     <section className="space-y-6">
@@ -73,7 +74,7 @@ export function BossBoard() {
             </p>
           </div>
           <div className="grid grid-cols-3 gap-3 rounded-lg bg-slate-50 p-3 text-center">
-            <Metric label="团队" value={teams.length} />
+            <Metric label="成员" value={memberCount} />
             <Metric label="事项" value={(sections.eval?.total || 0) + (sections.build?.total || 0) + (sections.topics?.total || 0) + (sections.demo?.total || 0)} />
             <Metric label="任务" value={sections.build?.tasks || 0} />
           </div>

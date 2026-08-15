@@ -81,9 +81,10 @@ export function upsertUser(feishuUser) {
 // New users are joined to the configured default team on login so everyone
 // lands in the shared workspace and can see the same projects.
 export function ensureDefaultTeamMembership(userId) {
-  if (!config.defaultTeamId) return;
+  const teamId = config.defaultTeamId || db.prepare('SELECT id FROM teams ORDER BY created_at ASC LIMIT 1').get()?.id;
+  if (!teamId) return;
   db.prepare('INSERT OR IGNORE INTO team_members (team_id, user_id, role) VALUES (?, ?, ?)')
-    .run(config.defaultTeamId, userId, 'member');
+    .run(teamId, userId, 'member');
 }
 
 export function signJwt(user) {

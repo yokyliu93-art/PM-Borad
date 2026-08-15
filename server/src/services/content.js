@@ -511,11 +511,19 @@ function fallbackWeeklyTopics({ meetingDoc, meetingNotes, aiError }) {
     dailyTopics: [{
       title: meetingDoc?.title || meetingNotes?.title || '周会选题待整理',
       owner: '',
-      firstDraftAt: '8 月 15 日',
+      firstDraftAt: '',
       summary: body || '飞书文档已读取，但没有抽取到可展示内容。',
     }],
     deepTopics: [],
   };
+}
+
+function topicBodyWithDiscussion(topic, extraLines = []) {
+  return [
+    topic.summary || '',
+    topic.meetingDiscussion ? `## 周会讨论纪要\n${topic.meetingDiscussion}` : '',
+    ...extraLines,
+  ].filter(Boolean).join('\n\n');
 }
 
 function evalTimelineText(evalSet) {
@@ -692,7 +700,7 @@ export async function parseWeeklyTopics(projectId, userId, fields = {}) {
     kind: 'topic',
     subKind: 'daily',
     title: topic.title || '未命名日常选题',
-    body: topic.summary || '',
+    body: topicBodyWithDiscussion(topic),
     ownerText: topic.owner || '待分配',
     progress: topic.progress || 0,
     timelineText: topicTimelineText(topic, false),
@@ -704,7 +712,7 @@ export async function parseWeeklyTopics(projectId, userId, fields = {}) {
     kind: 'topic',
     subKind: 'business',
     title: topic.title || '未命名商务选题',
-    body: topic.summary || '',
+    body: topicBodyWithDiscussion(topic),
     ownerText: topic.owner || '待分配',
     progress: topic.progress || 0,
     timelineText: topicTimelineText(topic, false),
@@ -716,7 +724,7 @@ export async function parseWeeklyTopics(projectId, userId, fields = {}) {
     kind: 'topic',
     subKind: 'deep',
     title: topic.title || '未命名深度选题',
-    body: [topic.summary || '', topic.resources ? `资源配合：${topic.resources}` : ''].filter(Boolean).join('\n\n'),
+    body: topicBodyWithDiscussion(topic, [topic.resources ? `资源配合：${topic.resources}` : '']),
     ownerText: topic.owner || '待分配',
     progress: topic.progress || 0,
     timelineText: topicTimelineText(topic, true),
@@ -728,7 +736,7 @@ export async function parseWeeklyTopics(projectId, userId, fields = {}) {
     kind: 'topic',
     subKind: 'weekly_recommendation',
     title: topic.title || '未命名本周项目推荐',
-    body: topic.summary || '',
+    body: topicBodyWithDiscussion(topic),
     ownerText: topic.owner || '待分配',
     progress: topic.progress || 0,
     timelineText: topicTimelineText(topic, false),

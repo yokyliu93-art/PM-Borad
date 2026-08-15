@@ -398,15 +398,17 @@ export function ContentHub({ mode = 'all', initialTopicType = 'daily' }) {
       intro: '',
       weeklyPlan: '',
       phaseProgress: '',
+      meetingDiscussion: '',
       interviewRaw: '',
       outline: '',
     };
     const body = String(item.body || '');
-    const sectionPattern = /##\s*(技术介绍|周计划|阶段性进度|采访原文|稿件框架)\s*\n([\s\S]*?)(?=\n##\s*(?:技术介绍|周计划|阶段性进度|采访原文|稿件框架)\s*\n|$)/g;
+    const sectionPattern = /##\s*(技术介绍|周计划|阶段性进度|周会讨论纪要|采访原文|稿件框架)\s*\n([\s\S]*?)(?=\n##\s*(?:技术介绍|周计划|阶段性进度|周会讨论纪要|采访原文|稿件框架)\s*\n|$)/g;
     const keyMap = {
       技术介绍: 'intro',
       周计划: 'weeklyPlan',
       阶段性进度: 'phaseProgress',
+      周会讨论纪要: 'meetingDiscussion',
       采访原文: 'interviewRaw',
       稿件框架: 'outline',
     };
@@ -776,6 +778,7 @@ export function ContentHub({ mode = 'all', initialTopicType = 'daily' }) {
           {selectedTopic.sub_kind === 'deep' ? (
           <div className="mt-4 grid gap-3 md:grid-cols-2">
             <TopicDetailBlock title="阶段性进度" value={topicDetailSections(selectedTopic).phaseProgress || '暂无进度更新'} />
+            <TopicDetailBlock title="周会讨论纪要" value={topicDetailSections(selectedTopic).meetingDiscussion || '等待从周会速记中同步讨论纪要'} />
             <TopicDetailBlock title="采访原文" value={topicDetailSections(selectedTopic).interviewRaw || '等待飞书原文链接或摘录'} />
             <TopicDetailBlock title="稿件框架" value={topicDetailSections(selectedTopic).outline || '等待补充稿件框架'} />
           </div>
