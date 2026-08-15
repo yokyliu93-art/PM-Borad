@@ -868,7 +868,7 @@ export function ContentHub({ mode = 'all', initialTopicType = 'daily' }) {
                 <>
                   <div className="flex flex-wrap items-center gap-2">
                     <span className="rounded-md bg-emerald-50 px-2 py-1 text-xs font-medium text-emerald-700">{topicTypeLabels[item.sub_kind] || kindLabels[item.kind] || 'Memo'}</span>
-                    {item.project_name ? <span className="rounded-md bg-slate-100 px-2 py-1 text-xs font-medium text-slate-500">{item.project_name}</span> : null}
+                    {item.project_name ? <span className="rounded-md bg-slate-100 px-2 py-1 text-xs font-medium text-slate-500">Build</span> : null}
                     {hasTopicMemo(item) ? <span className="rounded-md bg-sky-50 px-2 py-1 text-xs font-medium text-sky-700">有 memo / 文档</span> : null}
                   </div>
                   <h3 className="mt-4 text-xl font-semibold tracking-normal text-slate-950">{item.title}</h3>
