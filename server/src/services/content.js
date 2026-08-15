@@ -271,6 +271,49 @@ function userMatchesOwnerText(user, ownerText = '') {
   return owner === name || owner.includes(name) || name.includes(owner);
 }
 
+function replaceTopicIntro(body = '', intro = '') {
+  const text = String(body || '');
+  const nextIntro = String(intro || '').trim();
+  const sectionPattern = /##\s*技术介绍\s*\n([\s\S]*?)(?=\n##\s*(?:周计划|阶段性进度|周会讨论纪要|采访原文|稿件框架)\s*\n|$)/;
+  if (sectionPattern.test(text)) {
+    return text.replace(sectionPattern, `## 技术介绍\n${nextIntro}\n`);
+  }
+  return nextIntro;
+}
+
+function setCurrentProgressText(timelineText = '', currentProgress = '') {
+  const progress = String(currentProgress || '').trim();
+  const current = String(timelineText || '').trim();
+  if (/当前进度[：:]\s*[^\n]*/.test(current)) {
+    return progress
+      ? current.replace(/当前进度[：:]\s*[^\n]*/, `当前进度：${progress}`)
+      : current.replace(/当前进度[：:]\s*[^\n]*\n?/g, '').trim();
+  }
+  if (!progress) return current;
+  return current ? `当前进度：${progress}\n${current}` : `当前进度：${progress}`;
+}
+
+export function updateTopicDetails(projectId, memoId, userId, fields = {}) {
+  const memo = db.prepare('SELECT id, kind, title, body, timeline_text, created_by, owner_text FROM content_memos WHERE id = ? AND project_id = ?').get(memoId, projectId);
+  if (!memo) throw new Error('选题不存在');
+  if (memo.kind !== 'topic') throw new Error('只能编辑选题卡片');
+  if (!canEditTopic(userId, memo)) throw new Error('只有作者、负责人和编辑可以编辑选题卡片');
+  const title = String(fields.title ?? memo.title).trim();
+  if (!title) throw new Error('选题名称不能为空');
+  const hasBody = Object.prototype.hasOwnProperty.call(fields, 'body') || Object.prototype.hasOwnProperty.call(fields, 'theme');
+  const body = hasBody ? replaceTopicIntro(memo.body, fields.body ?? fields.theme ?? '') : memo.body;
+  const timelineText = Object.prototype.hasOwnProperty.call(fields, 'currentProgress')
+    || Object.prototype.hasOwnProperty.call(fields, 'current_progress')
+    ? setCurrentProgressText(memo.timeline_text, fields.currentProgress ?? fields.current_progress ?? '')
+    : memo.timeline_text;
+  db.prepare(`
+    UPDATE content_memos
+    SET title = ?, body = ?, timeline_text = ?, updated_at = datetime('now')
+    WHERE id = ? AND project_id = ?
+  `).run(title, body, timelineText, memoId, projectId);
+  return get(projectId, memoId, userId);
+}
+
 export function updateTopicFinalDoc(projectId, memoId, userId, fields = {}) {
   const memo = db.prepare('SELECT id, kind, created_by, owner_text FROM content_memos WHERE id = ? AND project_id = ?').get(memoId, projectId);
   if (!memo) throw new Error('选题不存在');

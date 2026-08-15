@@ -70,6 +70,15 @@ router.delete('/:memoId/vote-demo', (req, res) => {
   }
 });
 
+router.put('/:memoId/topic-details', (req, res) => {
+  try {
+    const data = contentService.updateTopicDetails(req.params.projectId, req.params.memoId, req.user.id, req.body || {});
+    res.json({ ok: true, data });
+  } catch (err) {
+    res.status(400).json({ ok: false, error: err.message });
+  }
+});
+
 router.put('/:memoId/topic-final-doc', (req, res) => {
   try {
     const data = contentService.updateTopicFinalDoc(req.params.projectId, req.params.memoId, req.user.id, req.body || {});
