@@ -157,7 +157,9 @@ export function ContentHub({ mode = 'all', initialTopicType = 'daily' }) {
         const daily = res.data?.dailyTopics?.length || 0;
         const deep = res.data?.deepTopics?.length || 0;
         const pushed = (res.data?.notifications || []).filter((item) => item.pushed).length;
-        toast.success(`已解析 ${daily} 个日常选题、${deep} 个深度选题，已推送 ${pushed} 位负责人`);
+        toast.success(res.data?.fallback
+          ? `DeepSeek 解析失败，但已先回传飞书内容，生成 ${daily} 个待整理选题`
+          : `已解析 ${daily} 个日常选题、${deep} 个深度选题，已推送 ${pushed} 位负责人`);
       } else {
         toast.success(`已导入例会，并生成 ${res.data?.topics?.length || 0} 条候选选题`);
       }

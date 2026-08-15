@@ -287,6 +287,50 @@ function topicTimelineText(topic, deep = false) {
   return topic.firstDraftAt ? `交稿日期：${topic.firstDraftAt}` : '交稿日期：待定';
 }
 
+const TOPIC_LINE_KEYWORDS = /选题|题目|主题|初稿|截稿|稿|文章|报道|采访|约访|试用|体验|Demo|demo|深度|日常|专题|系列|发布|上线|推荐|Builder|GAI|GenAI|下周|本周|时间|进度|排期|timeline|讨论|确定|待定/i;
+
+function topicExcerpt(content = '', limit = 1800) {
+  const text = String(content || '').replace(/\r/g, '\n').replace(/\n{3,}/g, '\n\n').trim();
+  if (!text) return '';
+  if (text.length <= limit) return text;
+  const lines = text.split('\n').map((line) => line.trim()).filter(Boolean);
+  const picked = [];
+  const seen = new Set();
+  for (let i = 0; i < lines.length; i += 1) {
+    if (!TOPIC_LINE_KEYWORDS.test(lines[i])) continue;
+    for (let j = Math.max(0, i - 1); j <= Math.min(lines.length - 1, i + 2); j += 1) {
+      const line = lines[j];
+      if (seen.has(line)) continue;
+      picked.push(line);
+      seen.add(line);
+    }
+  }
+  const relevant = picked.join('\n').slice(0, limit);
+  return relevant || text.slice(0, limit);
+}
+
+function fallbackWeeklyTopics({ meetingDoc, meetingNotes, aiError }) {
+  const docPart = topicExcerpt(meetingDoc?.content || '', 900);
+  const notesPart = topicExcerpt(meetingNotes?.content || '', 1800);
+  const body = [
+    aiError ? `DeepSeek 没有返回可用 JSON，已先回传飞书文档内容，等待人工整理。错误：${aiError}` : '',
+    meetingDoc?.title ? `周会文档：${meetingDoc.title}` : '',
+    docPart ? `周会文档片段：\n${docPart}` : '',
+    meetingNotes?.title ? `周会速记文档：${meetingNotes.title}` : '',
+    notesPart ? `速记文档片段：\n${notesPart}` : '',
+  ].filter(Boolean).join('\n\n');
+  return {
+    fallback: true,
+    dailyTopics: [{
+      title: meetingDoc?.title || meetingNotes?.title || '周会选题待整理',
+      owner: '',
+      firstDraftAt: '8 月 15 日',
+      summary: body || '飞书文档已读取，但没有抽取到可展示内容。',
+    }],
+    deepTopics: [],
+  };
+}
+
 function evalTimelineText(evalSet) {
   if (Array.isArray(evalSet.timeline) && evalSet.timeline.length) {
     return evalSet.timeline
@@ -421,14 +465,28 @@ export async function parseWeeklyTopics(projectId, userId, fields = {}) {
     feishuService.fetchDocContent(userId, meetingDocUrl),
     feishuService.fetchDocContent(userId, meetingNotesUrl),
   ]);
-  const parsed = await aiService.parseWeeklyTopics({ meetingDoc, meetingNotes });
+  let parsed;
+  let aiError = '';
+  try {
+    parsed = await aiService.parseWeeklyTopics({ meetingDoc, meetingNotes });
+    if (!parsed.dailyTopics.length && !parsed.deepTopics.length) {
+      aiError = 'DeepSeek 返回了空选题列表';
+      parsed = fallbackWeeklyTopics({ meetingDoc, meetingNotes, aiError });
+    }
+  } catch (err) {
+    aiError = err.userMessage || err.message || 'DeepSeek 解析失败';
+    console.error('[content] weekly topics AI fallback:', aiError);
+    parsed = fallbackWeeklyTopics({ meetingDoc, meetingNotes, aiError });
+  }
   const meeting = create(projectId, userId, {
     kind: 'meeting',
     title: fields.title || meetingDoc.title || '周会选题解析',
     body: [
       `周会文档：${meetingDoc.title || meetingDocUrl}`,
       `周会速记文档：${meetingNotes.title || meetingNotesUrl}`,
-      `DeepSeek 已解析出 ${parsed.dailyTopics.length} 个日常选题、${parsed.deepTopics.length} 个深度选题。`,
+      parsed.fallback
+        ? `DeepSeek 解析失败，已先回传飞书文档内容，生成 ${parsed.dailyTopics.length} 个待整理选题。`
+        : `DeepSeek 已解析出 ${parsed.dailyTopics.length} 个日常选题、${parsed.deepTopics.length} 个深度选题。`,
     ].join('\n'),
     sourceUrl: meetingDocUrl,
     meetingDocUrl,
@@ -479,6 +537,8 @@ export async function parseWeeklyTopics(projectId, userId, fields = {}) {
     dailyTopics: createdDaily,
     deepTopics: createdDeep,
     notifications,
+    fallback: !!parsed.fallback,
+    aiError,
     source: {
       meetingDoc: { title: meetingDoc.title, url: meetingDocUrl },
       meetingNotes: { title: meetingNotes.title, url: meetingNotesUrl },
