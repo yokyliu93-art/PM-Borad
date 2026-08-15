@@ -169,7 +169,7 @@ export function ContentHub({ mode = 'all', initialTopicType = 'daily' }) {
   ), [items, activeTab, isGlobal]);
 
   const selectedTopic = useMemo(() => (
-    filteredItems.find((item) => item.id === selectedTopicId && item.kind === 'topic' && item.sub_kind === 'deep') || null
+    filteredItems.find((item) => item.id === selectedTopicId && item.kind === 'topic') || null
   ), [filteredItems, selectedTopicId]);
 
   const stats = useMemo(() => ({
@@ -743,13 +743,13 @@ export function ContentHub({ mode = 'all', initialTopicType = 'daily' }) {
       {selectedTopic ? (
         <article className="rounded-xl border border-slate-200 bg-white p-6 shadow-sm shadow-slate-950/5">
           <button onClick={() => setSelectedTopicId('')} className="mb-5 inline-flex items-center rounded-md border border-slate-200 px-3 py-2 text-sm font-semibold text-slate-600 transition hover:bg-slate-50">
-            返回深度选题
+            返回选题列表
           </button>
           <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
             <div className="min-w-0">
               <div className="flex flex-wrap items-center gap-2">
-                <span className="rounded-md bg-emerald-50 px-2 py-1 text-xs font-medium text-emerald-700">深度选题</span>
-                <span className="rounded-md bg-slate-100 px-2 py-1 text-xs font-medium text-slate-500">初稿阶段</span>
+                <span className="rounded-md bg-emerald-50 px-2 py-1 text-xs font-medium text-emerald-700">{topicTypeLabels[selectedTopic.sub_kind] || '选题'}</span>
+                <span className="rounded-md bg-slate-100 px-2 py-1 text-xs font-medium text-slate-500">{topicProgressText(selectedTopic)}</span>
               </div>
               <h3 className="mt-3 text-2xl font-semibold tracking-normal text-slate-950">{selectedTopic.title}</h3>
               <p className="mt-2 max-w-3xl whitespace-pre-wrap text-sm leading-6 text-slate-600">{topicCardBody(selectedTopic)}</p>
@@ -760,6 +760,7 @@ export function ContentHub({ mode = 'all', initialTopicType = 'daily' }) {
             </div>
           </div>
 
+          {selectedTopic.sub_kind === 'deep' ? (
           <div className="mt-5 rounded-lg border border-slate-200 bg-slate-50 p-4">
             <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
               <div>
@@ -770,13 +771,17 @@ export function ContentHub({ mode = 'all', initialTopicType = 'daily' }) {
             </div>
             <TopicWeekPlan plans={topicWeekPlans(selectedTopic)} currentWeek="W4" />
           </div>
+          ) : null}
 
+          {selectedTopic.sub_kind === 'deep' ? (
           <div className="mt-4 grid gap-3 md:grid-cols-2">
             <TopicDetailBlock title="阶段性进度" value={topicDetailSections(selectedTopic).phaseProgress || '暂无进度更新'} />
             <TopicDetailBlock title="采访原文" value={topicDetailSections(selectedTopic).interviewRaw || '等待飞书原文链接或摘录'} />
             <TopicDetailBlock title="稿件框架" value={topicDetailSections(selectedTopic).outline || '等待补充稿件框架'} />
           </div>
+          ) : null}
 
+          {selectedTopic.sub_kind === 'deep' ? (
           <div className="mt-4 rounded-lg border border-emerald-100 bg-white p-4">
             <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
               <div>
@@ -806,6 +811,7 @@ export function ContentHub({ mode = 'all', initialTopicType = 'daily' }) {
               ))}
             </div>
           </div>
+          ) : null}
 
           <div className="mt-4 space-y-3 rounded-md border border-slate-200 bg-white p-3">
             <div className="grid gap-3 lg:grid-cols-[1fr_auto] lg:items-end">
@@ -858,7 +864,7 @@ export function ContentHub({ mode = 'all', initialTopicType = 'daily' }) {
         <div className="grid gap-4 lg:grid-cols-2">
           {filteredItems.map((item) => (
             <article key={item.id} className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm shadow-slate-950/5">
-              {item.kind === 'topic' && item.sub_kind === 'deep' ? (
+              {item.kind === 'topic' ? (
                 <>
                   <div className="flex flex-wrap items-center gap-2">
                     <span className="rounded-md bg-emerald-50 px-2 py-1 text-xs font-medium text-emerald-700">{topicTypeLabels[item.sub_kind] || kindLabels[item.kind] || 'Memo'}</span>
@@ -881,7 +887,7 @@ export function ContentHub({ mode = 'all', initialTopicType = 'daily' }) {
                     </div>
                   </div>
                   <button onClick={() => setSelectedTopicId(item.id)} className="mt-4 inline-flex items-center justify-center rounded-md bg-slate-950 px-4 py-2 text-sm font-semibold text-white transition hover:bg-slate-800">
-                    进入二级页面
+                    查看详情
                   </button>
                 </>
               ) : (
