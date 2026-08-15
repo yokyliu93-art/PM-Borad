@@ -5,7 +5,7 @@ import * as aiService from './ai.js';
 import * as feishuService from './feishu.js';
 import * as feishuPushService from './feishuPush.js';
 
-const TOPIC_EDITORS = ['王兆洋', '骆轶航'];
+const TOPIC_EDITORS = ['王兆洋'];
 
 function normalizeKind(kind = '') {
   const value = String(kind || '').trim();
@@ -229,7 +229,7 @@ export function updateTopicFinalDoc(projectId, memoId, userId, fields = {}) {
 }
 
 export function updateTopicPublishDate(projectId, memoId, userId, fields = {}) {
-  if (!isTopicEditor(userId)) throw new Error('只有王兆洋、骆轶航和编辑可以选择发布日期');
+  if (!isTopicEditor(userId)) throw new Error('只有选题编辑可以选择发布日期');
   const memo = db.prepare('SELECT id, kind FROM content_memos WHERE id = ? AND project_id = ?').get(memoId, projectId);
   if (!memo) throw new Error('选题不存在');
   if (memo.kind !== 'topic') throw new Error('只能编辑选题发布日期');
@@ -272,7 +272,7 @@ export function archiveTopic(projectId, memoId, userId) {
   const memo = db.prepare('SELECT id, kind, created_by, owner_text FROM content_memos WHERE id = ? AND project_id = ?').get(memoId, projectId);
   if (!memo) throw new Error('选题不存在');
   if (memo.kind !== 'topic') throw new Error('只能归档选题');
-  if (!canArchiveTopic(userId, memo)) throw new Error('只有作者、王兆洋、骆轶航和编辑可以归档选题');
+  if (!canArchiveTopic(userId, memo)) throw new Error('只有作者、负责人和编辑可以归档选题');
   db.prepare(`
     UPDATE content_memos
     SET status = 'archived', updated_at = datetime('now')
@@ -325,7 +325,7 @@ export async function submitTopicDraft(projectId, memoId, userId, fields = {}) {
 }
 
 export async function updateTopicEditorNotes(projectId, memoId, userId, fields = {}) {
-  if (!isTopicEditor(userId)) throw new Error('只有王兆洋、骆轶航和编辑可以填写编辑建议');
+  if (!isTopicEditor(userId)) throw new Error('只有选题编辑可以填写编辑建议');
   const memo = db.prepare(`
     SELECT m.*, u.name as created_by_name
     FROM content_memos m

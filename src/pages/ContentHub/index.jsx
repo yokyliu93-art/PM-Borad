@@ -48,7 +48,7 @@ export function ContentHub({ mode = 'all', initialTopicType = 'daily' }) {
   const isTopics = mode === 'topics';
   const isDemo = mode === 'demo';
   const isEval = mode === 'eval';
-  const canEditTopics = ['王兆洋', '骆轶航'].some((name) => {
+  const canEditTopics = ['王兆洋'].some((name) => {
     const currentName = currentUser?.name || '';
     if (!currentName) return false;
     return currentName === name || currentName.includes(name) || name.includes(currentName);
@@ -313,7 +313,7 @@ export function ContentHub({ mode = 'all', initialTopicType = 'daily' }) {
   function canArchiveTopic(item) {
     const currentName = currentUser?.name || '';
     const jobTitle = currentUser?.job_title || currentUser?.jobTitle || '';
-    const namedEditor = currentName && ['王兆洋', '骆轶航'].some((name) => currentName === name || currentName.includes(name) || name.includes(currentName));
+    const namedEditor = currentName && ['王兆洋'].some((name) => currentName === name || currentName.includes(name) || name.includes(currentName));
     return item.created_by === currentUser?.id || currentUserMatchesOwner(item) || namedEditor || String(jobTitle).includes('编辑');
   }
 
@@ -406,7 +406,7 @@ export function ContentHub({ mode = 'all', initialTopicType = 'daily' }) {
           </p>
           {isTopics ? (
             <div className="mt-4 inline-flex items-center gap-2 rounded-full border border-emerald-100 bg-emerald-50 px-3 py-1.5 text-sm font-medium text-emerald-800">
-              <UserCheck size={15} />选题面板：王兆洋负责，王兆洋 / 骆轶航可编辑
+              <UserCheck size={15} />选题面板：选题负责人和编辑可维护
             </div>
           ) : null}
           <div className="mt-5 grid gap-3 md:grid-cols-4">
