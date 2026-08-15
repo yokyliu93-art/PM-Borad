@@ -7,7 +7,7 @@ import { Progress } from '../../components/ui/Progress';
 const blocks = [
   { key: 'eval', title: 'Eval', subtitle: '评测、测评与 benchmark', icon: Microscope, tone: 'violet' },
   { key: 'build', title: 'Build', subtitle: '正在 build 的复杂项目', icon: Boxes, tone: 'amber' },
-  { key: 'topics', title: '选题', subtitle: '日常 / 深度 / Frontier / Prompt', icon: Newspaper, tone: 'emerald' },
+  { key: 'topics', title: '选题', subtitle: '日常 / 深度 / 本周项目推荐', icon: Newspaper, tone: 'emerald' },
   { key: 'demo', title: 'Demo', subtitle: 'memo 试用、投票与可 demo 项', icon: FlaskConical, tone: 'cyan' },
 ];
 
@@ -102,8 +102,7 @@ function BoardBlock({ block, data, openCard, setOpenCard, navigate }) {
     ? [
         ...(data.dailyItems || []).map((item) => ({ ...item, topicType: '日常选题' })),
         ...(data.deepItems || []).map((item) => ({ ...item, topicType: '深度选题' })),
-        ...(data.frontierItems || []).map((item) => ({ ...item, topicType: 'Frontier' })),
-        ...(data.promptItems || []).map((item) => ({ ...item, topicType: 'Prompt' })),
+        ...(data.weeklyItems || []).map((item) => ({ ...item, topicType: '本周项目推荐' })),
       ]
     : data.items || [];
 
@@ -137,20 +136,14 @@ function BoardBlock({ block, data, openCard, setOpenCard, navigate }) {
             setOpenCard={setOpenCard}
           />
           <TopicLane
-            title="Frontier"
-            items={data.frontierItems || []}
-            openCard={openCard}
-            setOpenCard={setOpenCard}
-          />
-          <TopicLane
-            title="Prompt"
-            items={data.promptItems || []}
-            openCard={openCard}
-            setOpenCard={setOpenCard}
-          />
-          <TopicLane
             title="深度选题"
             items={data.deepItems || []}
+            openCard={openCard}
+            setOpenCard={setOpenCard}
+          />
+          <TopicLane
+            title="本周项目推荐"
+            items={data.weeklyItems || []}
             openCard={openCard}
             setOpenCard={setOpenCard}
           />
@@ -301,8 +294,7 @@ function BlockStats({ type, data }) {
       <div className="grid grid-cols-2 gap-2 text-center">
         <TinyMetric label="日常" value={data.dailyTotal || 0} />
         <TinyMetric label="深度" value={data.deepTotal || 0} />
-        <TinyMetric label="Frontier" value={data.frontierTotal || 0} />
-        <TinyMetric label="Prompt" value={data.promptTotal || 0} />
+        <TinyMetric label="推荐" value={data.weeklyTotal || 0} />
       </div>
     );
   }

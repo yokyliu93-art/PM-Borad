@@ -80,7 +80,7 @@ export function Shell() {
 
               <NavLink to="/topics/prompt" className={({ isActive }) => navClass(isActive)}>
                 <MessageSquareText size={16} />
-                <span>Prompt</span>
+                <span>Prompt PR</span>
               </NavLink>
 
               <NavGroup icon={Presentation} title="Demo" defaultOpen={location.pathname.startsWith('/demo')}>

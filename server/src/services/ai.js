@@ -14,7 +14,7 @@ const AUDIT_PROMPT = `你是总 PM 的审核 Agent。请审核子 PM 或执行 A
 
 const TOPIC_PARSE_PROMPT = `你是硅星人内容编辑部的选题统筹助手。请根据周会文档和周会速记文档，抽取选题并归类。
 只输出 JSON 对象，不要输出解释或 Markdown。格式：
-{"dailyTopics":[{"title":"日常选题标题","owner":"负责人姓名","firstDraftAt":"交稿日期，如 8月16日/下周三/待定","summary":"当前进展和需要做什么"}],"deepTopics":[{"title":"深度选题标题","owner":"负责人姓名","firstDraftAt":"首稿或阶段稿时间","summary":"选题背景和当前阶段","timeline":[{"week":"W1","detail":"目标、动作、负责人和交付物"}],"resources":"需要谁配合、需要什么资料"}],"frontierTopics":[{"title":"Frontier 研究/项目/产品名称","owner":"负责人姓名","summary":"一句话介绍","reason":"人们为什么必须关注","resources":"链接、memo 或下一步操作"}],"promptTopics":[{"title":"Prompt 项目或主题","owner":"负责人姓名","firstDraftAt":"交稿日期或待定","summary":"当前要做什么、需要谁配合"}]}`;
+{"dailyTopics":[{"title":"日常选题标题","owner":"负责人姓名","firstDraftAt":"交稿日期，如 8月16日/下周三/待定","summary":"当前进展和需要做什么"}],"deepTopics":[{"title":"深度选题标题","owner":"负责人姓名","firstDraftAt":"首稿或阶段稿时间","summary":"选题背景和当前阶段","timeline":[{"week":"W1","detail":"目标、动作、负责人和交付物"}],"resources":"需要谁配合、需要什么资料"}],"weeklyRecommendations":[{"title":"本周项目推荐标题","owner":"负责人姓名","firstDraftAt":"交稿日期或待定","summary":"推荐理由、项目亮点和要做什么"}],"frontierTopics":[{"title":"Frontier 研究/项目/产品名称","owner":"负责人姓名","summary":"一句话介绍","reason":"人们为什么必须关注","resources":"链接、memo 或下一步操作"}],"promptTopics":[{"title":"Prompt PR 项目或主题","owner":"负责人姓名","firstDraftAt":"交稿日期或待定","summary":"当前要做什么、需要谁配合"}]}`;
 
 const EVAL_PARSE_PROMPT = `你是硅星人 Eval 测试集整理助手。请根据飞书文档内容，整理成 PM Board 里的共享测试集模块，并把测试集拆成一道一道可复制给模型测试的问题。
 只输出 JSON 对象，不要输出解释或 Markdown。格式：
@@ -107,6 +107,7 @@ export async function parseWeeklyTopics({ meetingDoc, meetingNotes }) {
   return {
     dailyTopics: Array.isArray(parsed.dailyTopics) ? parsed.dailyTopics : [],
     deepTopics: Array.isArray(parsed.deepTopics) ? parsed.deepTopics : [],
+    weeklyRecommendations: Array.isArray(parsed.weeklyRecommendations) ? parsed.weeklyRecommendations : [],
     frontierTopics: Array.isArray(parsed.frontierTopics) ? parsed.frontierTopics : [],
     promptTopics: Array.isArray(parsed.promptTopics) ? parsed.promptTopics : [],
   };

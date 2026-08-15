@@ -19,8 +19,9 @@ function normalizeKind(kind = '') {
 function normalizeSubKind(subKind = '') {
   const value = String(subKind || '').trim();
   const lower = value.toLowerCase();
-  if (['daily', 'deep', 'frontier', 'prompt'].includes(lower)) return lower;
+  if (['daily', 'deep', 'weekly_recommendation', 'frontier', 'prompt'].includes(lower)) return lower;
   if (value.includes('深度')) return 'deep';
+  if (/本周项目推荐|项目推荐|weekly/i.test(value)) return 'weekly_recommendation';
   if (/frontier|前沿/i.test(value)) return 'frontier';
   if (/prompt|提示词|提示/i.test(value)) return 'prompt';
   return value ? 'daily' : '';
@@ -624,7 +625,7 @@ export async function parseWeeklyTopics(projectId, userId, fields = {}) {
   let aiError = '';
   try {
     parsed = await aiService.parseWeeklyTopics({ meetingDoc, meetingNotes });
-    if (!parsed.dailyTopics.length && !parsed.deepTopics.length && !parsed.frontierTopics?.length && !parsed.promptTopics?.length) {
+    if (!parsed.dailyTopics.length && !parsed.deepTopics.length && !parsed.weeklyRecommendations?.length && !parsed.frontierTopics?.length && !parsed.promptTopics?.length) {
       aiError = 'DeepSeek 返回了空选题列表';
       parsed = fallbackWeeklyTopics({ meetingDoc, meetingNotes, aiError });
     }
@@ -641,7 +642,7 @@ export async function parseWeeklyTopics(projectId, userId, fields = {}) {
       meetingNotesUrl ? `周会速记文档：${meetingNotes.title || meetingNotesUrl}` : '',
       parsed.fallback
         ? `DeepSeek 解析失败，已先回传飞书文档内容，生成 ${parsed.dailyTopics.length} 个待整理选题。`
-        : `DeepSeek 已解析出 ${parsed.dailyTopics.length} 个日常选题、${parsed.deepTopics.length} 个深度选题、${parsed.frontierTopics?.length || 0} 个 Frontier、${parsed.promptTopics?.length || 0} 个 Prompt。`,
+        : `DeepSeek 已解析出 ${parsed.dailyTopics.length} 个日常选题、${parsed.deepTopics.length} 个深度选题、${parsed.weeklyRecommendations?.length || 0} 个本周项目推荐、${parsed.frontierTopics?.length || 0} 个 Frontier、${parsed.promptTopics?.length || 0} 个 Prompt PR。`,
     ].filter(Boolean).join('\n'),
     sourceUrl: meetingDocUrl,
     meetingDocUrl,
@@ -672,6 +673,18 @@ export async function parseWeeklyTopics(projectId, userId, fields = {}) {
     meetingDocUrl,
     meetingMinutesUrl: meetingNotesUrl,
   }));
+  const createdWeekly = (parsed.weeklyRecommendations || []).map((topic) => create(projectId, userId, {
+    kind: 'topic',
+    subKind: 'weekly_recommendation',
+    title: topic.title || '未命名本周项目推荐',
+    body: topic.summary || '',
+    ownerText: topic.owner || '待分配',
+    progress: topic.progress || 0,
+    timelineText: topicTimelineText(topic, false),
+    sourceUrl: meetingDocUrl,
+    meetingDocUrl,
+    meetingMinutesUrl: meetingNotesUrl,
+  }));
   const createdFrontier = (parsed.frontierTopics || []).map((topic) => create(projectId, userId, {
     kind: 'topic',
     subKind: 'frontier',
@@ -691,7 +704,7 @@ export async function parseWeeklyTopics(projectId, userId, fields = {}) {
   const createdPrompt = (parsed.promptTopics || []).map((topic) => create(projectId, userId, {
     kind: 'topic',
     subKind: 'prompt',
-    title: topic.title || '未命名 Prompt',
+    title: topic.title || '未命名 Prompt PR',
     body: topic.summary || '',
     ownerText: topic.owner || '待分配',
     progress: topic.progress || 0,
@@ -703,7 +716,7 @@ export async function parseWeeklyTopics(projectId, userId, fields = {}) {
 
   const boardUrl = `${config.clientUrl}/topics/daily`;
   const notifications = [];
-  for (const topic of [...parsed.dailyTopics, ...parsed.deepTopics, ...(parsed.frontierTopics || []), ...(parsed.promptTopics || [])]) {
+  for (const topic of [...parsed.dailyTopics, ...parsed.deepTopics, ...(parsed.weeklyRecommendations || []), ...(parsed.frontierTopics || []), ...(parsed.promptTopics || [])]) {
     if (!topic.owner) continue;
     notifications.push(await notifyTopicOwner({
       ownerName: topic.owner,
@@ -719,6 +732,7 @@ export async function parseWeeklyTopics(projectId, userId, fields = {}) {
     meeting,
     dailyTopics: createdDaily,
     deepTopics: createdDeep,
+    weeklyRecommendations: createdWeekly,
     frontierTopics: createdFrontier,
     promptTopics: createdPrompt,
     notifications,
