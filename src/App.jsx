@@ -12,6 +12,7 @@ import { Subproject } from './pages/Subproject';
 import { Dashboard } from './pages/Dashboard';
 import { BossBoard } from './pages/BossBoard';
 import { ContentHub } from './pages/ContentHub';
+import { PublicEval } from './pages/PublicEval';
 import { MyWorkspace } from './pages/MyWorkspace';
 import { ArrowRight, Check, FlaskConical, LayoutDashboard, Loader2, Microscope, Newspaper, ShieldCheck } from 'lucide-react';
 
@@ -262,6 +263,7 @@ function ProjectRoutes() {
 export default function App() {
   return (
     <Routes>
+      <Route path="/p/eval/:id" element={<PublicEval />} />
       <Route element={<AuthGate />}>
           <Route element={<Shell />}>
           <Route index element={<Navigate to="/board" replace />} />

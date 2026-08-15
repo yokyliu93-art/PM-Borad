@@ -6,6 +6,7 @@ import * as feishuService from './feishu.js';
 import * as feishuPushService from './feishuPush.js';
 
 const TOPIC_EDITORS = ['王兆洋'];
+const DEEP_TOPIC_STAGES = new Set(['待讨论', '组队中', '执行中', '出提纲', '填成稿', '已发布']);
 
 function normalizeKind(kind = '') {
   const value = String(kind || '').trim();
@@ -398,7 +399,20 @@ export function updateTopicDocLinks(projectId, memoId, userId, fields = {}) {
     current = {};
   }
   const incoming = fields.docLinks || fields.doc_links || {};
-  const allowedKeys = ['techIntro', 'weeklyPlan', 'phaseProgress', 'interviewRaw', 'outline', 'reference', 'draft'];
+  const allowedKeys = [
+    'techIntro',
+    'sourceDoc',
+    'weeklyPlan',
+    'phaseProgress',
+    'interviewRaw',
+    'outline',
+    'reference',
+    'references',
+    'members',
+    'interviews',
+    'draft',
+    'final',
+  ];
   const next = { ...current };
   for (const key of allowedKeys) {
     if (Object.prototype.hasOwnProperty.call(incoming, key)) {
@@ -410,6 +424,26 @@ export function updateTopicDocLinks(projectId, memoId, userId, fields = {}) {
     SET doc_links_json = ?, updated_at = datetime('now')
     WHERE id = ? AND project_id = ?
   `).run(JSON.stringify(next), memoId, projectId);
+  return get(projectId, memoId, userId);
+}
+
+export function updateDeepTopicState(projectId, memoId, userId, fields = {}) {
+  const memo = db.prepare('SELECT id, kind, sub_kind, created_by, owner_text, status, timeline_text, progress FROM content_memos WHERE id = ? AND project_id = ?').get(memoId, projectId);
+  if (!memo) throw new Error('选题不存在');
+  if (memo.kind !== 'topic' || memo.sub_kind !== 'deep') throw new Error('只能更新深度选题状态');
+  if (!canEditTopic(userId, memo)) throw new Error('只有作者、负责人和编辑可以更新深度选题状态');
+
+  const incomingStatus = String(fields.status || fields.stage || '').trim();
+  const status = DEEP_TOPIC_STAGES.has(incomingStatus) ? incomingStatus : (DEEP_TOPIC_STAGES.has(memo.status) ? memo.status : '待讨论');
+  const numericProgress = Number(fields.progress ?? memo.progress ?? 0);
+  const progress = Number.isFinite(numericProgress) ? Math.max(0, Math.min(100, Math.round(numericProgress))) : 0;
+  const timelineText = String(fields.timelineText ?? fields.timeline_text ?? memo.timeline_text ?? '').trim();
+
+  db.prepare(`
+    UPDATE content_memos
+    SET status = ?, progress = ?, timeline_text = ?, updated_at = datetime('now')
+    WHERE id = ? AND project_id = ?
+  `).run(status, progress, timelineText, memoId, projectId);
   return get(projectId, memoId, userId);
 }
 
@@ -709,6 +743,41 @@ export async function importEvalDoc(projectId, userId, fields = {}) {
     evalSet: get(projectId, memo.id, userId),
     source: { title: doc.title, url: docUrl },
   };
+}
+
+// Public Eval: test sets are meant to be shared externally so anyone can copy
+// prompts to benchmark new models. These helpers skip auth and project-scoped
+// membership, returning only kind='eval' memos that are not archived.
+export function listPublicEvalSets() {
+  return db.prepare(`
+    SELECT
+      m.id, m.title, m.body, m.source_url, m.owner_text,
+      m.created_at, m.updated_at,
+      COUNT(q.id) as question_count
+    FROM content_memos m
+    LEFT JOIN content_eval_questions q ON q.memo_id = m.id
+    WHERE m.kind = 'eval' AND m.status != 'archived'
+    GROUP BY m.id
+    ORDER BY m.updated_at DESC, m.created_at DESC
+  `).all();
+}
+
+export function getPublicEval(memoId) {
+  const memo = db.prepare(`
+    SELECT id, title, body, source_url, owner_text, created_at, updated_at
+    FROM content_memos
+    WHERE id = ? AND kind = 'eval' AND status != 'archived'
+  `).get(memoId);
+  if (!memo) return null;
+  const questions = db.prepare(`
+    SELECT
+      id, title, prompt_text, input_text, expected_output,
+      evaluation_criteria, reference_answer, sort_order
+    FROM content_eval_questions
+    WHERE memo_id = ?
+    ORDER BY sort_order ASC, created_at ASC
+  `).all(memoId);
+  return { ...memo, questions };
 }
 
 function findUserByName(name = '', projectId = '') {

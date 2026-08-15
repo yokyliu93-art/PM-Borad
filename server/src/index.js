@@ -19,6 +19,7 @@ import dashboardRoutes from './routes/dashboard.js';
 import agentRoutes from './routes/agent.js';
 import contentRoutes from './routes/content.js';
 import teamContentRoutes from './routes/teamContent.js';
+import publicRoutes from './routes/public.js';
 import { feishuRouter, projectFeishuRouter } from './routes/feishu.js';
 import { startReminderWorker } from './services/reminder.js';
 import { startProjectProgressSyncWorker } from './services/feishuProgress.js';
@@ -45,6 +46,8 @@ app.use((req, res, next) => {
   next();
 });
 
+// Public endpoints: no login required (Eval test sets are shareable externally).
+app.use('/api/public', publicRoutes);
 app.use('/api/auth', authRoutes);
 app.use('/api/teams', teamRoutes);
 app.use('/api/projects', projectRoutes);

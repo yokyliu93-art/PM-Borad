@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useParams } from 'react-router-dom';
 import toast from 'react-hot-toast';
-import { BookOpenText, CalendarDays, Copy, ExternalLink, FilePlus2, FlaskConical, LogIn, MessageSquareText, Sparkles, ThumbsUp, Trash2, UserCheck, Vote } from 'lucide-react';
+import { BookOpenText, CalendarDays, Copy, ExternalLink, FilePlus2, FlaskConical, Link2, LogIn, MessageSquareText, Sparkles, ThumbsUp, Trash2, UserCheck, Vote } from 'lucide-react';
 import { get, post, put, del } from '../../lib/api';
 import { useStore } from '../../store';
 import { Avatar } from '../../components/ui/Avatar';
@@ -32,6 +32,15 @@ const topicTypeLabels = {
   prompt: 'Prompt PR',
 };
 
+const deepTopicStages = [
+  { key: '待讨论', progress: 10 },
+  { key: '组队中', progress: 25 },
+  { key: '执行中', progress: 55 },
+  { key: '出提纲', progress: 75 },
+  { key: '填成稿', progress: 90 },
+  { key: '已发布', progress: 100 },
+];
+
 export function ContentHub({ mode = 'all', initialTopicType = 'daily' }) {
   const { projectId } = useParams();
   const { currentTeamId, currentUser } = useStore();
@@ -53,6 +62,7 @@ export function ContentHub({ mode = 'all', initialTopicType = 'daily' }) {
   const [topicPublishDates, setTopicPublishDates] = useState({});
   const [topicEditorNotes, setTopicEditorNotes] = useState({});
   const [topicDocLinkDrafts, setTopicDocLinkDrafts] = useState({});
+  const [deepTopicDrafts, setDeepTopicDrafts] = useState({});
   const [topicCandidateBatch, setTopicCandidateBatch] = useState(null);
   const [topicCandidateEnabled, setTopicCandidateEnabled] = useState({});
   const [parsingDiscussions, setParsingDiscussions] = useState(false);
@@ -424,6 +434,26 @@ export function ContentHub({ mode = 'all', initialTopicType = 'daily' }) {
     }
   }
 
+  async function saveDeepTopicState(item) {
+    const targetProjectId = item.project_id || projectId;
+    const draft = deepTopicDrafts[item.id] || {};
+    const status = draft.status ?? deepTopicStage(item);
+    const progress = draft.progress ?? deepTopicProgress(item, status);
+    const timelineText = draft.timelineText ?? item.timeline_text ?? '';
+    const res = await put(`/api/projects/${targetProjectId}/content/${item.id}/deep-topic-state`, { status, progress, timelineText });
+    if (res.ok) {
+      setItems((current) => current.map((memo) => (memo.id === item.id ? res.data : memo)));
+      setDeepTopicDrafts((drafts) => {
+        const next = { ...drafts };
+        delete next[item.id];
+        return next;
+      });
+      toast.success('深度选题状态已保存');
+    } else {
+      toast.error(res.error || '保存失败');
+    }
+  }
+
   async function submitTopicDraft(item) {
     const targetProjectId = item.project_id || projectId;
     const draftDocUrl = topicDraftLinks[item.id] ?? item.draft_doc_url ?? '';
@@ -533,6 +563,7 @@ export function ContentHub({ mode = 'all', initialTopicType = 'daily' }) {
   }
 
   function topicProgressText(item) {
+    if (item.sub_kind === 'deep') return deepTopicStage(item);
     const timeline = String(item.timeline_text || '');
     const body = String(item.body || '');
     const explicit = `${timeline}\n${body}`.match(/当前进度[：:]\s*([^\n]+)/);
@@ -540,6 +571,34 @@ export function ContentHub({ mode = 'all', initialTopicType = 'daily' }) {
     if (item.draft_doc_url) return item.editor_notes ? '编辑建议已返回' : '已提交初稿';
     if (Number(item.progress || 0) > 0) return '等待提交初稿';
     return '等待提交初稿';
+  }
+
+  function deepTopicStage(item) {
+    const status = String(item.status || '').trim();
+    if (deepTopicStages.some((stage) => stage.key === status)) return status;
+    const explicit = `${item.timeline_text || ''}\n${item.body || ''}`.match(/当前进度[：:]\s*([^\n]+)/);
+    if (explicit?.[1] && deepTopicStages.some((stage) => stage.key === explicit[1].trim())) return explicit[1].trim();
+    return item.draft_doc_url ? '填成稿' : '待讨论';
+  }
+
+  function deepTopicProgress(item, stage = deepTopicStage(item)) {
+    const matched = deepTopicStages.find((option) => option.key === stage);
+    if (matched) return matched.progress;
+    return Number(item.progress || 0);
+  }
+
+  function deepTopicDraftValue(item, key) {
+    return deepTopicDrafts[item.id]?.[key] ?? (key === 'status' ? deepTopicStage(item) : key === 'progress' ? deepTopicProgress(item) : item.timeline_text ?? '');
+  }
+
+  function setDeepTopicDraft(item, key, value) {
+    setDeepTopicDrafts((drafts) => ({
+      ...drafts,
+      [item.id]: {
+        ...(drafts[item.id] || {}),
+        [key]: value,
+      },
+    }));
   }
 
   function topicWeekPlans(item) {
@@ -935,56 +994,112 @@ export function ContentHub({ mode = 'all', initialTopicType = 'daily' }) {
           </div>
 
           {selectedTopic.sub_kind === 'deep' ? (
-          <div className="mt-5 rounded-lg border border-slate-200 bg-slate-50 p-4">
-            <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-              <div>
-                <p className="text-sm font-semibold text-slate-950">执行进度同步</p>
-                <p className="mt-1 text-xs leading-5 text-slate-500">按周同步推进，文档入口保留每周不会频繁变化的材料。</p>
+            <div className="mt-5 space-y-4">
+              <div className="rounded-lg border border-emerald-100 bg-emerald-50/30 p-4">
+                <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+                  <div>
+                    <p className="text-sm font-semibold text-slate-950">深度选题生命周期</p>
+                    <p className="mt-1 text-xs leading-5 text-slate-500">飞书文档是工作空间；PM Board 只同步状态、分工、周计划和编辑意见。</p>
+                  </div>
+                  {canEditTopicMeta(selectedTopic) ? (
+                    <div className="flex flex-wrap items-center gap-2">
+                      <select
+                        value={deepTopicDraftValue(selectedTopic, 'status')}
+                        onChange={(event) => {
+                          const stage = deepTopicStages.find((option) => option.key === event.target.value);
+                          setDeepTopicDrafts((drafts) => ({
+                            ...drafts,
+                            [selectedTopic.id]: {
+                              ...(drafts[selectedTopic.id] || {}),
+                              status: event.target.value,
+                              progress: stage?.progress ?? deepTopicProgress(selectedTopic),
+                            },
+                          }));
+                        }}
+                        className="rounded-md border border-emerald-100 bg-white px-3 py-2 text-sm font-semibold text-slate-800 outline-none focus:border-emerald-400"
+                      >
+                        {deepTopicStages.map((stage) => <option key={stage.key} value={stage.key}>{stage.key}</option>)}
+                      </select>
+                      <button onClick={() => saveDeepTopicState(selectedTopic)} className="rounded-md bg-emerald-600 px-3 py-2 text-sm font-semibold text-white transition hover:bg-emerald-500">
+                        保存阶段
+                      </button>
+                    </div>
+                  ) : null}
+                </div>
+                <DeepStageRail stages={deepTopicStages} current={deepTopicDraftValue(selectedTopic, 'status')} />
               </div>
-              <span className="rounded-full bg-emerald-50 px-3 py-1 text-xs font-semibold text-emerald-700">{topicProgressText(selectedTopic)}</span>
-            </div>
-            <TopicWeekPlan plans={topicWeekPlans(selectedTopic)} currentWeek="W4" />
-          </div>
-          ) : null}
 
-          {selectedTopic.sub_kind === 'deep' ? (
-          <div className="mt-4 grid gap-3 md:grid-cols-2">
-            <TopicDetailBlock title="阶段性进度" value={topicDetailSections(selectedTopic).phaseProgress || '暂无进度更新'} />
-            <TopicDetailBlock title="采访原文" value={topicDetailSections(selectedTopic).interviewRaw || '等待飞书原文链接或摘录'} />
-            <TopicDetailBlock title="稿件框架" value={topicDetailSections(selectedTopic).outline || '等待补充稿件框架'} />
-          </div>
-          ) : null}
-
-          {selectedTopic.sub_kind === 'deep' ? (
-          <div className="mt-4 rounded-lg border border-emerald-100 bg-white p-4">
-            <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-              <div>
-                <p className="text-sm font-semibold text-slate-950">深度选题三步</p>
-                <p className="mt-1 text-xs leading-5 text-slate-500">每一步都直接进入对应飞书文档，PM Board 负责同步状态。</p>
+              <div className="grid gap-4 lg:grid-cols-[0.9fr_1.1fr]">
+                <div className="rounded-lg border border-slate-200 bg-white p-4">
+                  <p className="text-sm font-semibold text-slate-950">组队与分工</p>
+                  <p className="mt-1 text-xs leading-5 text-slate-500">发起人/主笔负责推进，队员负责采访、资料、事实核验等子任务。</p>
+                  <DeepTextArea
+                    label="队员与分工"
+                    value={docLinkValue(selectedTopic, 'members')}
+                    disabled={!canEditTopicDocLinks(selectedTopic)}
+                    placeholder="例如：小艺 - 主笔；雅婷 - 资料整理；李楠 - 采访联络"
+                    onChange={(value) => setTopicDocLink(selectedTopic, 'members', value)}
+                  />
+                </div>
+                <div className="rounded-lg border border-slate-200 bg-white p-4">
+                  <p className="text-sm font-semibold text-slate-950">按周推进</p>
+                  <p className="mt-1 text-xs leading-5 text-slate-500">以周为单位同步执行进度，Agent 回传时优先更新这里。</p>
+                  {canEditTopicMeta(selectedTopic) ? (
+                    <textarea
+                      value={deepTopicDraftValue(selectedTopic, 'timelineText')}
+                      onChange={(event) => setDeepTopicDraft(selectedTopic, 'timelineText', event.target.value)}
+                      rows={4}
+                      placeholder="W1：要点整理&#10;W2：采访和资料补齐&#10;W3：写作提纲&#10;W4：初稿"
+                      className="mt-3 w-full rounded-md border border-slate-200 px-3 py-2 text-sm leading-6 outline-none transition focus:border-emerald-400"
+                    />
+                  ) : null}
+                  <TopicWeekPlan plans={topicWeekPlans({ ...selectedTopic, timeline_text: deepTopicDraftValue(selectedTopic, 'timelineText') })} currentWeek="W4" />
+                </div>
               </div>
-              {canEditTopicDocLinks(selectedTopic) ? (
-                <button onClick={() => saveTopicDocLinks(selectedTopic)} className="inline-flex items-center justify-center rounded-md bg-emerald-600 px-3 py-2 text-sm font-semibold text-white transition hover:bg-emerald-500">
-                  保存入口
-                </button>
-              ) : null}
-            </div>
-            <div className="mt-3 grid gap-3 md:grid-cols-3">
-              {[
-                ['techIntro', '要点整理'],
-                ['outline', '写作提纲'],
-                ['draft', '初稿'],
-              ].map(([key, label]) => (
-                <TopicDocLinkInput
-                  key={key}
-                  label={label}
-                  value={key === 'draft' ? (docLinkValue(selectedTopic, key) || selectedTopic.draft_doc_url || '') : docLinkValue(selectedTopic, key)}
+
+              <div className="grid gap-4 md:grid-cols-2">
+                <TopicDetailBlock title="阶段性进度" value={topicDetailSections(selectedTopic).phaseProgress || '等待 Agent 或负责人回传进度'} />
+                <DeepTextArea
+                  label="采访对象"
+                  value={docLinkValue(selectedTopic, 'interviews')}
                   disabled={!canEditTopicDocLinks(selectedTopic)}
-                  onChange={(value) => setTopicDocLink(selectedTopic, key, value)}
-                  onCopy={() => copyText(key === 'draft' ? (docLinkValue(selectedTopic, key) || selectedTopic.draft_doc_url || '') : docLinkValue(selectedTopic, key), '链接已复制')}
+                  placeholder="记录采访对象、联络状态、已完成/待约"
+                  onChange={(value) => setTopicDocLink(selectedTopic, 'interviews', value)}
                 />
-              ))}
+              </div>
+
+              <div className="rounded-lg border border-emerald-100 bg-white p-4">
+                <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                  <div>
+                    <p className="text-sm font-semibold text-slate-950">飞书工作空间</p>
+                    <p className="mt-1 text-xs leading-5 text-slate-500">资料放在飞书里，PM Board 只做入口、状态和提醒。</p>
+                  </div>
+                  {canEditTopicDocLinks(selectedTopic) ? (
+                    <button onClick={() => saveTopicDocLinks(selectedTopic)} className="inline-flex items-center justify-center rounded-md bg-emerald-600 px-3 py-2 text-sm font-semibold text-white transition hover:bg-emerald-500">
+                      保存入口
+                    </button>
+                  ) : null}
+                </div>
+                <div className="mt-3 grid gap-3 md:grid-cols-2">
+                  {[
+                    ['sourceDoc', '选题文档'],
+                    ['references', '参考资料'],
+                    ['outline', '写作提纲'],
+                    ['draft', '初稿'],
+                    ['final', '终稿 / 发布稿'],
+                  ].map(([key, label]) => (
+                    <TopicDocLinkInput
+                      key={key}
+                      label={label}
+                      value={key === 'draft' ? (docLinkValue(selectedTopic, key) || selectedTopic.draft_doc_url || '') : docLinkValue(selectedTopic, key)}
+                      disabled={!canEditTopicDocLinks(selectedTopic)}
+                      onChange={(value) => setTopicDocLink(selectedTopic, key, value)}
+                      onCopy={() => copyText(key === 'draft' ? (docLinkValue(selectedTopic, key) || selectedTopic.draft_doc_url || '') : docLinkValue(selectedTopic, key), '链接已复制')}
+                    />
+                  ))}
+                </div>
+              </div>
             </div>
-          </div>
           ) : null}
 
           <div className="mt-4 space-y-3 rounded-md border border-slate-200 bg-white p-3">
@@ -1069,11 +1184,11 @@ export function ContentHub({ mode = 'all', initialTopicType = 'daily' }) {
                   </div>
                   <div className="mt-3 grid gap-3 md:grid-cols-2">
                     <div className="rounded-md border border-slate-200 bg-slate-50 p-3">
-                      <p className="text-xs font-semibold text-slate-500">负责人</p>
+                      <p className="text-xs font-semibold text-slate-500">{item.sub_kind === 'deep' ? '主笔 / 负责人' : '负责人'}</p>
                       <p className="mt-1 text-sm font-semibold text-slate-950">{topicOwnerText(item)}</p>
                     </div>
                     <div className="rounded-md border border-slate-200 bg-slate-50 p-3">
-                      <p className="text-xs font-semibold text-slate-500">当前进度</p>
+                      <p className="text-xs font-semibold text-slate-500">{item.sub_kind === 'deep' ? '生命周期' : '当前进度'}</p>
                       <p className="mt-1 text-sm font-semibold text-slate-950">{topicProgressText(item)}</p>
                     </div>
                   </div>
@@ -1219,7 +1334,12 @@ export function ContentHub({ mode = 'all', initialTopicType = 'daily' }) {
 
               {item.kind === 'eval' && item.eval_questions?.length ? (
                 <div className="mt-4 space-y-3">
-                  <p className="text-xs font-semibold text-slate-500">测试题模块</p>
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <p className="text-xs font-semibold text-slate-500">测试题模块</p>
+                    <button onClick={() => copyText(`${window.location.origin}/p/eval/${item.id}`, '公开链接已复制')} className="inline-flex items-center gap-1.5 rounded-md border border-violet-200 bg-white px-3 py-1.5 text-xs font-semibold text-violet-700 transition hover:bg-violet-50">
+                      <Link2 size={13} />复制公开链接
+                    </button>
+                  </div>
                   {item.eval_questions.map((question, index) => (
                     <div key={question.id} className="rounded-lg border border-violet-100 bg-violet-50/40 p-3">
                       <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
@@ -1351,6 +1471,42 @@ function TopicBoardStat({ label, value, detail, withMemo, active, waitingDraft }
         ) : null}
       </div>
     </div>
+  );
+}
+
+function DeepStageRail({ stages, current }) {
+  const currentIndex = Math.max(0, stages.findIndex((stage) => stage.key === current));
+  return (
+    <div className="mt-4 grid gap-2 md:grid-cols-3 xl:grid-cols-6">
+      {stages.map((stage, index) => {
+        const active = index <= currentIndex;
+        const currentStage = stage.key === current;
+        return (
+          <div key={stage.key} className={`rounded-md border p-3 ${currentStage ? 'border-emerald-300 bg-white shadow-sm' : active ? 'border-emerald-100 bg-white/80' : 'border-slate-200 bg-white/50'}`}>
+            <p className={`text-sm font-semibold ${active ? 'text-emerald-700' : 'text-slate-500'}`}>{stage.key}</p>
+            <div className="mt-2 h-1.5 rounded-full bg-slate-100">
+              <div className={`h-full rounded-full ${active ? 'bg-emerald-500' : 'bg-slate-200'}`} style={{ width: `${active ? stage.progress : 0}%` }} />
+            </div>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
+function DeepTextArea({ label, value, disabled, placeholder, onChange }) {
+  return (
+    <label className="mt-3 block">
+      <span className="text-xs font-semibold text-slate-500">{label}</span>
+      <textarea
+        value={value}
+        disabled={disabled}
+        onChange={(event) => onChange(event.target.value)}
+        placeholder={placeholder}
+        rows={4}
+        className="mt-2 w-full rounded-md border border-slate-200 bg-white px-3 py-2 text-sm leading-6 text-slate-800 outline-none transition focus:border-emerald-400 disabled:bg-slate-50 disabled:text-slate-500"
+      />
+    </label>
   );
 }
 
