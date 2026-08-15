@@ -303,6 +303,7 @@ export function migrate() {
       body TEXT DEFAULT '',
       source_url TEXT DEFAULT '',
       timeline_text TEXT DEFAULT '',
+      final_doc_url TEXT DEFAULT '',
       status TEXT DEFAULT 'open',
       created_by TEXT NOT NULL REFERENCES users(id),
       created_at TEXT DEFAULT (datetime('now')),
@@ -437,6 +438,9 @@ export function migrate() {
   }
   if (!memoCols.includes('meeting_minutes_url')) {
     db.exec("ALTER TABLE content_memos ADD COLUMN meeting_minutes_url TEXT DEFAULT ''");
+  }
+  if (!memoCols.includes('final_doc_url')) {
+    db.exec("ALTER TABLE content_memos ADD COLUMN final_doc_url TEXT DEFAULT ''");
   }
 
   const moduleCols = db.prepare('PRAGMA table_info(project_modules)').all().map((c) => c.name);

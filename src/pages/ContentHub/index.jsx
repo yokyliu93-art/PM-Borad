@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { useParams } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import { BookOpenText, CalendarDays, Copy, FilePlus2, FlaskConical, LogIn, MessageSquareText, Sparkles, ThumbsUp, UserCheck, Vote } from 'lucide-react';
-import { get, post, del } from '../../lib/api';
+import { get, post, put, del } from '../../lib/api';
 import { useStore } from '../../store';
 import { Avatar } from '../../components/ui/Avatar';
 import { EmptyState } from '../../components/ui/EmptyState';
@@ -37,6 +37,7 @@ export function ContentHub({ mode = 'all', initialTopicType = 'daily' }) {
   const [importingEval, setImportingEval] = useState(false);
   const [parsingTopics, setParsingTopics] = useState(false);
   const [topicParseError, setTopicParseError] = useState('');
+  const [topicLinkDrafts, setTopicLinkDrafts] = useState({});
   const [form, setForm] = useState({ kind: mode === 'topics' ? 'topic' : mode === 'demo' ? 'demo' : mode === 'eval' ? 'eval' : 'memo', subKind: mode === 'topics' ? 'daily' : '', title: '', body: '', sourceUrl: '', timelineText: '', ownerText: '', progress: 0, meetingDocUrl: '', meetingMinutesUrl: '' });
   const [minutes, setMinutes] = useState({ title: '', meetingDocUrl: '', meetingMinutesUrl: '', transcript: '' });
   const [experienceDrafts, setExperienceDrafts] = useState({});
@@ -44,6 +45,11 @@ export function ContentHub({ mode = 'all', initialTopicType = 'daily' }) {
   const isTopics = mode === 'topics';
   const isDemo = mode === 'demo';
   const isEval = mode === 'eval';
+  const canEditTopics = ['王兆洋', '骆轶航'].some((name) => {
+    const currentName = currentUser?.name || '';
+    if (!currentName) return false;
+    return currentName === name || currentName.includes(name) || name.includes(currentName);
+  });
 
   useEffect(() => {
     if (currentTeamId) loadProjects();
@@ -220,6 +226,18 @@ export function ContentHub({ mode = 'all', initialTopicType = 'daily' }) {
     }
   }
 
+  async function saveTopicFinalDoc(item) {
+    const targetProjectId = item.project_id || projectId;
+    const finalDocUrl = topicLinkDrafts[item.id] ?? item.final_doc_url ?? '';
+    const res = await put(`/api/projects/${targetProjectId}/content/${item.id}/topic-final-doc`, { finalDocUrl });
+    if (res.ok) {
+      setItems((current) => current.map((memo) => (memo.id === item.id ? res.data : memo)));
+      toast.success('飞书稿件链接已保存');
+    } else {
+      toast.error(res.error || '保存失败');
+    }
+  }
+
   async function copyText(text, message = '已复制') {
     try {
       await navigator.clipboard.writeText(text || '');
@@ -309,7 +327,7 @@ export function ContentHub({ mode = 'all', initialTopicType = 'daily' }) {
           </p>
           {isTopics ? (
             <div className="mt-4 inline-flex items-center gap-2 rounded-full border border-emerald-100 bg-emerald-50 px-3 py-1.5 text-sm font-medium text-emerald-800">
-              <UserCheck size={15} />选题总负责人：王兆洋
+              <UserCheck size={15} />选题面板：王兆洋负责，王兆洋 / 骆轶航可编辑
             </div>
           ) : null}
           <div className="mt-5 grid gap-3 md:grid-cols-4">
@@ -483,6 +501,28 @@ export function ContentHub({ mode = 'all', initialTopicType = 'daily' }) {
                 </div>
               ) : null}
 
+              {item.kind === 'topic' ? (
+                <div className="mt-4 rounded-md border border-slate-200 bg-white p-3">
+                  <div className="flex flex-col gap-3 lg:flex-row lg:items-end">
+                    <label className="min-w-0 flex-1">
+                      <span className="mb-1.5 block text-xs font-semibold text-slate-500">飞书稿件链接</span>
+                      <input
+                        value={topicLinkDrafts[item.id] ?? item.final_doc_url ?? ''}
+                        onChange={(event) => setTopicLinkDrafts((drafts) => ({ ...drafts, [item.id]: event.target.value }))}
+                        disabled={!canEditTopics}
+                        placeholder={canEditTopics ? '手动填最终稿件飞书链接' : '等待王兆洋或骆轶航填写'}
+                        className="w-full rounded-md border border-slate-200 px-3 py-2 text-sm outline-none transition focus:border-emerald-400 disabled:bg-slate-50 disabled:text-slate-500"
+                      />
+                    </label>
+                    {canEditTopics ? (
+                      <button onClick={() => saveTopicFinalDoc(item)} className="rounded-md bg-slate-950 px-4 py-2 text-sm font-semibold text-white transition hover:bg-slate-800">
+                        保存链接
+                      </button>
+                    ) : null}
+                  </div>
+                </div>
+              ) : null}
+
               {item.kind === 'eval' && item.eval_questions?.length ? (
                 <div className="mt-4 space-y-3">
                   <p className="text-xs font-semibold text-slate-500">测试题模块</p>
@@ -528,6 +568,9 @@ export function ContentHub({ mode = 'all', initialTopicType = 'daily' }) {
               ) : null}
 
               <div className="mt-4 flex flex-wrap gap-3">
+                {item.final_doc_url ? (
+                  <a href={item.final_doc_url} target="_blank" rel="noreferrer" className="text-sm font-medium text-emerald-700 hover:text-emerald-600">打开飞书稿件</a>
+                ) : null}
                 {item.source_url ? (
                   <a href={item.source_url} target="_blank" rel="noreferrer" className="text-sm font-medium text-emerald-700 hover:text-emerald-600">打开资料链接</a>
                 ) : null}

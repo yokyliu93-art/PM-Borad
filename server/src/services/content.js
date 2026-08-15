@@ -5,6 +5,8 @@ import * as aiService from './ai.js';
 import * as feishuService from './feishu.js';
 import * as feishuPushService from './feishuPush.js';
 
+const TOPIC_EDITORS = ['王兆洋', '骆轶航'];
+
 function normalizeKind(kind = '') {
   const value = String(kind || '').trim();
   if (['demo', 'meeting', 'topic', 'memo', 'eval'].includes(value)) return value;
@@ -125,9 +127,9 @@ export function create(projectId, userId, fields = {}) {
   db.prepare(`
     INSERT INTO content_memos (
       id, project_id, kind, sub_kind, title, body, source_url, timeline_text,
-      status, owner_text, progress, meeting_doc_url, meeting_minutes_url, created_by
+      status, owner_text, progress, meeting_doc_url, meeting_minutes_url, final_doc_url, created_by
     )
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `).run(
     id,
     projectId,
@@ -142,6 +144,7 @@ export function create(projectId, userId, fields = {}) {
     Math.min(100, Math.max(0, Math.round(Number(fields.progress || 0)))),
     fields.meetingDocUrl || fields.meeting_doc_url || fields.weeklyDocUrl || fields.weekly_doc_url || '',
     fields.meetingMinutesUrl || fields.meeting_minutes_url || fields.minutesUrl || fields.minutes_url || '',
+    fields.finalDocUrl || fields.final_doc_url || '',
     userId
   );
   return get(projectId, id, userId);
@@ -170,6 +173,27 @@ export function getMemoProjectId(memoId) {
 export function unvoteDemo(projectId, memoId, userId) {
   db.prepare("DELETE FROM content_memo_votes WHERE memo_id = ? AND user_id = ? AND vote = 'demo'").run(memoId, userId);
   db.prepare("UPDATE content_memos SET updated_at = datetime('now') WHERE id = ?").run(memoId);
+  return get(projectId, memoId, userId);
+}
+
+export function canEditTopics(userId) {
+  const user = db.prepare('SELECT name FROM users WHERE id = ?').get(userId);
+  const name = String(user?.name || '').trim();
+  if (!name) return false;
+  return TOPIC_EDITORS.some((editor) => name === editor || name.includes(editor) || editor.includes(name));
+}
+
+export function updateTopicFinalDoc(projectId, memoId, userId, fields = {}) {
+  if (!canEditTopics(userId)) throw new Error('只有王兆洋和骆轶航可以编辑选题面板');
+  const memo = db.prepare('SELECT id, kind FROM content_memos WHERE id = ? AND project_id = ?').get(memoId, projectId);
+  if (!memo) throw new Error('选题不存在');
+  if (memo.kind !== 'topic') throw new Error('只能编辑选题的飞书稿件链接');
+  const finalDocUrl = String(fields.finalDocUrl || fields.final_doc_url || '').trim();
+  db.prepare(`
+    UPDATE content_memos
+    SET final_doc_url = ?, updated_at = datetime('now')
+    WHERE id = ? AND project_id = ?
+  `).run(finalDocUrl, memoId, projectId);
   return get(projectId, memoId, userId);
 }
 
