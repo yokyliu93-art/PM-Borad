@@ -67,6 +67,7 @@ export function ContentHub({ mode = 'all', initialTopicType = 'daily' }) {
   const [topicCandidateEnabled, setTopicCandidateEnabled] = useState({});
   const [parsingDiscussions, setParsingDiscussions] = useState(false);
   const [selectedTopicId, setSelectedTopicId] = useState('');
+  const [selectedEvalId, setSelectedEvalId] = useState('');
   const [topicOverview, setTopicOverview] = useState(null);
   const [form, setForm] = useState({ kind: isInitialTopicLike ? 'topic' : mode === 'demo' ? 'demo' : mode === 'eval' ? 'eval' : 'memo', subKind: isInitialTopicLike ? initialTopicType : '', title: '', body: '', sourceUrl: '', timelineText: '', ownerText: '', progress: 0, meetingDocUrl: '', meetingMinutesUrl: '' });
   const [minutes, setMinutes] = useState({ title: '', meetingDocUrl: '', meetingMinutesUrl: '', transcript: '' });
@@ -193,6 +194,10 @@ export function ContentHub({ mode = 'all', initialTopicType = 'daily' }) {
   const selectedTopic = useMemo(() => (
     filteredItems.find((item) => item.id === selectedTopicId && item.kind === 'topic') || null
   ), [filteredItems, selectedTopicId]);
+
+  const selectedEval = useMemo(() => (
+    filteredItems.find((item) => item.id === selectedEvalId && item.kind === 'eval') || null
+  ), [filteredItems, selectedEvalId]);
 
   const stats = useMemo(() => ({
     memos: items.length,
@@ -976,7 +981,7 @@ export function ContentHub({ mode = 'all', initialTopicType = 'daily' }) {
           <button onClick={() => setSelectedTopicId('')} className="mb-5 inline-flex items-center rounded-md border border-slate-200 px-3 py-2 text-sm font-semibold text-slate-600 transition hover:bg-slate-50">
             返回选题列表
           </button>
-          <div className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_320px]">
+          <div className={`grid gap-5 ${selectedTopic.sub_kind === 'deep' ? 'xl:grid-cols-[minmax(0,1fr)_420px]' : 'xl:grid-cols-[minmax(0,1fr)_320px]'}`}>
           <div className="min-w-0">
           <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
             <div className="min-w-0">
@@ -1032,28 +1037,21 @@ export function ContentHub({ mode = 'all', initialTopicType = 'daily' }) {
               <div className="grid gap-4 lg:grid-cols-[0.9fr_1.1fr]">
                 <div className="rounded-lg border border-slate-200 bg-white p-4">
                   <p className="text-sm font-semibold text-slate-950">组队与分工</p>
-                  <p className="mt-1 text-xs leading-5 text-slate-500">发起人/主笔负责推进，队员负责采访、资料、事实核验等子任务。</p>
-                  <DeepTextArea
-                    label="队员与分工"
+                  <p className="mt-1 text-xs leading-5 text-slate-500">直接从团队成员里点选，可以多选；具体分工可以在飞书文档里写细。</p>
+                  <MemberMultiSelect
+                    members={teamMemberNames()}
                     value={docLinkValue(selectedTopic, 'members')}
                     disabled={!canEditTopicDocLinks(selectedTopic)}
-                    placeholder="例如：小艺 - 主笔；雅婷 - 资料整理；李楠 - 采访联络"
                     onChange={(value) => setTopicDocLink(selectedTopic, 'members', value)}
                   />
                 </div>
                 <div className="rounded-lg border border-slate-200 bg-white p-4">
-                  <p className="text-sm font-semibold text-slate-950">按周推进</p>
-                  <p className="mt-1 text-xs leading-5 text-slate-500">以周为单位同步执行进度，Agent 回传时优先更新这里。</p>
-                  {canEditTopicMeta(selectedTopic) ? (
-                    <textarea
-                      value={deepTopicDraftValue(selectedTopic, 'timelineText')}
-                      onChange={(event) => setDeepTopicDraft(selectedTopic, 'timelineText', event.target.value)}
-                      rows={4}
-                      placeholder="W1：要点整理&#10;W2：采访和资料补齐&#10;W3：写作提纲&#10;W4：初稿"
-                      className="mt-3 w-full rounded-md border border-slate-200 px-3 py-2 text-sm leading-6 outline-none transition focus:border-emerald-400"
-                    />
-                  ) : null}
-                  <TopicWeekPlan plans={topicWeekPlans({ ...selectedTopic, timeline_text: deepTopicDraftValue(selectedTopic, 'timelineText') })} currentWeek="W4" />
+                  <p className="text-sm font-semibold text-slate-950">本页怎么协作</p>
+                  <div className="mt-3 space-y-2 text-sm leading-6 text-slate-600">
+                    <p>1. 负责人和队员在飞书文档里推进具体内容。</p>
+                    <p>2. Agent 每天把进度回传到 PM Board。</p>
+                    <p>3. 右侧 timeline 固定展示周计划和当前阶段。</p>
+                  </div>
                 </div>
               </div>
 
@@ -1145,22 +1143,136 @@ export function ContentHub({ mode = 'all', initialTopicType = 'daily' }) {
             ) : null}
           </div>
           </div>
-          <aside className="rounded-lg border border-amber-100 bg-amber-50/60 p-4">
-            <p className="flex items-center gap-2 text-sm font-semibold text-amber-900">
-              <MessageSquareText size={16} />周会讨论 / 编辑意见
-            </p>
-            <p className="mt-2 whitespace-pre-wrap text-sm leading-6 text-amber-950">
-              {selectedTopic.editor_notes || topicDetailSections(selectedTopic).meetingDiscussion || '第二步解析周会速记后，这里会显示大家围绕这个选题的讨论结果和编辑意见。'}
-            </p>
-            <div className="mt-4 space-y-2 border-t border-amber-100 pt-3">
-              {selectedTopic.meeting_minutes_url ? (
-                <a href={selectedTopic.meeting_minutes_url} target="_blank" rel="noreferrer" className="block text-sm font-medium text-amber-900 hover:text-amber-700">打开周会速记文档</a>
-              ) : null}
-              {selectedTopic.meeting_doc_url ? (
-                <a href={selectedTopic.meeting_doc_url} target="_blank" rel="noreferrer" className="block text-sm font-medium text-amber-900 hover:text-amber-700">打开周会文档</a>
-              ) : null}
+          <aside className="space-y-4 xl:sticky xl:top-5 xl:self-start">
+            {selectedTopic.sub_kind === 'deep' ? (
+              <div className="rounded-lg border border-emerald-100 bg-white p-4 shadow-sm shadow-emerald-950/5">
+                <div className="flex items-start justify-between gap-3">
+                  <div>
+                    <p className="flex items-center gap-2 text-sm font-semibold text-slate-950">
+                      <CalendarDays size={16} />按周推进
+                    </p>
+                    <p className="mt-1 text-xs leading-5 text-slate-500">这块固定在右侧，方便一眼看到进度。</p>
+                  </div>
+                  <span className="rounded-full bg-emerald-50 px-2.5 py-1 text-xs font-semibold text-emerald-700">{deepTopicDraftValue(selectedTopic, 'status')}</span>
+                </div>
+                {canEditTopicMeta(selectedTopic) ? (
+                  <div className="mt-3 space-y-2">
+                    <textarea
+                      value={deepTopicDraftValue(selectedTopic, 'timelineText')}
+                      onChange={(event) => setDeepTopicDraft(selectedTopic, 'timelineText', event.target.value)}
+                      rows={5}
+                      placeholder="W1：要点整理&#10;W2：采访和资料补齐&#10;W3：写作提纲&#10;W4：初稿"
+                      className="w-full rounded-md border border-slate-200 px-3 py-2 text-sm leading-6 outline-none transition focus:border-emerald-400"
+                    />
+                    <button onClick={() => saveDeepTopicState(selectedTopic)} className="w-full rounded-md bg-emerald-600 px-3 py-2 text-sm font-semibold text-white transition hover:bg-emerald-500">
+                      保存 timeline
+                    </button>
+                  </div>
+                ) : null}
+                <TopicWeekPlan plans={topicWeekPlans({ ...selectedTopic, timeline_text: deepTopicDraftValue(selectedTopic, 'timelineText') })} currentWeek="W4" compact />
+              </div>
+            ) : null}
+            <div className="rounded-lg border border-amber-100 bg-amber-50/60 p-4">
+              <p className="flex items-center gap-2 text-sm font-semibold text-amber-900">
+                <MessageSquareText size={16} />周会讨论 / 编辑意见
+              </p>
+              <p className="mt-2 whitespace-pre-wrap text-sm leading-6 text-amber-950">
+                {selectedTopic.editor_notes || topicDetailSections(selectedTopic).meetingDiscussion || '第二步解析周会速记后，这里会显示大家围绕这个选题的讨论结果和编辑意见。'}
+              </p>
+              <div className="mt-4 space-y-2 border-t border-amber-100 pt-3">
+                {selectedTopic.meeting_minutes_url ? (
+                  <a href={selectedTopic.meeting_minutes_url} target="_blank" rel="noreferrer" className="block text-sm font-medium text-amber-900 hover:text-amber-700">打开周会速记文档</a>
+                ) : null}
+                {selectedTopic.meeting_doc_url ? (
+                  <a href={selectedTopic.meeting_doc_url} target="_blank" rel="noreferrer" className="block text-sm font-medium text-amber-900 hover:text-amber-700">打开周会文档</a>
+                ) : null}
+              </div>
             </div>
           </aside>
+          </div>
+        </article>
+      ) : selectedEval ? (
+        <article className="rounded-xl border border-slate-200 bg-white p-6 shadow-sm shadow-slate-950/5">
+          <button onClick={() => setSelectedEvalId('')} className="mb-5 inline-flex items-center rounded-md border border-slate-200 px-3 py-2 text-sm font-semibold text-slate-600 transition hover:bg-slate-50">
+            返回测试集列表
+          </button>
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="rounded-md bg-violet-50 px-2 py-1 text-xs font-medium text-violet-700">Eval 测试集</span>
+            <span className="rounded-md bg-slate-100 px-2 py-1 text-xs font-medium text-slate-500">{selectedEval.eval_questions?.length || 0} 道题</span>
+            {selectedEval.owner_text && !['待分配', '待定'].includes(selectedEval.owner_text) ? (
+              <span className="rounded-md bg-slate-100 px-2 py-1 text-xs font-medium text-slate-500">负责人 {selectedEval.owner_text}</span>
+            ) : (
+              <span className="rounded-md bg-slate-100 px-2 py-1 text-xs font-medium text-slate-400">待分配</span>
+            )}
+          </div>
+          <h3 className="mt-4 text-2xl font-semibold tracking-normal text-slate-950">{selectedEval.title}</h3>
+          {selectedEval.body ? <p className="mt-3 max-w-3xl whitespace-pre-wrap text-sm leading-6 text-slate-600">{selectedEval.body}</p> : null}
+          <div className="mt-5 flex flex-wrap items-center gap-3">
+            <button onClick={() => copyText(window.location.origin + '/p/eval/' + selectedEval.id, '公开链接已复制')} className="inline-flex items-center gap-1.5 rounded-md bg-violet-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-violet-500">
+              <Link2 size={15} />复制公开链接
+            </button>
+            {selectedEval.source_url ? (
+              <a href={selectedEval.source_url} target="_blank" rel="noreferrer" className="text-sm font-medium text-slate-500 hover:text-slate-900">打开原始飞书文档 ↗</a>
+            ) : null}
+          </div>
+          <div className="mt-6 border-t border-slate-100 pt-5">
+            <p className="text-xs font-semibold text-slate-500">测试模块</p>
+            {selectedEval.eval_questions?.length ? (
+              <div className="mt-3 space-y-3">
+                {selectedEval.eval_questions.map((question, index) => (
+                  <div key={question.id} className="rounded-lg border border-violet-100 bg-violet-50/40 p-4">
+                    <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+                      <div className="min-w-0">
+                        <p className="text-xs font-semibold text-violet-700">第 {index + 1} 题</p>
+                        <h4 className="mt-1 text-sm font-semibold text-slate-950">{question.title}</h4>
+                      </div>
+                      <div className="flex shrink-0 flex-wrap gap-2">
+                        <button onClick={() => copyText(question.prompt_text, 'Prompt 已复制')} className="inline-flex items-center gap-1 rounded-md border border-violet-100 bg-white px-2 py-1.5 text-xs font-semibold text-violet-700 hover:bg-violet-50">
+                          <Copy size={12} />复制 Prompt
+                        </button>
+                        <button onClick={() => copyText(evalQuestionCopy(question), '完整题包已复制')} className="inline-flex items-center gap-1 rounded-md bg-violet-600 px-2 py-1.5 text-xs font-semibold text-white hover:bg-violet-500">
+                          <Copy size={12} />复制题包
+                        </button>
+                      </div>
+                    </div>
+                    {question.prompt_text ? (
+                      <div className="mt-3 rounded-md bg-white p-3">
+                        <p className="text-xs font-semibold text-slate-500">Prompt</p>
+                        <p className="mt-1 whitespace-pre-wrap text-sm leading-6 text-slate-700">{question.prompt_text}</p>
+                      </div>
+                    ) : null}
+                    <div className="mt-3 grid gap-2 md:grid-cols-2">
+                      {question.input_text ? (
+                        <div className="rounded-md bg-white p-3">
+                          <p className="text-xs font-semibold text-slate-500">输入 / 素材</p>
+                          <p className="mt-1 whitespace-pre-wrap text-xs leading-5 text-slate-600">{question.input_text}</p>
+                        </div>
+                      ) : null}
+                      {question.expected_output ? (
+                        <div className="rounded-md bg-white p-3">
+                          <p className="text-xs font-semibold text-slate-500">期望输出</p>
+                          <p className="mt-1 whitespace-pre-wrap text-xs leading-5 text-slate-600">{question.expected_output}</p>
+                        </div>
+                      ) : null}
+                      {question.evaluation_criteria ? (
+                        <div className="rounded-md bg-white p-3">
+                          <p className="text-xs font-semibold text-slate-500">评测标准</p>
+                          <p className="mt-1 whitespace-pre-wrap text-xs leading-5 text-slate-600">{question.evaluation_criteria}</p>
+                        </div>
+                      ) : null}
+                      {question.reference_answer ? (
+                        <div className="rounded-md bg-white p-3">
+                          <p className="text-xs font-semibold text-slate-500">参考答案</p>
+                          <p className="mt-1 whitespace-pre-wrap text-xs leading-5 text-slate-600">{question.reference_answer}</p>
+                        </div>
+                      ) : null}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <p className="mt-3 text-sm text-slate-500">这个测试集还没有解析出测试题。</p>
+            )}
           </div>
         </article>
       ) : loading ? (
@@ -1171,7 +1283,25 @@ export function ContentHub({ mode = 'all', initialTopicType = 'daily' }) {
         <div className="grid gap-4 lg:grid-cols-2">
           {filteredItems.map((item) => (
             <article key={item.id} className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm shadow-slate-950/5">
-              {item.kind === 'topic' ? (
+              {item.kind === 'eval' ? (
+                <>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <span className="rounded-md bg-violet-50 px-2 py-1 text-xs font-medium text-violet-700">Eval 测试集</span>
+                    <span className="rounded-md bg-slate-100 px-2 py-1 text-xs font-medium text-slate-500">{item.eval_questions?.length || 0} 道题</span>
+                    {item.project_name ? <span className="rounded-md bg-slate-100 px-2 py-1 text-xs font-medium text-slate-500">{item.project_name}</span> : null}
+                  </div>
+                  <h3 className="mt-3 text-xl font-semibold tracking-normal text-slate-950">{item.title}</h3>
+                  <p className="mt-2 line-clamp-4 whitespace-pre-wrap text-sm leading-6 text-slate-600">{item.body || '还没有补充介绍'}</p>
+                  <div className="mt-4 flex flex-wrap gap-2">
+                    <button onClick={() => setSelectedEvalId(item.id)} className="inline-flex items-center justify-center rounded-md bg-slate-950 px-4 py-2 text-sm font-semibold text-white transition hover:bg-slate-800">
+                      查看详情
+                    </button>
+                    <button onClick={() => copyText(window.location.origin + '/p/eval/' + item.id, '公开链接已复制')} className="inline-flex items-center gap-1.5 rounded-md border border-violet-200 bg-white px-3 py-2 text-sm font-semibold text-violet-700 transition hover:bg-violet-50">
+                      <Link2 size={14} />复制公开链接
+                    </button>
+                  </div>
+                </>
+              ) : item.kind === 'topic' ? (
                 <>
                   <div className="flex flex-wrap items-center gap-2">
                     <span className="rounded-md bg-emerald-50 px-2 py-1 text-xs font-medium text-emerald-700">{topicTypeLabels[item.sub_kind] || kindLabels[item.kind] || 'Memo'}</span>
@@ -1332,55 +1462,6 @@ export function ContentHub({ mode = 'all', initialTopicType = 'daily' }) {
                 </div>
               ) : null}
 
-              {item.kind === 'eval' && item.eval_questions?.length ? (
-                <div className="mt-4 space-y-3">
-                  <div className="flex flex-wrap items-center justify-between gap-2">
-                    <p className="text-xs font-semibold text-slate-500">测试题模块</p>
-                    <button onClick={() => copyText(`${window.location.origin}/p/eval/${item.id}`, '公开链接已复制')} className="inline-flex items-center gap-1.5 rounded-md border border-violet-200 bg-white px-3 py-1.5 text-xs font-semibold text-violet-700 transition hover:bg-violet-50">
-                      <Link2 size={13} />复制公开链接
-                    </button>
-                  </div>
-                  {item.eval_questions.map((question, index) => (
-                    <div key={question.id} className="rounded-lg border border-violet-100 bg-violet-50/40 p-3">
-                      <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
-                        <div className="min-w-0">
-                          <p className="text-xs font-semibold text-violet-700">第 {index + 1} 题</p>
-                          <h4 className="mt-1 text-sm font-semibold text-slate-950">{question.title}</h4>
-                        </div>
-                        <div className="flex shrink-0 flex-wrap gap-2">
-                          <button onClick={() => copyText(question.prompt_text, 'Prompt 已复制')} className="inline-flex items-center gap-1 rounded-md border border-violet-100 bg-white px-2 py-1.5 text-xs font-semibold text-violet-700 hover:bg-violet-50">
-                            <Copy size={12} />复制 Prompt
-                          </button>
-                          <button onClick={() => copyText(evalQuestionCopy(question), '完整题包已复制')} className="inline-flex items-center gap-1 rounded-md bg-violet-600 px-2 py-1.5 text-xs font-semibold text-white hover:bg-violet-500">
-                            <Copy size={12} />复制题包
-                          </button>
-                        </div>
-                      </div>
-                      {question.prompt_text ? (
-                        <div className="mt-3 rounded-md bg-white p-3">
-                          <p className="text-xs font-semibold text-slate-500">Prompt</p>
-                          <p className="mt-1 line-clamp-4 whitespace-pre-wrap text-sm leading-6 text-slate-700">{question.prompt_text}</p>
-                        </div>
-                      ) : null}
-                      <div className="mt-3 grid gap-2 md:grid-cols-2">
-                        {question.input_text ? (
-                          <div className="rounded-md bg-white p-3">
-                            <p className="text-xs font-semibold text-slate-500">输入 / 素材</p>
-                            <p className="mt-1 line-clamp-3 whitespace-pre-wrap text-xs leading-5 text-slate-600">{question.input_text}</p>
-                          </div>
-                        ) : null}
-                        {question.evaluation_criteria ? (
-                          <div className="rounded-md bg-white p-3">
-                            <p className="text-xs font-semibold text-slate-500">评测标准</p>
-                            <p className="mt-1 line-clamp-3 whitespace-pre-wrap text-xs leading-5 text-slate-600">{question.evaluation_criteria}</p>
-                          </div>
-                        ) : null}
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              ) : null}
-
               <div className="mt-4 flex flex-wrap gap-3">
                 {item.draft_doc_url ? (
                   <a href={item.draft_doc_url} target="_blank" rel="noreferrer" className="text-sm font-medium text-slate-600 hover:text-slate-950">打开初稿</a>
@@ -1510,6 +1591,52 @@ function DeepTextArea({ label, value, disabled, placeholder, onChange }) {
   );
 }
 
+function MemberMultiSelect({ members, value, disabled, onChange }) {
+  const selected = String(value || '')
+    .split(/[、,，\n]/)
+    .map((name) => name.trim())
+    .filter(Boolean);
+  const selectedSet = new Set(selected);
+
+  function toggle(name) {
+    if (disabled) return;
+    const next = selectedSet.has(name)
+      ? selected.filter((item) => item !== name)
+      : [...selected, name];
+    onChange(next.join('、'));
+  }
+
+  if (!members.length) {
+    return (
+      <p className="mt-3 rounded-md border border-slate-200 bg-slate-50 px-3 py-2 text-sm text-slate-500">
+        暂无团队成员数据
+      </p>
+    );
+  }
+
+  return (
+    <div className="mt-3">
+      <div className="flex flex-wrap gap-2">
+        {members.map((name) => {
+          const active = selectedSet.has(name);
+          return (
+            <button
+              key={name}
+              type="button"
+              disabled={disabled}
+              onClick={() => toggle(name)}
+              className={`rounded-full border px-3 py-1.5 text-sm font-semibold transition disabled:cursor-not-allowed disabled:opacity-70 ${active ? 'border-emerald-200 bg-emerald-50 text-emerald-700' : 'border-slate-200 bg-white text-slate-600 hover:bg-slate-50'}`}
+            >
+              {name}
+            </button>
+          );
+        })}
+      </div>
+      <p className="mt-3 text-xs leading-5 text-slate-500">已选择：{selected.length ? selected.join('、') : '暂无'}</p>
+    </div>
+  );
+}
+
 function TopicDetailBlock({ title, value }) {
   return (
     <div className="rounded-md border border-slate-200 bg-white p-3">
@@ -1519,7 +1646,7 @@ function TopicDetailBlock({ title, value }) {
   );
 }
 
-function TopicWeekPlan({ plans, currentWeek }) {
+function TopicWeekPlan({ plans, currentWeek, compact = false }) {
   const list = plans.length ? plans : [{ week: 'W1', detail: '等待补充周计划' }];
   function statusFor(week) {
     if (week === currentWeek) return { label: '当前阶段', className: 'bg-emerald-50 text-emerald-700 border-emerald-100' };
@@ -1530,7 +1657,7 @@ function TopicWeekPlan({ plans, currentWeek }) {
     return { label: '待推进', className: 'bg-white text-slate-500 border-slate-200' };
   }
   return (
-    <div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+    <div className={`mt-4 grid gap-3 ${compact ? 'grid-cols-1' : 'md:grid-cols-2 xl:grid-cols-3'}`}>
       {list.map((plan, index) => {
         const status = statusFor(plan.week);
         return (
