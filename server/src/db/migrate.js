@@ -305,6 +305,7 @@ export function migrate() {
       timeline_text TEXT DEFAULT '',
       final_doc_url TEXT DEFAULT '',
       draft_doc_url TEXT DEFAULT '',
+      publish_date TEXT DEFAULT '',
       editor_notes TEXT DEFAULT '',
       status TEXT DEFAULT 'open',
       created_by TEXT NOT NULL REFERENCES users(id),
@@ -446,6 +447,9 @@ export function migrate() {
   }
   if (!memoCols.includes('draft_doc_url')) {
     db.exec("ALTER TABLE content_memos ADD COLUMN draft_doc_url TEXT DEFAULT ''");
+  }
+  if (!memoCols.includes('publish_date')) {
+    db.exec("ALTER TABLE content_memos ADD COLUMN publish_date TEXT DEFAULT ''");
   }
   if (!memoCols.includes('editor_notes')) {
     db.exec("ALTER TABLE content_memos ADD COLUMN editor_notes TEXT DEFAULT ''");

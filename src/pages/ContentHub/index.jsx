@@ -39,6 +39,7 @@ export function ContentHub({ mode = 'all', initialTopicType = 'daily' }) {
   const [topicParseError, setTopicParseError] = useState('');
   const [topicLinkDrafts, setTopicLinkDrafts] = useState({});
   const [topicDraftLinks, setTopicDraftLinks] = useState({});
+  const [topicPublishDates, setTopicPublishDates] = useState({});
   const [topicEditorNotes, setTopicEditorNotes] = useState({});
   const [form, setForm] = useState({ kind: mode === 'topics' ? 'topic' : mode === 'demo' ? 'demo' : mode === 'eval' ? 'eval' : 'memo', subKind: mode === 'topics' ? 'daily' : '', title: '', body: '', sourceUrl: '', timelineText: '', ownerText: '', progress: 0, meetingDocUrl: '', meetingMinutesUrl: '' });
   const [minutes, setMinutes] = useState({ title: '', meetingDocUrl: '', meetingMinutesUrl: '', transcript: '' });
@@ -242,6 +243,18 @@ export function ContentHub({ mode = 'all', initialTopicType = 'daily' }) {
     }
   }
 
+  async function saveTopicPublishDate(item) {
+    const targetProjectId = item.project_id || projectId;
+    const publishDate = topicPublishDates[item.id] ?? item.publish_date ?? '';
+    const res = await put(`/api/projects/${targetProjectId}/content/${item.id}/topic-publish-date`, { publishDate });
+    if (res.ok) {
+      setItems((current) => current.map((memo) => (memo.id === item.id ? res.data : memo)));
+      toast.success('发布日期已保存');
+    } else {
+      toast.error(res.error || '保存失败');
+    }
+  }
+
   async function submitTopicDraft(item) {
     const targetProjectId = item.project_id || projectId;
     const draftDocUrl = topicDraftLinks[item.id] ?? item.draft_doc_url ?? '';
@@ -299,6 +312,11 @@ export function ContentHub({ mode = 'all', initialTopicType = 'daily' }) {
 
   function isTopicAuthor(item) {
     return item.created_by === currentUser?.id;
+  }
+
+  function canEditTopicMeta() {
+    const jobTitle = currentUser?.job_title || currentUser?.jobTitle || '';
+    return canEditTopics || String(jobTitle).includes('编辑');
   }
 
   async function archiveTopic(item) {
@@ -538,7 +556,26 @@ export function ContentHub({ mode = 'all', initialTopicType = 'daily' }) {
               {item.timeline_text || item.kind === 'topic' ? (
                 <div className="mt-4 rounded-md border border-emerald-100 bg-emerald-50/70 p-3">
                   <p className="text-xs font-semibold text-emerald-800">{item.kind === 'topic' ? '发布日期' : item.kind === 'eval' ? 'Eval 计划' : item.sub_kind === 'deep' ? '深度选题长 timeline' : '选题执行计划'}</p>
-                  <p className="mt-1 whitespace-pre-wrap text-sm leading-6 text-emerald-900">{item.kind === 'topic' ? '待王兆洋选择' : item.timeline_text}</p>
+                  {item.kind === 'topic' ? (
+                    <div className="mt-2 flex flex-col gap-2 sm:flex-row sm:items-center">
+                      <input
+                        type="date"
+                        value={topicPublishDates[item.id] ?? item.publish_date ?? ''}
+                        onChange={(event) => setTopicPublishDates((drafts) => ({ ...drafts, [item.id]: event.target.value }))}
+                        disabled={!canEditTopicMeta()}
+                        className="rounded-md border border-emerald-200 bg-white px-3 py-2 text-sm text-emerald-950 outline-none transition focus:border-emerald-500 disabled:bg-emerald-50 disabled:text-emerald-800"
+                      />
+                      {canEditTopicMeta() ? (
+                        <button onClick={() => saveTopicPublishDate(item)} className="rounded-md bg-emerald-600 px-3 py-2 text-sm font-semibold text-white transition hover:bg-emerald-500">
+                          保存发布日期
+                        </button>
+                      ) : (
+                        <span className="text-sm text-emerald-900">{item.publish_date || '待王兆洋选择'}</span>
+                      )}
+                    </div>
+                  ) : (
+                    <p className="mt-1 whitespace-pre-wrap text-sm leading-6 text-emerald-900">{item.timeline_text}</p>
+                  )}
                 </div>
               ) : null}
 
@@ -568,35 +605,38 @@ export function ContentHub({ mode = 'all', initialTopicType = 'daily' }) {
                       <input
                         value={topicLinkDrafts[item.id] ?? item.final_doc_url ?? ''}
                         onChange={(event) => setTopicLinkDrafts((drafts) => ({ ...drafts, [item.id]: event.target.value }))}
-                        disabled={!canEditTopics}
-                        placeholder={canEditTopics ? '手动填最终成稿飞书链接' : '等待王兆洋或骆轶航填写'}
+                        disabled={!isTopicAuthor(item) && !canEditTopicMeta()}
+                        placeholder={isTopicAuthor(item) ? '作者填写最终成稿飞书链接' : '等待作者填写最终成稿链接'}
                         className="w-full rounded-md border border-slate-200 px-3 py-2 text-sm outline-none transition focus:border-emerald-400 disabled:bg-slate-50 disabled:text-slate-500"
                       />
                     </label>
-                    {canEditTopics ? (
+                    {isTopicAuthor(item) || canEditTopicMeta() ? (
                       <button onClick={() => saveTopicFinalDoc(item)} className="rounded-md bg-slate-950 px-4 py-2 text-sm font-semibold text-white transition hover:bg-slate-800">
                         保存链接
                       </button>
                     ) : null}
                   </div>
 
-                  <div className="grid gap-3 lg:grid-cols-[1fr_auto] lg:items-end">
-                    <label className="min-w-0">
-                      <span className="mb-1.5 block text-xs font-semibold text-slate-500">编辑建议</span>
+                  <div className="rounded-md border border-amber-100 bg-amber-50/60 p-3">
+                    <div className="mb-2 flex items-center justify-between gap-3">
+                      <span className="text-xs font-semibold text-amber-800">编辑建议</span>
+                      {canEditTopicMeta() ? <span className="text-xs text-amber-700">王兆洋 / 编辑可写</span> : null}
+                    </div>
+                    <div className="grid gap-3 lg:grid-cols-[1fr_auto] lg:items-end">
                       <textarea
                         value={topicEditorNotes[item.id] ?? item.editor_notes ?? ''}
                         onChange={(event) => setTopicEditorNotes((drafts) => ({ ...drafts, [item.id]: event.target.value }))}
-                        disabled={!canArchiveTopic(item) || isTopicAuthor(item)}
-                        placeholder={canArchiveTopic(item) && !isTopicAuthor(item) ? '写给作者的修改建议，可由 Agent 回传后粘贴' : '等待编辑建议'}
+                        disabled={!canEditTopicMeta()}
+                        placeholder={canEditTopicMeta() ? '写给作者的修改建议，可由 Agent 回传后粘贴' : '暂无编辑建议'}
                         rows={3}
-                        className="w-full rounded-md border border-slate-200 px-3 py-2 text-sm outline-none transition focus:border-emerald-400 disabled:bg-slate-50 disabled:text-slate-500"
+                        className="w-full rounded-md border border-amber-100 bg-white px-3 py-2 text-sm outline-none transition focus:border-amber-400 disabled:bg-amber-50 disabled:text-amber-900"
                       />
-                    </label>
-                    {canArchiveTopic(item) && !isTopicAuthor(item) ? (
-                      <button onClick={() => saveTopicEditorNotes(item)} className="rounded-md bg-slate-950 px-4 py-2 text-sm font-semibold text-white transition hover:bg-slate-800">
-                        推送建议
-                      </button>
-                    ) : null}
+                      {canEditTopicMeta() ? (
+                        <button onClick={() => saveTopicEditorNotes(item)} className="rounded-md bg-slate-950 px-4 py-2 text-sm font-semibold text-white transition hover:bg-slate-800">
+                          推送建议
+                        </button>
+                      ) : null}
+                    </div>
                   </div>
 
                   {canArchiveTopic(item) ? (

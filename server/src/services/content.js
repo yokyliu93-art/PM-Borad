@@ -128,9 +128,9 @@ export function create(projectId, userId, fields = {}) {
     INSERT INTO content_memos (
       id, project_id, kind, sub_kind, title, body, source_url, timeline_text,
       status, owner_text, progress, meeting_doc_url, meeting_minutes_url, final_doc_url,
-      draft_doc_url, editor_notes, created_by
+      draft_doc_url, publish_date, editor_notes, created_by
     )
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `).run(
     id,
     projectId,
@@ -147,6 +147,7 @@ export function create(projectId, userId, fields = {}) {
     fields.meetingMinutesUrl || fields.meeting_minutes_url || fields.minutesUrl || fields.minutes_url || '',
     fields.finalDocUrl || fields.final_doc_url || '',
     fields.draftDocUrl || fields.draft_doc_url || '',
+    fields.publishDate || fields.publish_date || '',
     fields.editorNotes || fields.editor_notes || '',
     userId
   );
@@ -215,16 +216,30 @@ function topicBoardUrl() {
 }
 
 export function updateTopicFinalDoc(projectId, memoId, userId, fields = {}) {
-  if (!canEditTopics(userId)) throw new Error('只有王兆洋和骆轶航可以编辑选题面板');
-  const memo = db.prepare('SELECT id, kind FROM content_memos WHERE id = ? AND project_id = ?').get(memoId, projectId);
+  const memo = db.prepare('SELECT id, kind, created_by FROM content_memos WHERE id = ? AND project_id = ?').get(memoId, projectId);
   if (!memo) throw new Error('选题不存在');
   if (memo.kind !== 'topic') throw new Error('只能编辑选题的飞书稿件链接');
+  if (memo.created_by !== userId && !isTopicEditor(userId)) throw new Error('只有作者和编辑可以填写最终成稿链接');
   const finalDocUrl = String(fields.finalDocUrl || fields.final_doc_url || '').trim();
   db.prepare(`
     UPDATE content_memos
     SET final_doc_url = ?, updated_at = datetime('now')
     WHERE id = ? AND project_id = ?
   `).run(finalDocUrl, memoId, projectId);
+  return get(projectId, memoId, userId);
+}
+
+export function updateTopicPublishDate(projectId, memoId, userId, fields = {}) {
+  if (!isTopicEditor(userId)) throw new Error('只有王兆洋、骆轶航和编辑可以选择发布日期');
+  const memo = db.prepare('SELECT id, kind FROM content_memos WHERE id = ? AND project_id = ?').get(memoId, projectId);
+  if (!memo) throw new Error('选题不存在');
+  if (memo.kind !== 'topic') throw new Error('只能编辑选题发布日期');
+  const publishDate = String(fields.publishDate || fields.publish_date || '').trim();
+  db.prepare(`
+    UPDATE content_memos
+    SET publish_date = ?, updated_at = datetime('now')
+    WHERE id = ? AND project_id = ?
+  `).run(publishDate, memoId, projectId);
   return get(projectId, memoId, userId);
 }
 
