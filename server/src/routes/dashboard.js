@@ -31,7 +31,7 @@ function summarizeTeam(team) {
 
   const projectIds = projects.map((project) => project.id);
   const empty = {
-    topics: { total: 0, progress: 0, daily: { total: 0, planned: 0 }, deep: { total: 0, planned: 0 }, weekly: { total: 0, planned: 0 }, recent: [] },
+    topics: { total: 0, progress: 0, daily: { total: 0, planned: 0 }, business: { total: 0, planned: 0 }, deep: { total: 0, planned: 0 }, recent: [] },
     demo: { total: 0, ready: 0, progress: 0, recent: [] },
     eval: { total: 0, done: 0, progress: 0, recent: [] },
     build: { total: 0, active: 0, completed: 0, tasks: 0, progress: 0, recent: [] },
@@ -56,10 +56,10 @@ function summarizeTeam(team) {
   const teamSize = Number(team.members_count || 1);
   const demoThreshold = Math.max(1, Math.ceil(teamSize / 2));
   const topicMemos = memos.filter((memo) => memo.kind === 'topic');
-  const dailyTopics = topicMemos.filter((memo) => !['deep', 'weekly_recommendation', 'frontier', 'prompt'].includes(memo.sub_kind));
+  const dailyTopics = topicMemos.filter((memo) => !['business', 'deep', 'frontier', 'prompt'].includes(memo.sub_kind));
+  const businessTopics = topicMemos.filter((memo) => memo.sub_kind === 'business');
   const deepTopics = topicMemos.filter((memo) => memo.sub_kind === 'deep');
-  const weeklyTopics = topicMemos.filter((memo) => memo.sub_kind === 'weekly_recommendation');
-  const visibleTopicMemos = [...dailyTopics, ...deepTopics, ...weeklyTopics];
+  const visibleTopicMemos = [...dailyTopics, ...businessTopics, ...deepTopics];
   const plannedTopics = visibleTopicMemos.filter((memo) => String(memo.timeline_text || '').trim()).length;
   const demoMemos = memos.filter((memo) => memo.kind === 'demo');
   const evalMemos = memos.filter((memo) => (
@@ -93,13 +93,13 @@ function summarizeTeam(team) {
           total: dailyTopics.length,
           planned: dailyTopics.filter((memo) => String(memo.timeline_text || '').trim()).length,
         },
+        business: {
+          total: businessTopics.length,
+          planned: businessTopics.filter((memo) => String(memo.timeline_text || '').trim()).length,
+        },
         deep: {
           total: deepTopics.length,
           planned: deepTopics.filter((memo) => String(memo.timeline_text || '').trim()).length,
-        },
-        weekly: {
-          total: weeklyTopics.length,
-          planned: weeklyTopics.filter((memo) => String(memo.timeline_text || '').trim()).length,
         },
         recent: visibleTopicMemos,
       },
@@ -318,7 +318,7 @@ router.get('/department', authRequired, (req, res) => {
   `).all(req.user.id);
 
   const sections = {
-    topics: { total: 0, progress: 0, dailyTotal: 0, dailyPlanned: 0, deepTotal: 0, deepPlanned: 0, weeklyTotal: 0, weeklyPlanned: 0, dailyItems: [], deepItems: [], weeklyItems: [] },
+    topics: { total: 0, progress: 0, dailyTotal: 0, dailyPlanned: 0, businessTotal: 0, businessPlanned: 0, deepTotal: 0, deepPlanned: 0, dailyItems: [], businessItems: [], deepItems: [] },
     demo: { total: 0, ready: 0, progress: 0, items: [] },
     eval: { total: 0, done: 0, progress: 0, items: [] },
     build: { total: 0, active: 0, completed: 0, tasks: 0, progress: 0, items: [] },
@@ -329,13 +329,13 @@ router.get('/department', authRequired, (req, res) => {
     sections.topics.total += team.sections.topics.total;
     sections.topics.dailyTotal += team.sections.topics.daily.total;
     sections.topics.dailyPlanned += team.sections.topics.daily.planned;
+    sections.topics.businessTotal += team.sections.topics.business.total;
+    sections.topics.businessPlanned += team.sections.topics.business.planned;
     sections.topics.deepTotal += team.sections.topics.deep.total;
     sections.topics.deepPlanned += team.sections.topics.deep.planned;
-    sections.topics.weeklyTotal += team.sections.topics.weekly.total;
-    sections.topics.weeklyPlanned += team.sections.topics.weekly.planned;
-    sections.topics.dailyItems.push(...team.sections.topics.recent.filter((item) => !['deep', 'weekly_recommendation'].includes(item.sub_kind)).map((item) => ({ ...item, team_name: team.name })));
+    sections.topics.dailyItems.push(...team.sections.topics.recent.filter((item) => !['business', 'deep'].includes(item.sub_kind)).map((item) => ({ ...item, team_name: team.name })));
+    sections.topics.businessItems.push(...team.sections.topics.recent.filter((item) => item.sub_kind === 'business').map((item) => ({ ...item, team_name: team.name })));
     sections.topics.deepItems.push(...team.sections.topics.recent.filter((item) => item.sub_kind === 'deep').map((item) => ({ ...item, team_name: team.name })));
-    sections.topics.weeklyItems.push(...team.sections.topics.recent.filter((item) => item.sub_kind === 'weekly_recommendation').map((item) => ({ ...item, team_name: team.name })));
     sections.demo.total += team.sections.demo.total;
     sections.demo.ready += team.sections.demo.ready;
     sections.demo.items.push(...team.sections.demo.recent.map((item) => ({ ...item, team_name: team.name })));
@@ -349,7 +349,7 @@ router.get('/department', authRequired, (req, res) => {
     sections.build.items.push(...team.sections.build.recent.map((item) => ({ ...item, team_name: team.name })));
   }
 
-  sections.topics.progress = percent(sections.topics.dailyPlanned + sections.topics.deepPlanned + sections.topics.weeklyPlanned, sections.topics.total);
+  sections.topics.progress = percent(sections.topics.dailyPlanned + sections.topics.businessPlanned + sections.topics.deepPlanned, sections.topics.total);
   sections.demo.progress = percent(sections.demo.ready, sections.demo.total);
   sections.eval.progress = percent(sections.eval.done, sections.eval.total);
   sections.build.progress = teamRows.length

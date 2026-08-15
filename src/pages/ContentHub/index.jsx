@@ -25,6 +25,7 @@ const kindLabels = {
 
 const topicTypeLabels = {
   daily: '日常选题',
+  business: '商务选题',
   deep: '深度选题',
   weekly_recommendation: '本周项目推荐',
   frontier: 'Frontier',
@@ -104,6 +105,17 @@ export function ContentHub({ mode = 'all', initialTopicType = 'daily' }) {
       }
       path = `/api/content?${params.toString()}`;
     }
+    if (isGlobal && isTopics && topicType === 'daily') {
+      const dailyParams = new URLSearchParams({ teamId: currentTeamId, kind: 'topic', subKind: 'daily' });
+      const weeklyParams = new URLSearchParams({ teamId: currentTeamId, kind: 'topic', subKind: 'weekly_recommendation' });
+      const [dailyRes, weeklyRes] = await Promise.all([
+        get(`/api/content?${dailyParams.toString()}`),
+        get(`/api/content?${weeklyParams.toString()}`),
+      ]);
+      setItems([...(dailyRes.ok ? dailyRes.data || [] : []), ...(weeklyRes.ok ? weeklyRes.data || [] : [])]);
+      setLoading(false);
+      return;
+    }
     const res = await get(path);
     if (res.ok) setItems(res.data || []);
     setLoading(false);
@@ -166,6 +178,7 @@ export function ContentHub({ mode = 'all', initialTopicType = 'daily' }) {
     if (res.ok) {
       if (isTopics) {
         const daily = res.data?.dailyTopics?.length || 0;
+        const business = res.data?.businessTopics?.length || 0;
         const deep = res.data?.deepTopics?.length || 0;
         const weekly = res.data?.weeklyRecommendations?.length || 0;
         const frontier = res.data?.frontierTopics?.length || 0;
@@ -173,7 +186,7 @@ export function ContentHub({ mode = 'all', initialTopicType = 'daily' }) {
         const pushed = (res.data?.notifications || []).filter((item) => item.pushed).length;
         toast.success(res.data?.fallback
           ? `DeepSeek 解析失败，但已先回传飞书内容，生成 ${daily} 个待整理选题`
-          : `已解析 ${daily} 个日常、${deep} 个深度、${weekly} 个本周项目推荐、${frontier} 个 Frontier、${prompt} 个 Prompt PR，已推送 ${pushed} 位负责人`);
+          : `已解析 ${daily} 个日常、${business} 个商务、${deep} 个深度、${weekly} 个本周项目推荐、${frontier} 个 Frontier、${prompt} 个 Prompt PR，已推送 ${pushed} 位负责人`);
       } else {
         toast.success(`已导入例会，并生成 ${res.data?.topics?.length || 0} 条候选选题`);
       }
@@ -374,7 +387,7 @@ export function ContentHub({ mode = 'all', initialTopicType = 'daily' }) {
             连接周会文档和速记文档，自动生成选题板块
           </h2>
           <p className="mt-3 max-w-md text-sm leading-7 text-slate-600">
-            系统会读取飞书周会文档和速记文档，再调用 DeepSeek 解析日常选题、深度选题和本周项目推荐；Frontier 与 Prompt PR 会自动分流到左侧对应栏目。
+            系统会读取飞书周会文档和速记文档，再调用 DeepSeek 解析日常选题、商务选题、深度选题和本周项目推荐；Frontier 与 Prompt PR 会自动分流到左侧对应栏目。
           </p>
         </div>
         <div className="space-y-3">
@@ -415,7 +428,7 @@ export function ContentHub({ mode = 'all', initialTopicType = 'daily' }) {
           <p className="text-sm font-medium text-emerald-700">{isTopics ? '硅星人选题' : isFrontier ? '硅星人 Frontier' : isPrompt ? '硅星人 Prompt PR' : isDemo ? '硅星人 Demo 模块' : isEval ? '硅星人 Eval' : '硅星人内容池'}</p>
           <h2 className="mt-2 text-3xl font-semibold tracking-normal text-slate-950">{isTopics ? '从周会进入选题推进' : isFrontier ? 'Frontier 前沿观察' : isPrompt ? 'Prompt PR 推进' : isDemo ? '从 memo 到 Demo 决策' : isEval ? '测试集和评测进度' : '把零散 memo 变成可协作的板块'}</h2>
           <p className="mt-3 max-w-3xl text-sm leading-6 text-slate-600">
-            {isTopics ? '选题只保留日常选题、深度选题和本周项目推荐。日常选题看负责人、交稿日期和发布日期；深度选题按更长 timeline 协作推进。' : isFrontier ? '这里承接周会里拆出来的 Frontier 前沿项目、研究和产品观察，不混在选题列表里。' : isPrompt ? '这里承接 Prompt PR 相关项目、协作事项和推进记录，不混在选题列表里。' : isDemo ? '这里都是大家扔上来的 Demo memo。试用后写体验，半数通过就进入 Demo。' : isEval ? '把测试集以飞书链接的方式放进来，记录负责人、评测进度和当前说明，部门大盘会同步显示 Eval 进度。' : 'Demo、每周例会和选题先放在这里。大家写试用体验、投 Demo 票，够半数通过后就可以进入 Demo 或沉淀成项目任务。'}
+            {isTopics ? '选题分为日常选题、商务选题和深度选题。本周项目推荐固定放在日常选题里；深度选题按更长 timeline 协作推进。' : isFrontier ? '这里承接周会里拆出来的 Frontier 前沿项目、研究和产品观察，不混在选题列表里。' : isPrompt ? '这里承接 Prompt PR 相关项目、协作事项和推进记录，不混在选题列表里。' : isDemo ? '这里都是大家扔上来的 Demo memo。试用后写体验，半数通过就进入 Demo。' : isEval ? '把测试集以飞书链接的方式放进来，记录负责人、评测进度和当前说明，部门大盘会同步显示 Eval 进度。' : 'Demo、每周例会和选题先放在这里。大家写试用体验、投 Demo 票，够半数通过后就可以进入 Demo 或沉淀成项目任务。'}
           </p>
           {isTopics ? (
             <div className="mt-4 inline-flex items-center gap-2 rounded-full border border-emerald-100 bg-emerald-50 px-3 py-1.5 text-sm font-medium text-emerald-800">
@@ -468,8 +481,8 @@ export function ContentHub({ mode = 'all', initialTopicType = 'daily' }) {
             {isTopics || form.kind === 'topic' ? (
               <select value={form.subKind || 'daily'} onChange={(event) => setForm({ ...form, subKind: event.target.value })} className="w-full rounded-md border border-slate-200 bg-white px-3 py-2 text-sm outline-none focus:border-emerald-400">
                 <option value="daily">日常选题</option>
+                <option value="business">商务选题</option>
                 <option value="deep">深度选题</option>
-                <option value="weekly_recommendation">本周项目推荐</option>
               </select>
             ) : null}
             <input value={form.title} onChange={(event) => setForm({ ...form, title: event.target.value })} placeholder={isEval ? '测试集名称' : '标题'} className="w-full rounded-md border border-slate-200 px-3 py-2 text-sm outline-none focus:border-emerald-400" />
@@ -532,8 +545,8 @@ export function ContentHub({ mode = 'all', initialTopicType = 'daily' }) {
         <div className="flex flex-wrap gap-2">
           {[
             ['daily', '日常选题'],
+            ['business', '商务选题'],
             ['deep', '深度选题'],
-            ['weekly_recommendation', '本周项目推荐'],
           ].map(([key, label]) => (
             <button key={key} onClick={() => setTopicType(key)} className={`rounded-md px-3 py-2 text-sm transition ${topicType === key ? 'bg-slate-950 text-white' : 'border border-slate-200 bg-white text-slate-600 hover:bg-slate-50'}`}>{label}</button>
           ))}

@@ -68,7 +68,7 @@ export function Shell() {
                 <span className="ml-auto text-xs text-slate-400">统帅视角</span>
               </NavLink>
 
-              <NavLink to="/topics" className={({ isActive }) => navClass(isActive || location.pathname === '/topics/daily' || location.pathname === '/topics/deep')}>
+              <NavLink to="/topics" className={({ isActive }) => navClass(isActive || location.pathname === '/topics/daily' || location.pathname === '/topics/business' || location.pathname === '/topics/deep')}>
                 <NotebookTabs size={16} />
                 <span>选题</span>
               </NavLink>

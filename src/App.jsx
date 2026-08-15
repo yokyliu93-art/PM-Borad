@@ -266,6 +266,7 @@ export default function App() {
           <Route path="/board" element={<BossBoard />} />
           <Route path="/topics" element={<ContentHub mode="topics" initialTopicType="daily" />} />
           <Route path="/topics/daily" element={<ContentHub mode="topics" initialTopicType="daily" />} />
+          <Route path="/topics/business" element={<ContentHub mode="topics" initialTopicType="business" />} />
           <Route path="/topics/deep" element={<ContentHub mode="topics" initialTopicType="deep" />} />
           <Route path="/topics/frontier" element={<ContentHub mode="frontier" initialTopicType="frontier" />} />
           <Route path="/topics/prompt" element={<ContentHub mode="prompt" initialTopicType="prompt" />} />
