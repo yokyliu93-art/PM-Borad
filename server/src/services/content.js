@@ -254,6 +254,12 @@ function isTopicEditor(userId) {
   return canEditTopics(userId) || String(db.prepare('SELECT job_title FROM users WHERE id = ?').get(userId)?.job_title || '').includes('编辑');
 }
 
+function canEditTopic(userId, memo) {
+  if (memo.created_by === userId) return true;
+  const user = db.prepare('SELECT name, job_title FROM users WHERE id = ?').get(userId);
+  return userMatchesOwnerText(user, memo.owner_text) || isTopicEditor(userId);
+}
+
 function topicBoardUrl() {
   return `${config.clientUrl}/topics`;
 }
@@ -266,10 +272,10 @@ function userMatchesOwnerText(user, ownerText = '') {
 }
 
 export function updateTopicFinalDoc(projectId, memoId, userId, fields = {}) {
-  const memo = db.prepare('SELECT id, kind, created_by FROM content_memos WHERE id = ? AND project_id = ?').get(memoId, projectId);
+  const memo = db.prepare('SELECT id, kind, created_by, owner_text FROM content_memos WHERE id = ? AND project_id = ?').get(memoId, projectId);
   if (!memo) throw new Error('选题不存在');
   if (memo.kind !== 'topic') throw new Error('只能编辑选题的飞书稿件链接');
-  if (memo.created_by !== userId && !isTopicEditor(userId)) throw new Error('只有作者和编辑可以填写最终成稿链接');
+  if (!canEditTopic(userId, memo)) throw new Error('只有作者、负责人和编辑可以填写稿件链接');
   const finalDocUrl = String(fields.finalDocUrl || fields.final_doc_url || '').trim();
   db.prepare(`
     UPDATE content_memos
@@ -280,10 +286,10 @@ export function updateTopicFinalDoc(projectId, memoId, userId, fields = {}) {
 }
 
 export function updateTopicPublishDate(projectId, memoId, userId, fields = {}) {
-  if (!isTopicEditor(userId)) throw new Error('只有选题编辑可以选择发布日期');
-  const memo = db.prepare('SELECT id, kind FROM content_memos WHERE id = ? AND project_id = ?').get(memoId, projectId);
+  const memo = db.prepare('SELECT id, kind, created_by, owner_text FROM content_memos WHERE id = ? AND project_id = ?').get(memoId, projectId);
   if (!memo) throw new Error('选题不存在');
   if (memo.kind !== 'topic') throw new Error('只能编辑选题发布日期');
+  if (!canEditTopic(userId, memo)) throw new Error('只有作者、负责人和编辑可以选择发布日期');
   const publishDate = String(fields.publishDate || fields.publish_date || '').trim();
   db.prepare(`
     UPDATE content_memos
@@ -320,10 +326,10 @@ export function updateTopicDraftDate(projectId, memoId, userId, fields = {}) {
 }
 
 export function updateTopicOwner(projectId, memoId, userId, fields = {}) {
-  const memo = db.prepare('SELECT id, kind FROM content_memos WHERE id = ? AND project_id = ?').get(memoId, projectId);
+  const memo = db.prepare('SELECT id, kind, created_by, owner_text FROM content_memos WHERE id = ? AND project_id = ?').get(memoId, projectId);
   if (!memo) throw new Error('选题不存在');
   if (memo.kind !== 'topic') throw new Error('只能编辑选题负责人');
-  if (!isTopicEditor(userId)) throw new Error('只有选题编辑可以分配负责人');
+  if (!canEditTopic(userId, memo)) throw new Error('只有作者、负责人和编辑可以分配负责人');
   const ownerText = String(fields.ownerText || fields.owner_text || '').trim();
   if (!ownerText) throw new Error('请选择负责人');
   db.prepare(`
@@ -386,8 +392,7 @@ export async function submitTopicDraft(projectId, memoId, userId, fields = {}) {
   `).get(memoId, projectId);
   if (!memo) throw new Error('选题不存在');
   if (memo.kind !== 'topic') throw new Error('只能提交选题初稿');
-  const user = db.prepare('SELECT name FROM users WHERE id = ?').get(userId);
-  if (memo.created_by !== userId && !userMatchesOwnerText(user, memo.owner_text)) throw new Error('只有选题负责人可以提交初稿');
+  if (!canEditTopic(userId, memo)) throw new Error('只有作者、负责人和编辑可以提交初稿');
   const draftDocUrl = String(fields.draftDocUrl || fields.draft_doc_url || '').trim();
   if (!draftDocUrl) throw new Error('请填写初稿飞书链接');
   db.prepare(`
@@ -421,7 +426,6 @@ export async function submitTopicDraft(projectId, memoId, userId, fields = {}) {
 }
 
 export async function updateTopicEditorNotes(projectId, memoId, userId, fields = {}) {
-  if (!isTopicEditor(userId)) throw new Error('只有选题编辑可以填写编辑建议');
   const memo = db.prepare(`
     SELECT m.*, u.name as created_by_name
     FROM content_memos m
@@ -430,6 +434,7 @@ export async function updateTopicEditorNotes(projectId, memoId, userId, fields =
   `).get(memoId, projectId);
   if (!memo) throw new Error('选题不存在');
   if (memo.kind !== 'topic') throw new Error('只能编辑选题建议');
+  if (!canEditTopic(userId, memo)) throw new Error('只有作者、负责人和编辑可以填写编辑建议');
   const editorNotes = String(fields.editorNotes || fields.editor_notes || '').trim();
   if (!editorNotes) throw new Error('请填写编辑建议');
   db.prepare(`
