@@ -142,25 +142,25 @@ export function ContentHub({ mode = 'all', initialTopicType = 'daily' }) {
       const list = res.ok ? res.data || [] : [];
       return query.subKind ? list.filter((item) => item.sub_kind === query.subKind) : list;
     };
-    const [daily, business, deep, weekly, memo, demo] = await Promise.all([
+    const [daily, business, deep, weekly] = await Promise.all([
       fetchList({ kind: 'topic', subKind: 'daily' }),
       fetchList({ kind: 'topic', subKind: 'business' }),
       fetchList({ kind: 'topic', subKind: 'deep' }),
       fetchList({ kind: 'topic', subKind: 'weekly_recommendation' }),
-      fetchList({ kind: 'memo' }),
-      fetchList({ kind: 'demo' }),
     ]);
-    const allTopics = [...daily, ...business, ...deep, ...weekly];
+    const topicGroupStats = (list) => ({
+      total: list.length,
+      withMemo: list.filter((item) => hasTopicMemo(item)).length,
+      active: list.filter((item) => String(item.status || 'open') !== 'archived').length,
+      waitingDraft: list.filter((item) => item.sub_kind === 'deep' && !item.draft_doc_url).length,
+    });
+    const dailyWithWeekly = [...daily, ...weekly];
     setTopicOverview({
-      daily: daily.length + weekly.length,
+      daily: topicGroupStats(dailyWithWeekly),
       dailyPure: daily.length,
       weekly: weekly.length,
-      business: business.length,
-      deep: deep.length,
-      withMemo: allTopics.filter((item) => hasTopicMemo(item)).length,
-      demoReady: demo.filter((item) => item.demo_ready).length,
-      memo: memo.length,
-      experiences: [...memo, ...demo].reduce((sum, item) => sum + Number(item.experience_count || 0), 0),
+      business: topicGroupStats(business),
+      deep: topicGroupStats(deep),
     });
   }
 
@@ -180,13 +180,9 @@ export function ContentHub({ mode = 'all', initialTopicType = 'daily' }) {
   }), [items]);
 
   const displayStats = isTopics ? {
-    daily: topicOverview?.daily || 0,
-    business: topicOverview?.business || 0,
-    deep: topicOverview?.deep || 0,
-    withMemo: topicOverview?.withMemo || 0,
-    demoReady: topicOverview?.demoReady || 0,
-    memo: topicOverview?.memo || 0,
-    experiences: topicOverview?.experiences || 0,
+    daily: topicOverview?.daily || { total: 0, withMemo: 0, active: 0, waitingDraft: 0 },
+    business: topicOverview?.business || { total: 0, withMemo: 0, active: 0, waitingDraft: 0 },
+    deep: topicOverview?.deep || { total: 0, withMemo: 0, active: 0, waitingDraft: 0 },
   } : stats;
 
   async function createMemo(event) {
@@ -600,13 +596,29 @@ export function ContentHub({ mode = 'all', initialTopicType = 'daily' }) {
             </div>
           ) : null}
           {isTopics ? (
-            <div className="mt-5 grid gap-3 md:grid-cols-3 xl:grid-cols-6">
-              <Stat label="日常选题" value={displayStats.daily} detail={`含本周推荐 ${topicOverview?.weekly || 0}`} />
-              <Stat label="深度选题" value={displayStats.deep} detail="按二级页面推进" />
-              <Stat label="商务选题" value={displayStats.business} detail="来自周会其他事项" />
-              <Stat label="有 memo / 文档" value={displayStats.withMemo} detail="已挂飞书入口" />
-              <Stat label="可 Demo" value={displayStats.demoReady} detail="Demo 池已达条件" />
-              <Stat label="试用体验" value={displayStats.experiences} detail={`${displayStats.memo} 个普通 memo`} />
+            <div className="mt-5 grid gap-3 lg:grid-cols-3">
+              <TopicBoardStat
+                label="日常选题"
+                value={displayStats.daily.total}
+                detail={`含本周项目推荐 ${topicOverview?.weekly || 0}`}
+                withMemo={displayStats.daily.withMemo}
+                active={displayStats.daily.active}
+              />
+              <TopicBoardStat
+                label="深度选题"
+                value={displayStats.deep.total}
+                detail="按周计划同步进度"
+                withMemo={displayStats.deep.withMemo}
+                active={displayStats.deep.active}
+                waitingDraft={displayStats.deep.waitingDraft}
+              />
+              <TopicBoardStat
+                label="商务选题"
+                value={displayStats.business.total}
+                detail="来自周会商务事项"
+                withMemo={displayStats.business.withMemo}
+                active={displayStats.business.active}
+              />
             </div>
           ) : (
             <div className="mt-5 grid gap-3 md:grid-cols-4">
@@ -1104,6 +1116,36 @@ function Stat({ label, value, detail = '' }) {
       <p className="text-2xl font-semibold text-slate-950">{value}</p>
       <p className="mt-1 text-xs text-slate-500">{label}</p>
       {detail ? <p className="mt-1 text-[11px] leading-4 text-slate-400">{detail}</p> : null}
+    </div>
+  );
+}
+
+function TopicBoardStat({ label, value, detail, withMemo, active, waitingDraft }) {
+  return (
+    <div className="rounded-lg border border-slate-100 bg-slate-50 p-4">
+      <div className="flex items-start justify-between gap-3">
+        <div>
+          <p className="text-sm font-semibold text-slate-500">{label}</p>
+          <p className="mt-1 text-[11px] leading-4 text-slate-400">{detail}</p>
+        </div>
+        <p className="text-3xl font-semibold text-slate-950">{value}</p>
+      </div>
+      <div className="mt-4 grid grid-cols-2 gap-2 text-xs">
+        <div className="rounded-md bg-white px-3 py-2">
+          <p className="font-semibold text-slate-950">{withMemo}</p>
+          <p className="mt-0.5 text-slate-500">有 memo / 文档</p>
+        </div>
+        <div className="rounded-md bg-white px-3 py-2">
+          <p className="font-semibold text-slate-950">{active}</p>
+          <p className="mt-0.5 text-slate-500">推进中</p>
+        </div>
+        {waitingDraft !== undefined ? (
+          <div className="col-span-2 rounded-md bg-white px-3 py-2">
+            <p className="font-semibold text-slate-950">{waitingDraft}</p>
+            <p className="mt-0.5 text-slate-500">等待提交初稿</p>
+          </div>
+        ) : null}
+      </div>
     </div>
   );
 }
