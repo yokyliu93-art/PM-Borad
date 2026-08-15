@@ -557,7 +557,7 @@ export function ContentHub({ mode = 'all', initialTopicType = 'daily' }) {
                           保存发布日期
                         </button>
                       ) : (
-                        <span className="text-sm text-emerald-900">{item.publish_date || '待王兆洋选择'}</span>
+                        <span className="min-h-5 text-sm text-emerald-900">{item.publish_date || ' '}</span>
                       )}
                     </div>
                   ) : (
