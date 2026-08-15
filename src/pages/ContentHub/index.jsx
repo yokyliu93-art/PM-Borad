@@ -768,8 +768,8 @@ export function ContentHub({ mode = 'all', initialTopicType = 'daily' }) {
           <div className="mt-4 rounded-lg border border-emerald-100 bg-white p-4">
             <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
               <div>
-                <p className="text-sm font-semibold text-slate-950">飞书文档入口</p>
-                <p className="mt-1 text-xs leading-5 text-slate-500">正文继续放在飞书里，PM Board 只负责挂入口、看负责人和进度。</p>
+                <p className="text-sm font-semibold text-slate-950">深度选题三步</p>
+                <p className="mt-1 text-xs leading-5 text-slate-500">每一步都直接进入对应飞书文档，PM Board 负责同步状态。</p>
               </div>
               {canEditTopicDocLinks(selectedTopic) ? (
                 <button onClick={() => saveTopicDocLinks(selectedTopic)} className="inline-flex items-center justify-center rounded-md bg-emerald-600 px-3 py-2 text-sm font-semibold text-white transition hover:bg-emerald-500">
@@ -777,22 +777,19 @@ export function ContentHub({ mode = 'all', initialTopicType = 'daily' }) {
                 </button>
               ) : null}
             </div>
-            <div className="mt-3 grid gap-3 md:grid-cols-2">
+            <div className="mt-3 grid gap-3 md:grid-cols-3">
               {[
-                ['techIntro', '技术介绍文档'],
-                ['weeklyPlan', '周计划文档'],
-                ['phaseProgress', '阶段进度文档'],
-                ['interviewRaw', '采访原文文档'],
-                ['outline', '稿件框架文档'],
-                ['reference', '资料补充文档'],
+                ['techIntro', '要点整理'],
+                ['outline', '写作提纲'],
+                ['draft', '初稿'],
               ].map(([key, label]) => (
                 <TopicDocLinkInput
                   key={key}
                   label={label}
-                  value={docLinkValue(selectedTopic, key)}
+                  value={key === 'draft' ? (docLinkValue(selectedTopic, key) || selectedTopic.draft_doc_url || '') : docLinkValue(selectedTopic, key)}
                   disabled={!canEditTopicDocLinks(selectedTopic)}
                   onChange={(value) => setTopicDocLink(selectedTopic, key, value)}
-                  onCopy={() => copyText(docLinkValue(selectedTopic, key), '链接已复制')}
+                  onCopy={() => copyText(key === 'draft' ? (docLinkValue(selectedTopic, key) || selectedTopic.draft_doc_url || '') : docLinkValue(selectedTopic, key), '链接已复制')}
                 />
               ))}
             </div>
@@ -1151,8 +1148,15 @@ function TopicWeekPlan({ plans, currentWeek }) {
 function TopicDocLinkInput({ label, value, disabled, onChange, onCopy }) {
   const hasValue = Boolean(String(value || '').trim());
   return (
-    <label className="block rounded-md border border-slate-100 bg-slate-50 p-3">
+    <label className={`block rounded-md border p-3 transition ${hasValue ? 'border-emerald-100 bg-emerald-50/40 hover:bg-emerald-50' : 'border-slate-100 bg-slate-50'}`}>
       <span className="text-xs font-semibold text-slate-500">{label}</span>
+      {hasValue ? (
+        <a href={value} target="_blank" rel="noreferrer" className="mt-1 flex items-center gap-1 text-sm font-semibold text-emerald-700 hover:text-emerald-600">
+          直接打开 <ExternalLink size={13} />
+        </a>
+      ) : (
+        <p className="mt-1 text-sm font-semibold text-slate-400">等待链接</p>
+      )}
       <div className="mt-2 flex gap-2">
         <input
           value={value}
@@ -1162,14 +1166,9 @@ function TopicDocLinkInput({ label, value, disabled, onChange, onCopy }) {
           className="min-w-0 flex-1 rounded-md border border-slate-200 bg-white px-3 py-2 text-sm text-slate-950 outline-none transition focus:border-emerald-400 disabled:bg-slate-50 disabled:text-slate-500"
         />
         {hasValue ? (
-          <>
-            <a href={value} target="_blank" rel="noreferrer" className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-md border border-slate-200 bg-white text-slate-600 transition hover:bg-slate-100" title="打开飞书文档">
-              <ExternalLink size={15} />
-            </a>
-            <button type="button" onClick={onCopy} className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-md border border-slate-200 bg-white text-slate-600 transition hover:bg-slate-100" title="复制链接">
-              <Copy size={15} />
-            </button>
-          </>
+          <button type="button" onClick={onCopy} className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-md border border-slate-200 bg-white text-slate-600 transition hover:bg-slate-100" title="复制链接">
+            <Copy size={15} />
+          </button>
         ) : null}
       </div>
     </label>
