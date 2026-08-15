@@ -38,6 +38,7 @@ router.post('/parse-weekly-topics', async (req, res) => {
     const data = await contentService.parseWeeklyTopics(req.params.projectId, req.user.id, req.body || {});
     res.status(201).json({ ok: true, data });
   } catch (err) {
+    console.error('[content] parse weekly topics failed:', err.userMessage || err.message);
     res.status(400).json({ ok: false, error: err.userMessage || err.message });
   }
 });

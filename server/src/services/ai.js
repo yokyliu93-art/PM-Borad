@@ -98,12 +98,7 @@ export async function auditAgentFile({ project, task, payload }) {
 }
 
 export async function parseWeeklyTopics({ meetingDoc, meetingNotes }) {
-  const userContent = [
-    `周会文档链接：${meetingDoc?.url || ''}`,
-    meetingDoc?.content ? `周会文档内容：\n${meetingDoc.content}` : '',
-    `周会速记文档链接：${meetingNotes?.url || ''}`,
-    meetingNotes?.content ? `周会速记文档内容：\n${meetingNotes.content}` : '',
-  ].filter(Boolean).join('\n\n').slice(0, 60000);
+  const userContent = buildTopicParseInput({ meetingDoc, meetingNotes });
   const parsed = await callAIJson({
     systemPrompt: TOPIC_PARSE_PROMPT,
     userContent,
@@ -113,6 +108,44 @@ export async function parseWeeklyTopics({ meetingDoc, meetingNotes }) {
     dailyTopics: Array.isArray(parsed.dailyTopics) ? parsed.dailyTopics : [],
     deepTopics: Array.isArray(parsed.deepTopics) ? parsed.deepTopics : [],
   };
+}
+
+function buildTopicParseInput({ meetingDoc, meetingNotes }) {
+  const docExcerpt = topicRelevantExcerpt(meetingDoc?.content || '', 12000);
+  const notesExcerpt = topicRelevantExcerpt(meetingNotes?.content || '', 24000);
+  return [
+    `周会文档链接：${meetingDoc?.url || ''}`,
+    meetingDoc?.title ? `周会文档标题：${meetingDoc.title}` : '',
+    docExcerpt ? `周会文档选题相关片段：\n${docExcerpt}` : '',
+    `周会速记文档链接：${meetingNotes?.url || ''}`,
+    meetingNotes?.title ? `周会速记文档标题：${meetingNotes.title}` : '',
+    notesExcerpt ? `周会速记文档选题相关片段：\n${notesExcerpt}` : '',
+  ].filter(Boolean).join('\n\n').slice(0, 42000);
+}
+
+const TOPIC_KEYWORDS = /选题|题目|主题|负责人|负责|初稿|截稿|稿|文章|报道|采访|约访|试用|体验|Demo|demo|深度|日常|专题|系列|发布|上线|推荐|Builder|GAI|GenAI|下周|本周|时间|进度|排期|timeline|讨论|确定|待定|王兆洋|刘雨琦|樊雅婷|孙芮|董道力|潘仁浩|饶上|温新炮/i;
+
+function topicRelevantExcerpt(content = '', limit = 20000) {
+  const text = String(content || '').replace(/\r/g, '\n').replace(/\n{3,}/g, '\n\n').trim();
+  if (!text) return '';
+  if (text.length <= limit) return text;
+
+  const lines = text.split('\n').map((line) => line.trim()).filter(Boolean);
+  const selected = [];
+  const seen = new Set();
+  for (let i = 0; i < lines.length; i += 1) {
+    if (!TOPIC_KEYWORDS.test(lines[i])) continue;
+    for (let j = Math.max(0, i - 1); j <= Math.min(lines.length - 1, i + 2); j += 1) {
+      const line = lines[j];
+      if (seen.has(line)) continue;
+      selected.push(line);
+      seen.add(line);
+    }
+  }
+  const relevant = selected.join('\n');
+  const head = text.slice(0, Math.min(5000, Math.floor(limit * 0.25)));
+  const tail = text.slice(-Math.min(3000, Math.floor(limit * 0.15)));
+  return [head, relevant, tail].filter(Boolean).join('\n\n---\n\n').slice(0, limit);
 }
 
 export async function parseEvalDoc({ doc }) {
