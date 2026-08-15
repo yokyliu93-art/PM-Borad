@@ -1,5 +1,7 @@
 import { config } from '../config.js';
 
+const AI_JSON_MAX_TOKENS = Number(process.env.AI_JSON_MAX_TOKENS || 12000);
+
 const SYSTEM_PROMPT = `你是专业的项目管理和任务拆解助手。请根据用户提供的项目信息，把项目拆解成 5-8 个可执行的任务，每个任务下再拆 2-5 个子任务。
 只输出一个 JSON 对象，不要输出任何解释文字、Markdown 代码块或其他内容。格式如下：
 {"tasks":[{"title":"任务标题","summary":"一句话说明任务目标","cycle":"周期，如 第1周","idea":"这块任务背后的核心想法","executionPlan":"执行方案","resourcePlan":"资源配合","subtasks":[{"title":"子任务标题","note":"备注，可为空字符串"}]}]}`;
@@ -233,7 +235,7 @@ async function callAIJson({ systemPrompt, userContent, fallbackError }) {
           { role: 'user', content: userContent },
         ],
         temperature: 0.3,
-        max_tokens: 5000,
+        max_tokens: AI_JSON_MAX_TOKENS,
         response_format: { type: 'json_object' },
       }),
       signal: controller.signal,
@@ -249,8 +251,26 @@ async function callAIJson({ systemPrompt, userContent, fallbackError }) {
   }
   const data = await res.json();
   const content = data?.choices?.[0]?.message?.content;
-  if (!content) throw new Error('AI 未返回有效内容');
-  return parseJsonObject(content);
+  const finishReason = data?.choices?.[0]?.finish_reason || '';
+  if (!content) {
+    console.error('[ai] empty content', {
+      model: provider.model,
+      finishReason,
+      reasoningLength: String(data?.choices?.[0]?.message?.reasoning_content || '').length,
+    });
+    throw new Error(finishReason === 'length' ? 'AI 输出被截断，请缩短文档内容后重试' : 'AI 未返回有效内容');
+  }
+  try {
+    return parseJsonObject(content);
+  } catch (err) {
+    console.error('[ai] invalid json content', {
+      model: provider.model,
+      finishReason,
+      contentLength: String(content || '').length,
+      preview: String(content || '').slice(0, 240),
+    });
+    throw err;
+  }
 }
 
 function getAIProvider() {
@@ -271,10 +291,9 @@ function getAIProvider() {
 function parseJsonObject(content) {
   let text = String(content || '').trim();
   text = text.replace(/^```(?:json)?\s*/i, '').replace(/```\s*$/, '').trim();
-  const start = text.indexOf('{');
-  const end = text.lastIndexOf('}');
+  const json = extractJson(text, '{', '}');
   try {
-    return JSON.parse(start >= 0 && end > start ? text.slice(start, end + 1) : text);
+    return JSON.parse(json || text);
   } catch {
     throw new Error('AI 返回的 JSON 无法解析，请重试');
   }
@@ -283,11 +302,10 @@ function parseJsonObject(content) {
 function parseTasks(content) {
   let text = content.trim();
   text = text.replace(/^```(?:json)?\s*/i, '').replace(/```\s*$/, '').trim();
-  const start = text.indexOf('{');
-  const end = text.lastIndexOf('}');
+  const json = extractJson(text, '{', '}');
   let parsed;
   try {
-    parsed = JSON.parse(start >= 0 && end > start ? text.slice(start, end + 1) : text);
+    parsed = JSON.parse(json || text);
   } catch {
     throw new Error('AI 返回的 JSON 无法解析，请重试');
   }
@@ -304,4 +322,34 @@ function parseTasks(content) {
       ? t.subtasks.map((s) => ({ title: (s.title || '').trim(), note: (s.note || '').trim() }))
       : [],
   })).filter((t) => t.title);
+}
+
+function extractJson(text, openChar, closeChar) {
+  const start = text.indexOf(openChar);
+  if (start < 0) return '';
+  let depth = 0;
+  let inString = false;
+  let escaped = false;
+  for (let i = start; i < text.length; i += 1) {
+    const ch = text[i];
+    if (escaped) {
+      escaped = false;
+      continue;
+    }
+    if (ch === '\\') {
+      escaped = inString;
+      continue;
+    }
+    if (ch === '"') {
+      inString = !inString;
+      continue;
+    }
+    if (inString) continue;
+    if (ch === openChar) depth += 1;
+    if (ch === closeChar) {
+      depth -= 1;
+      if (depth === 0) return text.slice(start, i + 1);
+    }
+  }
+  return '';
 }

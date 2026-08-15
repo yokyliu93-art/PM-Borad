@@ -37,7 +37,8 @@ app.use(cors({
   credentials: true,
 }));
 app.use(cookieParser());
-app.use(express.json({ limit: '5mb' }));
+app.use(express.json({ limit: '15mb' }));
+app.use(express.urlencoded({ extended: true, limit: '15mb' }));
 app.use('/uploads', express.static(config.uploadsDir));
 
 // Attach io to req so routes can emit events
