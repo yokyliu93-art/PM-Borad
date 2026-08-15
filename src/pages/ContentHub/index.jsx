@@ -1090,8 +1090,8 @@ export function ContentHub({ mode = 'all', initialTopicType = 'daily' }) {
               <div className="grid gap-4 lg:grid-cols-[0.9fr_1.1fr]">
                 <div className="rounded-lg border border-slate-200 bg-white p-4 lg:col-span-2">
                   <p className="text-sm font-semibold text-slate-950">组队与分工</p>
-                  <p className="mt-1 text-xs leading-5 text-slate-500">横向点选团队成员即可，可以多选；具体分工放到飞书文档里写细。</p>
-                  <MemberTagSelect
+                  <p className="mt-1 text-xs leading-5 text-slate-500">下拉选择协作成员，可以选 1-3 人；具体分工放到飞书文档里写细。</p>
+                  <MemberDropdownSelect
                     members={teamMemberNames()}
                     value={docLinkValue(selectedTopic, 'members')}
                     disabled={!canEditTopicDocLinks(selectedTopic)}
@@ -1696,18 +1696,16 @@ function DeepNewsFeed({ value }) {
   );
 }
 
-function MemberTagSelect({ members, value, disabled, onChange }) {
+function MemberDropdownSelect({ members, value, disabled, onChange }) {
   const selected = String(value || '')
     .split(/[、,，\n]/)
     .map((name) => name.trim())
     .filter(Boolean);
-  const selectedSet = new Set(selected);
 
-  function toggle(name) {
+  function setSlot(index, name) {
     if (disabled) return;
-    const next = selectedSet.has(name)
-      ? selected.filter((item) => item !== name)
-      : [...selected, name];
+    const next = [selected[0] || '', selected[1] || '', selected[2] || ''];
+    next[index] = name;
     onChange(next.filter(Boolean).join('、'));
   }
 
@@ -1721,21 +1719,19 @@ function MemberTagSelect({ members, value, disabled, onChange }) {
 
   return (
     <div className="mt-3">
-      <div className="flex flex-nowrap gap-2 overflow-x-auto pb-1">
-        {members.map((name) => {
-          const active = selectedSet.has(name);
-          return (
-            <button
-              key={name}
-              type="button"
-              disabled={disabled}
-              onClick={() => toggle(name)}
-              className={`shrink-0 rounded-full border px-4 py-2 text-sm font-semibold transition disabled:cursor-not-allowed disabled:opacity-70 ${active ? 'border-emerald-200 bg-emerald-50 text-emerald-700' : 'border-slate-200 bg-white text-slate-600 hover:bg-slate-50'}`}
-            >
-              {name}
-            </button>
-          );
-        })}
+      <div className="grid gap-3 md:grid-cols-3">
+        {[0, 1, 2].map((index) => (
+          <select
+            key={index}
+            value={selected[index] || ''}
+            disabled={disabled}
+            onChange={(event) => setSlot(index, event.target.value)}
+            className="w-full rounded-md border border-slate-200 bg-white px-3 py-2.5 text-sm font-semibold text-slate-800 outline-none transition focus:border-emerald-400 disabled:bg-slate-50 disabled:text-slate-500"
+          >
+            <option value="">{index === 0 ? '指派给成员...' : '继续选择成员...'}</option>
+            {members.map((name) => <option key={name} value={name}>{name}</option>)}
+          </select>
+        ))}
       </div>
       <p className="mt-3 text-xs leading-5 text-slate-500">已选择：{selected.length ? selected.join('、') : '暂无'}</p>
     </div>
