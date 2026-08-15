@@ -731,8 +731,10 @@ export function ContentHub({ mode = 'all', initialTopicType = 'daily' }) {
     return canEditTopicMeta(item);
   }
 
-  function teamMemberNames() {
-    return teamMembers.map((member) => member.name).filter(Boolean);
+  function teamMemberOptions() {
+    return teamMembers
+      .filter((member) => member.id && member.name)
+      .map((member) => ({ id: member.id, name: member.name, avatarUrl: member.avatar_url || '' }));
   }
 
   function topicDraftDateText(item) {
@@ -1090,9 +1092,9 @@ export function ContentHub({ mode = 'all', initialTopicType = 'daily' }) {
               <div className="grid gap-4 lg:grid-cols-[0.9fr_1.1fr]">
                 <div className="rounded-lg border border-slate-200 bg-white p-4 lg:col-span-2">
                   <p className="text-sm font-semibold text-slate-950">组队与分工</p>
-                  <p className="mt-1 text-xs leading-5 text-slate-500">下拉选择协作成员，可以选 1-3 人；具体分工放到飞书文档里写细。</p>
+                  <p className="mt-1 text-xs leading-5 text-slate-500">下拉选择 PM Board 账号，可以选 1-3 人；这里只绑定账号，不触发飞书私信推送。</p>
                   <MemberDropdownSelect
-                    members={teamMemberNames()}
+                    members={teamMemberOptions()}
                     value={docLinkValue(selectedTopic, 'members')}
                     disabled={!canEditTopicDocLinks(selectedTopic)}
                     onChange={(value) => setTopicDocLink(selectedTopic, 'members', value)}
@@ -1697,15 +1699,22 @@ function DeepNewsFeed({ value }) {
 }
 
 function MemberDropdownSelect({ members, value, disabled, onChange }) {
-  const selected = String(value || '')
+  const selectedTokens = String(value || '')
     .split(/[、,，\n]/)
-    .map((name) => name.trim())
+    .map((token) => token.trim())
     .filter(Boolean);
+  const memberById = new Map(members.map((member) => [member.id, member]));
+  const memberByName = new Map(members.map((member) => [member.name, member]));
+  const selectedIds = selectedTokens.map((token) => memberById.get(token)?.id || memberByName.get(token)?.id || token);
 
-  function setSlot(index, name) {
+  function selectedName(token) {
+    return memberById.get(token)?.name || memberByName.get(token)?.name || token;
+  }
+
+  function setSlot(index, userId) {
     if (disabled) return;
-    const next = [selected[0] || '', selected[1] || '', selected[2] || ''];
-    next[index] = name;
+    const next = [selectedIds[0] || '', selectedIds[1] || '', selectedIds[2] || ''];
+    next[index] = userId;
     onChange(next.filter(Boolean).join('、'));
   }
 
@@ -1723,17 +1732,17 @@ function MemberDropdownSelect({ members, value, disabled, onChange }) {
         {[0, 1, 2].map((index) => (
           <select
             key={index}
-            value={selected[index] || ''}
+            value={selectedIds[index] || ''}
             disabled={disabled}
             onChange={(event) => setSlot(index, event.target.value)}
             className="w-full rounded-md border border-slate-200 bg-white px-3 py-2.5 text-sm font-semibold text-slate-800 outline-none transition focus:border-emerald-400 disabled:bg-slate-50 disabled:text-slate-500"
           >
             <option value="">{index === 0 ? '指派给成员...' : '继续选择成员...'}</option>
-            {members.map((name) => <option key={name} value={name}>{name}</option>)}
+            {members.map((member) => <option key={member.id} value={member.id}>{member.name}</option>)}
           </select>
         ))}
       </div>
-      <p className="mt-3 text-xs leading-5 text-slate-500">已选择：{selected.length ? selected.join('、') : '暂无'}</p>
+      <p className="mt-3 text-xs leading-5 text-slate-500">已绑定账号：{selectedIds.length ? selectedIds.map(selectedName).join('、') : '暂无'}</p>
     </div>
   );
 }
