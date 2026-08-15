@@ -1,6 +1,6 @@
 import { config } from '../config.js';
 
-const AI_JSON_MAX_TOKENS = Number(process.env.AI_JSON_MAX_TOKENS || 12000);
+const AI_JSON_MAX_TOKENS = Number(process.env.AI_JSON_MAX_TOKENS || 24000);
 
 const SYSTEM_PROMPT = `你是专业的项目管理和任务拆解助手。请根据用户提供的项目信息，把项目拆解成 5-8 个可执行的任务，每个任务下再拆 2-5 个子任务。
 只输出一个 JSON 对象，不要输出任何解释文字、Markdown 代码块或其他内容。格式如下：
@@ -16,15 +16,18 @@ const AUDIT_PROMPT = `你是总 PM 的审核 Agent。请审核子 PM 或执行 A
 
 const TOPIC_PARSE_PROMPT = `你是硅星人内容编辑部的选题统筹助手。请根据周会文档抽取候选选题并归类。
 如果周会文档里有「其他」栏目，尤其是写着“大厂报道、商务合作、灵活内容、小绿书”等内容，这一栏里的选题全部归入 businessTopics，不要归入 dailyTopics。
+控制输出长度：每类最多 20 条；title 不超过 40 字；owner 只写姓名；summary/resources/detail 不超过 120 字；不要复述大段原文。
 只输出 JSON 对象，不要输出解释或 Markdown。格式：
 {"dailyTopics":[{"title":"日常选题标题","owner":"负责人姓名","firstDraftAt":"交稿日期，如 8月16日/下周三；如果文档没有明确日期就留空","summary":"当前进展和需要做什么"}],"businessTopics":[{"title":"商务选题标题","owner":"负责人姓名","firstDraftAt":"交稿日期或空","summary":"商务需求、客户/合作背景、当前要做什么"}],"deepTopics":[{"title":"深度选题标题","owner":"负责人姓名","firstDraftAt":"首稿或阶段稿时间，没有则留空","summary":"选题背景和当前阶段","timeline":[{"week":"W1","detail":"目标、动作、负责人和交付物"}],"resources":"需要谁配合、需要什么资料"}],"weeklyRecommendations":[{"title":"本周项目推荐标题","owner":"负责人姓名","firstDraftAt":"交稿日期或空","summary":"推荐理由、项目亮点和要做什么"}],"frontierTopics":[{"title":"Frontier 研究/项目/产品名称","owner":"负责人姓名","summary":"一句话介绍","reason":"人们为什么必须关注","resources":"链接、memo 或下一步操作"}],"promptTopics":[{"title":"Prompt PR 项目或主题","owner":"负责人姓名","firstDraftAt":"交稿日期或空","summary":"当前要做什么、需要谁配合"}]}`;
 
 const TOPIC_DISCUSSION_PROMPT = `你是硅星人内容编辑部的周会速记整理助手。请把周会速记里的讨论内容匹配到已经确认的选题上。
 输入会给你已有选题列表，每个选题有 topicId、title、type、owner。你只能给这些已有选题补充讨论纪要，不要新建选题。
+控制输出长度：每个选题 discussion/editorNotes 各不超过 180 字；只返回有明确讨论内容的选题；不要复述无关寒暄。
 只输出 JSON 对象，不要输出解释或 Markdown。格式：
 {"discussions":[{"topicId":"必须来自已有选题列表的 topicId","title":"选题标题","discussion":"周会上围绕这个选题讨论了什么，包括角度判断、反对意见、信息增量、需要补的材料","editorNotes":"编辑建议和下一步动作，写给负责人看","confidence":0.8}]}`;
 
 const EVAL_PARSE_PROMPT = `你是硅星人 Eval 测试集整理助手。请根据飞书文档内容，整理成 PM Board 里的共享测试集模块，并把测试集拆成一道一道可复制给模型测试的问题。
+控制输出长度：最多返回 30 道题；title 不超过 40 字；summary 不超过 220 字；prompt/input/expectedOutput/evaluationCriteria/referenceAnswer 各不超过 500 字。遇到特别长的题，只保留核心测试指令和关键评分点，不要整段复制原文。
 只输出 JSON 对象，不要输出解释或 Markdown。格式：
 {"title":"测试集名称","owner":"负责人姓名或待分配","progress":0,"summary":"测试目标、覆盖范围、使用方式和当前状态","timeline":[{"phase":"阶段或时间","detail":"要做什么、负责人、交付物或验收标准"}],"questions":[{"title":"第 1 题标题","prompt":"可直接复制给模型的完整 prompt","input":"题目所需素材、上下文、链接或变量","expectedOutput":"期望输出格式或交付物","evaluationCriteria":"评分标准、通过条件、扣分点","referenceAnswer":"可选参考答案或标杆输出"}]}`;
 
@@ -189,8 +192,8 @@ export async function parseEvalDoc({ doc }) {
   const userContent = [
     `测试集文档链接：${doc?.url || ''}`,
     doc?.title ? `文档标题：${doc.title}` : '',
-    doc?.content ? `文档内容：\n${doc.content}` : '',
-  ].filter(Boolean).join('\n\n').slice(0, 60000);
+    doc?.content ? `文档内容：\n${topicRelevantExcerpt(doc.content, 30000)}` : '',
+  ].filter(Boolean).join('\n\n').slice(0, 36000);
   const parsed = await callAIJson({
     systemPrompt: EVAL_PARSE_PROMPT,
     userContent,
@@ -259,6 +262,14 @@ async function callAIJson({ systemPrompt, userContent, fallbackError }) {
       reasoningLength: String(data?.choices?.[0]?.message?.reasoning_content || '').length,
     });
     throw new Error(finishReason === 'length' ? 'AI 输出被截断，请缩短文档内容后重试' : 'AI 未返回有效内容');
+  }
+  if (finishReason === 'length') {
+    console.error('[ai] truncated json content', {
+      model: provider.model,
+      contentLength: String(content || '').length,
+      preview: String(content || '').slice(0, 240),
+    });
+    throw new Error('AI 输出被截断：文档内容太长或题目太多，请先分段解析');
   }
   try {
     return parseJsonObject(content);
