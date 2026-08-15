@@ -52,6 +52,7 @@ export function ContentHub({ mode = 'all', initialTopicType = 'daily' }) {
   const [topicPublishDates, setTopicPublishDates] = useState({});
   const [topicEditorNotes, setTopicEditorNotes] = useState({});
   const [topicDocLinkDrafts, setTopicDocLinkDrafts] = useState({});
+  const [selectedTopicId, setSelectedTopicId] = useState('');
   const [form, setForm] = useState({ kind: isInitialTopicLike ? 'topic' : mode === 'demo' ? 'demo' : mode === 'eval' ? 'eval' : 'memo', subKind: isInitialTopicLike ? initialTopicType : '', title: '', body: '', sourceUrl: '', timelineText: '', ownerText: '', progress: 0, meetingDocUrl: '', meetingMinutesUrl: '' });
   const [minutes, setMinutes] = useState({ title: '', meetingDocUrl: '', meetingMinutesUrl: '', transcript: '' });
   const [experienceDrafts, setExperienceDrafts] = useState({});
@@ -79,6 +80,10 @@ export function ContentHub({ mode = 'all', initialTopicType = 'daily' }) {
   useEffect(() => {
     setTopicType(initialTopicType);
   }, [initialTopicType]);
+
+  useEffect(() => {
+    setSelectedTopicId('');
+  }, [mode, topicType]);
 
   useEffect(() => {
     if (!selectedProjectId && projects[0]?.id) setSelectedProjectId(projects[0].id);
@@ -125,6 +130,10 @@ export function ContentHub({ mode = 'all', initialTopicType = 'daily' }) {
   const filteredItems = useMemo(() => (
     isGlobal ? items : activeTab === 'all' ? items : items.filter((item) => item.kind === activeTab)
   ), [items, activeTab, isGlobal]);
+
+  const selectedTopic = useMemo(() => (
+    filteredItems.find((item) => item.id === selectedTopicId && item.kind === 'topic' && item.sub_kind === 'deep') || null
+  ), [filteredItems, selectedTopicId]);
 
   const stats = useMemo(() => ({
     memos: items.length,
@@ -629,7 +638,110 @@ export function ContentHub({ mode = 'all', initialTopicType = 'daily' }) {
         </div>
       ) : null}
 
-      {loading ? (
+      {selectedTopic ? (
+        <article className="rounded-xl border border-slate-200 bg-white p-6 shadow-sm shadow-slate-950/5">
+          <button onClick={() => setSelectedTopicId('')} className="mb-5 inline-flex items-center rounded-md border border-slate-200 px-3 py-2 text-sm font-semibold text-slate-600 transition hover:bg-slate-50">
+            返回深度选题
+          </button>
+          <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+            <div className="min-w-0">
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="rounded-md bg-emerald-50 px-2 py-1 text-xs font-medium text-emerald-700">深度选题</span>
+                <span className="rounded-md bg-slate-100 px-2 py-1 text-xs font-medium text-slate-500">初稿阶段</span>
+              </div>
+              <h3 className="mt-3 text-2xl font-semibold tracking-normal text-slate-950">{selectedTopic.title}</h3>
+              <p className="mt-2 max-w-3xl whitespace-pre-wrap text-sm leading-6 text-slate-600">{topicCardBody(selectedTopic)}</p>
+            </div>
+            <div className="shrink-0 rounded-md border border-slate-200 bg-slate-50 p-3">
+              <p className="text-xs font-semibold text-slate-500">执行人</p>
+              <p className="mt-1 text-sm font-semibold text-slate-950">{topicOwnerText(selectedTopic)}</p>
+            </div>
+          </div>
+
+          <div className="mt-5 grid gap-3 md:grid-cols-2">
+            <TopicDetailBlock title="周计划" value={topicDetailSections(selectedTopic).weeklyPlan || selectedTopic.timeline_text || '等待补充周计划'} />
+            <TopicDetailBlock title="阶段性进度" value={topicDetailSections(selectedTopic).phaseProgress || '暂无进度更新'} />
+            <TopicDetailBlock title="采访原文" value={topicDetailSections(selectedTopic).interviewRaw || '等待飞书原文链接或摘录'} />
+            <TopicDetailBlock title="稿件框架" value={topicDetailSections(selectedTopic).outline || '等待补充稿件框架'} />
+          </div>
+
+          <div className="mt-4 rounded-lg border border-emerald-100 bg-white p-4">
+            <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+              <div>
+                <p className="text-sm font-semibold text-slate-950">飞书文档入口</p>
+                <p className="mt-1 text-xs leading-5 text-slate-500">正文继续放在飞书里，PM Board 只负责挂入口、看负责人和进度。</p>
+              </div>
+              {canEditTopicDocLinks(selectedTopic) ? (
+                <button onClick={() => saveTopicDocLinks(selectedTopic)} className="inline-flex items-center justify-center rounded-md bg-emerald-600 px-3 py-2 text-sm font-semibold text-white transition hover:bg-emerald-500">
+                  保存入口
+                </button>
+              ) : null}
+            </div>
+            <div className="mt-3 grid gap-3 md:grid-cols-2">
+              {[
+                ['techIntro', '技术介绍文档'],
+                ['weeklyPlan', '周计划文档'],
+                ['phaseProgress', '阶段进度文档'],
+                ['interviewRaw', '采访原文文档'],
+                ['outline', '稿件框架文档'],
+                ['reference', '资料补充文档'],
+              ].map(([key, label]) => (
+                <TopicDocLinkInput
+                  key={key}
+                  label={label}
+                  value={docLinkValue(selectedTopic, key)}
+                  disabled={!canEditTopicDocLinks(selectedTopic)}
+                  onChange={(value) => setTopicDocLink(selectedTopic, key, value)}
+                  onCopy={() => copyText(docLinkValue(selectedTopic, key), '链接已复制')}
+                />
+              ))}
+            </div>
+          </div>
+
+          <div className="mt-4 space-y-3 rounded-md border border-slate-200 bg-white p-3">
+            <div className="grid gap-3 lg:grid-cols-[1fr_auto] lg:items-end">
+              <label className="min-w-0">
+                <span className="mb-1.5 block text-xs font-semibold text-slate-500">初稿飞书链接</span>
+                <input
+                  value={topicDraftLinks[selectedTopic.id] ?? selectedTopic.draft_doc_url ?? ''}
+                  onChange={(event) => setTopicDraftLinks((drafts) => ({ ...drafts, [selectedTopic.id]: event.target.value }))}
+                  disabled={!isTopicAuthor(selectedTopic)}
+                  placeholder={isTopicAuthor(selectedTopic) ? '作者提交初稿飞书链接' : '等待作者提交初稿'}
+                  className="w-full rounded-md border border-slate-200 px-3 py-2 text-sm outline-none transition focus:border-emerald-400 disabled:bg-slate-50 disabled:text-slate-500"
+                />
+              </label>
+              {isTopicAuthor(selectedTopic) ? (
+                <button onClick={() => submitTopicDraft(selectedTopic)} className="rounded-md bg-emerald-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-emerald-500">
+                  提交初稿
+                </button>
+              ) : null}
+            </div>
+            <div className="rounded-md border border-amber-100 bg-amber-50/60 p-3">
+              <span className="text-xs font-semibold text-amber-800">编辑建议</span>
+              <div className="mt-2 grid gap-3 lg:grid-cols-[1fr_auto] lg:items-end">
+                <textarea
+                  value={topicEditorNotes[selectedTopic.id] ?? selectedTopic.editor_notes ?? ''}
+                  onChange={(event) => setTopicEditorNotes((drafts) => ({ ...drafts, [selectedTopic.id]: event.target.value }))}
+                  disabled={!canEditTopicMeta()}
+                  placeholder={canEditTopicMeta() ? '写给作者的修改建议，可由 Agent 回传后粘贴' : '暂无编辑建议'}
+                  rows={3}
+                  className="w-full rounded-md border border-amber-100 bg-white px-3 py-2 text-sm outline-none transition focus:border-amber-400 disabled:bg-amber-50 disabled:text-amber-900"
+                />
+                {canEditTopicMeta() ? (
+                  <button onClick={() => saveTopicEditorNotes(selectedTopic)} className="rounded-md bg-slate-950 px-4 py-2 text-sm font-semibold text-white transition hover:bg-slate-800">
+                    推送建议
+                  </button>
+                ) : null}
+              </div>
+            </div>
+            {canArchiveTopic(selectedTopic) ? (
+              <button onClick={() => archiveTopic(selectedTopic)} className="inline-flex items-center justify-center gap-2 rounded-md border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-700 transition hover:bg-slate-50">
+                <Archive size={14} />归档
+              </button>
+            ) : null}
+          </div>
+        </article>
+      ) : loading ? (
         <div className="grid gap-4 lg:grid-cols-2">
           {[0, 1, 2, 3].map((i) => <div key={i} className="h-56 animate-pulse rounded-xl bg-slate-100" />)}
         </div>
@@ -651,7 +763,12 @@ export function ContentHub({ mode = 'all', initialTopicType = 'daily' }) {
                 <Avatar member={{ name: item.created_by_name, avatar_url: item.created_by_avatar }} size="md" />
               </div>
 
-              {item.kind === 'topic' || item.kind === 'eval' ? (
+              {item.kind === 'topic' && item.sub_kind === 'deep' ? (
+                <div className="mt-4 rounded-md border border-slate-200 bg-slate-50 p-3">
+                  <p className="text-xs font-semibold text-slate-500">执行人</p>
+                  <p className="mt-1 text-sm font-semibold text-slate-950">{topicOwnerText(item)}</p>
+                </div>
+              ) : item.kind === 'topic' || item.kind === 'eval' ? (
                 <div className="mt-4 grid gap-3 md:grid-cols-2">
                   <div className="rounded-md border border-slate-200 bg-slate-50 p-3">
                     <p className="text-xs font-semibold text-slate-500">负责人</p>
@@ -688,7 +805,13 @@ export function ContentHub({ mode = 'all', initialTopicType = 'daily' }) {
                 </div>
               ) : null}
 
-              {item.timeline_text || item.kind === 'topic' ? (
+              {item.kind === 'topic' && item.sub_kind === 'deep' ? (
+                <button onClick={() => setSelectedTopicId(item.id)} className="mt-4 inline-flex items-center justify-center rounded-md bg-slate-950 px-4 py-2 text-sm font-semibold text-white transition hover:bg-slate-800">
+                  进入二级页面
+                </button>
+              ) : null}
+
+              {(item.timeline_text || item.kind === 'topic') && !(item.kind === 'topic' && item.sub_kind === 'deep') ? (
                 <div className="mt-4 rounded-md border border-emerald-100 bg-emerald-50/70 p-3">
                   <p className="text-xs font-semibold text-emerald-800">{item.kind === 'topic' ? '发布日期' : item.kind === 'eval' ? 'Eval 计划' : item.sub_kind === 'deep' ? '深度选题长 timeline' : '选题执行计划'}</p>
                   {item.kind === 'topic' ? (
@@ -714,51 +837,7 @@ export function ContentHub({ mode = 'all', initialTopicType = 'daily' }) {
                 </div>
               ) : null}
 
-              {item.kind === 'topic' && item.sub_kind === 'deep' ? (
-                <details className="mt-4 rounded-md border border-slate-200 bg-slate-50 p-3">
-                  <summary className="cursor-pointer text-sm font-semibold text-slate-950">查看二级详情</summary>
-                  <div className="mt-3 grid gap-3 md:grid-cols-2">
-                    <TopicDetailBlock title="周计划" value={topicDetailSections(item).weeklyPlan || item.timeline_text} />
-                    <TopicDetailBlock title="阶段性进度" value={topicDetailSections(item).phaseProgress || '暂无进度更新'} />
-                    <TopicDetailBlock title="采访原文" value={topicDetailSections(item).interviewRaw || '等待飞书原文链接或摘录'} />
-                    <TopicDetailBlock title="稿件框架" value={topicDetailSections(item).outline || '等待补充稿件框架'} />
-                  </div>
-                  <div className="mt-3 rounded-lg border border-emerald-100 bg-white p-3">
-                    <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
-                      <div>
-                        <p className="text-sm font-semibold text-slate-950">飞书文档入口</p>
-                        <p className="mt-1 text-xs leading-5 text-slate-500">正文继续放在飞书里，PM Board 只负责挂入口、看负责人和进度。</p>
-                      </div>
-                      {canEditTopicDocLinks(item) ? (
-                        <button onClick={() => saveTopicDocLinks(item)} className="inline-flex items-center justify-center rounded-md bg-emerald-600 px-3 py-2 text-sm font-semibold text-white transition hover:bg-emerald-500">
-                          保存入口
-                        </button>
-                      ) : null}
-                    </div>
-                    <div className="mt-3 grid gap-3 md:grid-cols-2">
-                      {[
-                        ['techIntro', '技术介绍文档'],
-                        ['weeklyPlan', '周计划文档'],
-                        ['phaseProgress', '阶段进度文档'],
-                        ['interviewRaw', '采访原文文档'],
-                        ['outline', '稿件框架文档'],
-                        ['reference', '资料补充文档'],
-                      ].map(([key, label]) => (
-                        <TopicDocLinkInput
-                          key={key}
-                          label={label}
-                          value={docLinkValue(item, key)}
-                          disabled={!canEditTopicDocLinks(item)}
-                          onChange={(value) => setTopicDocLink(item, key, value)}
-                          onCopy={() => copyText(docLinkValue(item, key), '链接已复制')}
-                        />
-                      ))}
-                    </div>
-                  </div>
-                </details>
-              ) : null}
-
-              {item.kind === 'topic' ? (
+              {item.kind === 'topic' && item.sub_kind !== 'deep' ? (
                 <div className="mt-4 space-y-3 rounded-md border border-slate-200 bg-white p-3">
                   <div className="grid gap-3 lg:grid-cols-[1fr_auto] lg:items-end">
                     <label className="min-w-0">
