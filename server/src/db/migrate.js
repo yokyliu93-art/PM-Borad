@@ -304,6 +304,8 @@ export function migrate() {
       source_url TEXT DEFAULT '',
       timeline_text TEXT DEFAULT '',
       final_doc_url TEXT DEFAULT '',
+      draft_doc_url TEXT DEFAULT '',
+      editor_notes TEXT DEFAULT '',
       status TEXT DEFAULT 'open',
       created_by TEXT NOT NULL REFERENCES users(id),
       created_at TEXT DEFAULT (datetime('now')),
@@ -441,6 +443,12 @@ export function migrate() {
   }
   if (!memoCols.includes('final_doc_url')) {
     db.exec("ALTER TABLE content_memos ADD COLUMN final_doc_url TEXT DEFAULT ''");
+  }
+  if (!memoCols.includes('draft_doc_url')) {
+    db.exec("ALTER TABLE content_memos ADD COLUMN draft_doc_url TEXT DEFAULT ''");
+  }
+  if (!memoCols.includes('editor_notes')) {
+    db.exec("ALTER TABLE content_memos ADD COLUMN editor_notes TEXT DEFAULT ''");
   }
 
   const moduleCols = db.prepare('PRAGMA table_info(project_modules)').all().map((c) => c.name);

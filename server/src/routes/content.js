@@ -88,6 +88,24 @@ router.post('/:memoId/archive-topic', (req, res) => {
   }
 });
 
+router.post('/:memoId/submit-topic-draft', async (req, res) => {
+  try {
+    const data = await contentService.submitTopicDraft(req.params.projectId, req.params.memoId, req.user.id, req.body || {});
+    res.json({ ok: true, data });
+  } catch (err) {
+    res.status(400).json({ ok: false, error: err.message });
+  }
+});
+
+router.put('/:memoId/topic-editor-notes', async (req, res) => {
+  try {
+    const data = await contentService.updateTopicEditorNotes(req.params.projectId, req.params.memoId, req.user.id, req.body || {});
+    res.json({ ok: true, data });
+  } catch (err) {
+    res.status(400).json({ ok: false, error: err.message });
+  }
+});
+
 router.post('/:memoId/experiences', (req, res) => {
   try {
     const data = contentService.addExperience(req.params.projectId, req.params.memoId, req.user.id, req.body?.content || '');

@@ -38,6 +38,8 @@ export function ContentHub({ mode = 'all', initialTopicType = 'daily' }) {
   const [parsingTopics, setParsingTopics] = useState(false);
   const [topicParseError, setTopicParseError] = useState('');
   const [topicLinkDrafts, setTopicLinkDrafts] = useState({});
+  const [topicDraftLinks, setTopicDraftLinks] = useState({});
+  const [topicEditorNotes, setTopicEditorNotes] = useState({});
   const [form, setForm] = useState({ kind: mode === 'topics' ? 'topic' : mode === 'demo' ? 'demo' : mode === 'eval' ? 'eval' : 'memo', subKind: mode === 'topics' ? 'daily' : '', title: '', body: '', sourceUrl: '', timelineText: '', ownerText: '', progress: 0, meetingDocUrl: '', meetingMinutesUrl: '' });
   const [minutes, setMinutes] = useState({ title: '', meetingDocUrl: '', meetingMinutesUrl: '', transcript: '' });
   const [experienceDrafts, setExperienceDrafts] = useState({});
@@ -240,6 +242,30 @@ export function ContentHub({ mode = 'all', initialTopicType = 'daily' }) {
     }
   }
 
+  async function submitTopicDraft(item) {
+    const targetProjectId = item.project_id || projectId;
+    const draftDocUrl = topicDraftLinks[item.id] ?? item.draft_doc_url ?? '';
+    const res = await post(`/api/projects/${targetProjectId}/content/${item.id}/submit-topic-draft`, { draftDocUrl });
+    if (res.ok) {
+      setItems((current) => current.map((memo) => (memo.id === item.id ? res.data.topic : memo)));
+      toast.success(res.data.pushed ? '初稿已提交，并已推送王兆洋' : `初稿已提交，飞书推送失败：${res.data.pushError || '未知原因'}`);
+    } else {
+      toast.error(res.error || '提交失败');
+    }
+  }
+
+  async function saveTopicEditorNotes(item) {
+    const targetProjectId = item.project_id || projectId;
+    const editorNotes = topicEditorNotes[item.id] ?? item.editor_notes ?? '';
+    const res = await put(`/api/projects/${targetProjectId}/content/${item.id}/topic-editor-notes`, { editorNotes });
+    if (res.ok) {
+      setItems((current) => current.map((memo) => (memo.id === item.id ? res.data.topic : memo)));
+      toast.success(res.data.pushed ? '编辑建议已保存，并已推送作者' : `编辑建议已保存，飞书推送失败：${res.data.pushError || '未知原因'}`);
+    } else {
+      toast.error(res.error || '保存失败');
+    }
+  }
+
   async function copyText(text, message = '已复制') {
     try {
       await navigator.clipboard.writeText(text || '');
@@ -269,6 +295,10 @@ export function ContentHub({ mode = 'all', initialTopicType = 'daily' }) {
     const jobTitle = currentUser?.job_title || currentUser?.jobTitle || '';
     const namedEditor = currentName && ['王兆洋', '骆轶航'].some((name) => currentName === name || currentName.includes(name) || name.includes(currentName));
     return item.created_by === currentUser?.id || namedEditor || String(jobTitle).includes('编辑');
+  }
+
+  function isTopicAuthor(item) {
+    return item.created_by === currentUser?.id;
   }
 
   async function archiveTopic(item) {
@@ -513,9 +543,27 @@ export function ContentHub({ mode = 'all', initialTopicType = 'daily' }) {
               ) : null}
 
               {item.kind === 'topic' ? (
-                <div className="mt-4 rounded-md border border-slate-200 bg-white p-3">
-                  <div className="flex flex-col gap-3 lg:flex-row lg:items-end">
-                    <label className="min-w-0 flex-1">
+                <div className="mt-4 space-y-3 rounded-md border border-slate-200 bg-white p-3">
+                  <div className="grid gap-3 lg:grid-cols-[1fr_auto] lg:items-end">
+                    <label className="min-w-0">
+                      <span className="mb-1.5 block text-xs font-semibold text-slate-500">初稿飞书链接</span>
+                      <input
+                        value={topicDraftLinks[item.id] ?? item.draft_doc_url ?? ''}
+                        onChange={(event) => setTopicDraftLinks((drafts) => ({ ...drafts, [item.id]: event.target.value }))}
+                        disabled={!isTopicAuthor(item)}
+                        placeholder={isTopicAuthor(item) ? '作者提交初稿飞书链接' : '等待作者提交初稿'}
+                        className="w-full rounded-md border border-slate-200 px-3 py-2 text-sm outline-none transition focus:border-emerald-400 disabled:bg-slate-50 disabled:text-slate-500"
+                      />
+                    </label>
+                    {isTopicAuthor(item) ? (
+                      <button onClick={() => submitTopicDraft(item)} className="rounded-md bg-emerald-600 px-4 py-2 text-sm font-semibold text-white transition hover:bg-emerald-500">
+                        提交初稿
+                      </button>
+                    ) : null}
+                  </div>
+
+                  <div className="grid gap-3 lg:grid-cols-[1fr_auto] lg:items-end">
+                    <label className="min-w-0">
                       <span className="mb-1.5 block text-xs font-semibold text-slate-500">最终成稿飞书链接</span>
                       <input
                         value={topicLinkDrafts[item.id] ?? item.final_doc_url ?? ''}
@@ -530,12 +578,32 @@ export function ContentHub({ mode = 'all', initialTopicType = 'daily' }) {
                         保存链接
                       </button>
                     ) : null}
-                    {canArchiveTopic(item) ? (
-                      <button onClick={() => archiveTopic(item)} className="inline-flex items-center justify-center gap-2 rounded-md border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-700 transition hover:bg-slate-50">
-                        <Archive size={14} />归档
+                  </div>
+
+                  <div className="grid gap-3 lg:grid-cols-[1fr_auto] lg:items-end">
+                    <label className="min-w-0">
+                      <span className="mb-1.5 block text-xs font-semibold text-slate-500">编辑建议</span>
+                      <textarea
+                        value={topicEditorNotes[item.id] ?? item.editor_notes ?? ''}
+                        onChange={(event) => setTopicEditorNotes((drafts) => ({ ...drafts, [item.id]: event.target.value }))}
+                        disabled={!canArchiveTopic(item) || isTopicAuthor(item)}
+                        placeholder={canArchiveTopic(item) && !isTopicAuthor(item) ? '写给作者的修改建议，可由 Agent 回传后粘贴' : '等待编辑建议'}
+                        rows={3}
+                        className="w-full rounded-md border border-slate-200 px-3 py-2 text-sm outline-none transition focus:border-emerald-400 disabled:bg-slate-50 disabled:text-slate-500"
+                      />
+                    </label>
+                    {canArchiveTopic(item) && !isTopicAuthor(item) ? (
+                      <button onClick={() => saveTopicEditorNotes(item)} className="rounded-md bg-slate-950 px-4 py-2 text-sm font-semibold text-white transition hover:bg-slate-800">
+                        推送建议
                       </button>
                     ) : null}
                   </div>
+
+                  {canArchiveTopic(item) ? (
+                    <button onClick={() => archiveTopic(item)} className="inline-flex items-center justify-center gap-2 rounded-md border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-700 transition hover:bg-slate-50">
+                      <Archive size={14} />归档
+                    </button>
+                  ) : null}
                 </div>
               ) : null}
 
@@ -586,6 +654,9 @@ export function ContentHub({ mode = 'all', initialTopicType = 'daily' }) {
               <div className="mt-4 flex flex-wrap gap-3">
                 {item.final_doc_url ? (
                   <a href={item.final_doc_url} target="_blank" rel="noreferrer" className="text-sm font-medium text-emerald-700 hover:text-emerald-600">打开飞书稿件</a>
+                ) : null}
+                {item.draft_doc_url ? (
+                  <a href={item.draft_doc_url} target="_blank" rel="noreferrer" className="text-sm font-medium text-slate-600 hover:text-slate-950">打开初稿</a>
                 ) : null}
                 {item.source_url ? (
                   <a href={item.source_url} target="_blank" rel="noreferrer" className="text-sm font-medium text-emerald-700 hover:text-emerald-600">打开资料链接</a>

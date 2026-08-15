@@ -127,9 +127,10 @@ export function create(projectId, userId, fields = {}) {
   db.prepare(`
     INSERT INTO content_memos (
       id, project_id, kind, sub_kind, title, body, source_url, timeline_text,
-      status, owner_text, progress, meeting_doc_url, meeting_minutes_url, final_doc_url, created_by
+      status, owner_text, progress, meeting_doc_url, meeting_minutes_url, final_doc_url,
+      draft_doc_url, editor_notes, created_by
     )
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `).run(
     id,
     projectId,
@@ -145,6 +146,8 @@ export function create(projectId, userId, fields = {}) {
     fields.meetingDocUrl || fields.meeting_doc_url || fields.weeklyDocUrl || fields.weekly_doc_url || '',
     fields.meetingMinutesUrl || fields.meeting_minutes_url || fields.minutesUrl || fields.minutes_url || '',
     fields.finalDocUrl || fields.final_doc_url || '',
+    fields.draftDocUrl || fields.draft_doc_url || '',
+    fields.editorNotes || fields.editor_notes || '',
     userId
   );
   return get(projectId, id, userId);
@@ -192,6 +195,25 @@ function canArchiveTopic(userId, memo) {
   return namedEditor || jobTitle.includes('编辑');
 }
 
+function isTopicEditor(userId) {
+  return canEditTopics(userId) || String(db.prepare('SELECT job_title FROM users WHERE id = ?').get(userId)?.job_title || '').includes('编辑');
+}
+
+function findEditorByName(name = '王兆洋') {
+  const clean = String(name || '').trim();
+  return db.prepare(`
+    SELECT *
+    FROM users
+    WHERE name = ? OR name LIKE ? OR ? LIKE '%' || name || '%'
+    ORDER BY LENGTH(name) DESC
+    LIMIT 1
+  `).get(clean, `%${clean}%`, clean);
+}
+
+function topicBoardUrl() {
+  return `${config.clientUrl}/topics`;
+}
+
 export function updateTopicFinalDoc(projectId, memoId, userId, fields = {}) {
   if (!canEditTopics(userId)) throw new Error('只有王兆洋和骆轶航可以编辑选题面板');
   const memo = db.prepare('SELECT id, kind FROM content_memos WHERE id = ? AND project_id = ?').get(memoId, projectId);
@@ -217,6 +239,87 @@ export function archiveTopic(projectId, memoId, userId) {
     WHERE id = ? AND project_id = ?
   `).run(memoId, projectId);
   return { id: memoId, archived: true };
+}
+
+export async function submitTopicDraft(projectId, memoId, userId, fields = {}) {
+  const memo = db.prepare(`
+    SELECT m.*, u.name as created_by_name
+    FROM content_memos m
+    JOIN users u ON u.id = m.created_by
+    WHERE m.id = ? AND m.project_id = ?
+  `).get(memoId, projectId);
+  if (!memo) throw new Error('选题不存在');
+  if (memo.kind !== 'topic') throw new Error('只能提交选题初稿');
+  if (memo.created_by !== userId) throw new Error('只有选题创建者可以提交初稿');
+  const draftDocUrl = String(fields.draftDocUrl || fields.draft_doc_url || '').trim();
+  if (!draftDocUrl) throw new Error('请填写初稿飞书链接');
+  db.prepare(`
+    UPDATE content_memos
+    SET draft_doc_url = ?, updated_at = datetime('now')
+    WHERE id = ? AND project_id = ?
+  `).run(draftDocUrl, memoId, projectId);
+
+  const editor = findEditorByName('王兆洋');
+  let pushed = false;
+  let pushError = '';
+  if (editor?.id) {
+    try {
+      await feishuPushService.sendTextToUser(
+        editor.id,
+        [
+          `PM Board 初稿待编辑：${memo.title}`,
+          `作者：${memo.created_by_name || ''}`,
+          `初稿链接：${draftDocUrl}`,
+          `打开选题面板：${topicBoardUrl()}`,
+        ].filter(Boolean).join('\n')
+      );
+      pushed = true;
+    } catch (err) {
+      pushError = err.userMessage || err.message;
+    }
+  } else {
+    pushError = '未找到王兆洋账号';
+  }
+  return { topic: get(projectId, memoId, userId), pushed, pushError };
+}
+
+export async function updateTopicEditorNotes(projectId, memoId, userId, fields = {}) {
+  if (!isTopicEditor(userId)) throw new Error('只有王兆洋、骆轶航和编辑可以填写编辑建议');
+  const memo = db.prepare(`
+    SELECT m.*, u.name as created_by_name
+    FROM content_memos m
+    JOIN users u ON u.id = m.created_by
+    WHERE m.id = ? AND m.project_id = ?
+  `).get(memoId, projectId);
+  if (!memo) throw new Error('选题不存在');
+  if (memo.kind !== 'topic') throw new Error('只能编辑选题建议');
+  const editorNotes = String(fields.editorNotes || fields.editor_notes || '').trim();
+  if (!editorNotes) throw new Error('请填写编辑建议');
+  db.prepare(`
+    UPDATE content_memos
+    SET editor_notes = ?, updated_at = datetime('now')
+    WHERE id = ? AND project_id = ?
+  `).run(editorNotes, memoId, projectId);
+
+  let pushed = false;
+  let pushError = '';
+  if (memo.created_by) {
+    try {
+      await feishuPushService.sendTextToUser(
+        memo.created_by,
+        [
+          `PM Board 编辑建议：${memo.title}`,
+          editorNotes,
+          memo.draft_doc_url ? `初稿链接：${memo.draft_doc_url}` : '',
+          `打开选题面板：${topicBoardUrl()}`,
+        ].filter(Boolean).join('\n')
+      );
+      pushed = true;
+    } catch (err) {
+      pushError = err.userMessage || err.message;
+    }
+  }
+  return { topic: get(projectId, memoId, userId), pushed, pushError };
 }
 
 export function addExperience(projectId, memoId, userId, content) {
