@@ -323,6 +323,36 @@ export function ContentHub({ mode = 'all', initialTopicType = 'daily' }) {
     ].filter(Boolean).join('\n\n');
   }
 
+  function topicDetailSections(item) {
+    const sections = {
+      intro: '',
+      weeklyPlan: '',
+      phaseProgress: '',
+      interviewRaw: '',
+      outline: '',
+    };
+    const body = String(item.body || '');
+    const sectionPattern = /##\s*(技术介绍|周计划|阶段性进度|采访原文|稿件框架)\s*\n([\s\S]*?)(?=\n##\s*(?:技术介绍|周计划|阶段性进度|采访原文|稿件框架)\s*\n|$)/g;
+    const keyMap = {
+      技术介绍: 'intro',
+      周计划: 'weeklyPlan',
+      阶段性进度: 'phaseProgress',
+      采访原文: 'interviewRaw',
+      稿件框架: 'outline',
+    };
+    let match;
+    while ((match = sectionPattern.exec(body))) {
+      sections[keyMap[match[1]]] = String(match[2] || '').trim();
+    }
+    return sections;
+  }
+
+  function topicCardBody(item) {
+    const sections = topicDetailSections(item);
+    if (sections.intro) return sections.intro;
+    return item.body || '还没有补充内容';
+  }
+
   function topicOwnerText(item) {
     const owner = String(item.owner_text || '').trim();
     if (owner && owner !== '待定' && owner !== '待分配') return owner;
@@ -570,7 +600,7 @@ export function ContentHub({ mode = 'all', initialTopicType = 'daily' }) {
                     {item.kind !== 'topic' && item.demo_ready ? <span className="rounded-md bg-slate-950 px-2 py-1 text-xs font-medium text-white">已达 Demo 条件</span> : null}
                   </div>
                   <h3 className="mt-3 text-xl font-semibold tracking-normal text-slate-950">{item.title}</h3>
-                  <p className="mt-2 whitespace-pre-wrap text-sm leading-6 text-slate-600">{item.body || '还没有补充内容'}</p>
+                  <p className="mt-2 whitespace-pre-wrap text-sm leading-6 text-slate-600">{item.kind === 'topic' ? topicCardBody(item) : item.body || '还没有补充内容'}</p>
                 </div>
                 <Avatar member={{ name: item.created_by_name, avatar_url: item.created_by_avatar }} size="md" />
               </div>
@@ -638,6 +668,18 @@ export function ContentHub({ mode = 'all', initialTopicType = 'daily' }) {
                 </div>
               ) : null}
 
+              {item.kind === 'topic' && item.sub_kind === 'deep' ? (
+                <details className="mt-4 rounded-md border border-slate-200 bg-slate-50 p-3">
+                  <summary className="cursor-pointer text-sm font-semibold text-slate-950">查看二级详情</summary>
+                  <div className="mt-3 grid gap-3 md:grid-cols-2">
+                    <TopicDetailBlock title="周计划" value={topicDetailSections(item).weeklyPlan || item.timeline_text} />
+                    <TopicDetailBlock title="阶段性进度" value={topicDetailSections(item).phaseProgress || '暂无进度更新'} />
+                    <TopicDetailBlock title="采访原文" value={topicDetailSections(item).interviewRaw || '等待飞书原文链接或摘录'} />
+                    <TopicDetailBlock title="稿件框架" value={topicDetailSections(item).outline || '等待补充稿件框架'} />
+                  </div>
+                </details>
+              ) : null}
+
               {item.kind === 'topic' ? (
                 <div className="mt-4 space-y-3 rounded-md border border-slate-200 bg-white p-3">
                   <div className="grid gap-3 lg:grid-cols-[1fr_auto] lg:items-end">
@@ -661,7 +703,6 @@ export function ContentHub({ mode = 'all', initialTopicType = 'daily' }) {
                   <div className="rounded-md border border-amber-100 bg-amber-50/60 p-3">
                     <div className="mb-2 flex items-center justify-between gap-3">
                       <span className="text-xs font-semibold text-amber-800">编辑建议</span>
-                      {canEditTopicMeta() ? <span className="text-xs text-amber-700">王兆洋 / 编辑可写</span> : null}
                     </div>
                     <div className="grid gap-3 lg:grid-cols-[1fr_auto] lg:items-end">
                       <textarea
@@ -788,6 +829,15 @@ function Stat({ label, value }) {
     <div className="rounded-lg border border-slate-100 bg-slate-50 p-3">
       <p className="text-2xl font-semibold text-slate-950">{value}</p>
       <p className="mt-1 text-xs text-slate-500">{label}</p>
+    </div>
+  );
+}
+
+function TopicDetailBlock({ title, value }) {
+  return (
+    <div className="rounded-md border border-slate-200 bg-white p-3">
+      <p className="text-xs font-semibold text-slate-500">{title}</p>
+      <p className="mt-2 whitespace-pre-wrap text-sm leading-6 text-slate-700">{value}</p>
     </div>
   );
 }
