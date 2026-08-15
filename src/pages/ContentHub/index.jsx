@@ -433,6 +433,21 @@ export function ContentHub({ mode = 'all', initialTopicType = 'daily' }) {
     return '等待提交初稿';
   }
 
+  function topicWeekPlans(item) {
+    const source = topicDetailSections(item).weeklyPlan || item.timeline_text || '';
+    return String(source)
+      .split('\n')
+      .map((line) => line.trim())
+      .filter(Boolean)
+      .map((line) => {
+        const match = line.match(/^(W\d+|第[一二三四五六七八九十]+周|下周)[：:]\s*(.*)$/);
+        return {
+          week: match?.[1] || '阶段',
+          detail: match?.[2] || line,
+        };
+      });
+  }
+
   function topicDocLinks(item) {
     if (item.doc_links && typeof item.doc_links === 'object') return item.doc_links;
     try {
@@ -733,8 +748,18 @@ export function ContentHub({ mode = 'all', initialTopicType = 'daily' }) {
             </div>
           </div>
 
-          <div className="mt-5 grid gap-3 md:grid-cols-2">
-            <TopicDetailBlock title="周计划" value={topicDetailSections(selectedTopic).weeklyPlan || selectedTopic.timeline_text || '等待补充周计划'} />
+          <div className="mt-5 rounded-lg border border-slate-200 bg-slate-50 p-4">
+            <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+              <div>
+                <p className="text-sm font-semibold text-slate-950">执行进度同步</p>
+                <p className="mt-1 text-xs leading-5 text-slate-500">按周同步推进，文档入口保留每周不会频繁变化的材料。</p>
+              </div>
+              <span className="rounded-full bg-emerald-50 px-3 py-1 text-xs font-semibold text-emerald-700">{topicProgressText(selectedTopic)}</span>
+            </div>
+            <TopicWeekPlan plans={topicWeekPlans(selectedTopic)} currentWeek="W4" />
+          </div>
+
+          <div className="mt-4 grid gap-3 md:grid-cols-2">
             <TopicDetailBlock title="阶段性进度" value={topicDetailSections(selectedTopic).phaseProgress || '暂无进度更新'} />
             <TopicDetailBlock title="采访原文" value={topicDetailSections(selectedTopic).interviewRaw || '等待飞书原文链接或摘录'} />
             <TopicDetailBlock title="稿件框架" value={topicDetailSections(selectedTopic).outline || '等待补充稿件框架'} />
@@ -1091,6 +1116,34 @@ function TopicDetailBlock({ title, value }) {
     <div className="rounded-md border border-slate-200 bg-white p-3">
       <p className="text-xs font-semibold text-slate-500">{title}</p>
       <p className="mt-2 whitespace-pre-wrap text-sm leading-6 text-slate-700">{value}</p>
+    </div>
+  );
+}
+
+function TopicWeekPlan({ plans, currentWeek }) {
+  const list = plans.length ? plans : [{ week: 'W1', detail: '等待补充周计划' }];
+  function statusFor(week) {
+    if (week === currentWeek) return { label: '当前阶段', className: 'bg-emerald-50 text-emerald-700 border-emerald-100' };
+    if (/下周/.test(week)) return { label: '下一阶段', className: 'bg-sky-50 text-sky-700 border-sky-100' };
+    const currentNum = Number(String(currentWeek).replace(/\D/g, '') || 0);
+    const weekNum = Number(String(week).replace(/\D/g, '') || 0);
+    if (weekNum && currentNum && weekNum < currentNum) return { label: '已推进', className: 'bg-slate-100 text-slate-600 border-slate-200' };
+    return { label: '待推进', className: 'bg-white text-slate-500 border-slate-200' };
+  }
+  return (
+    <div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+      {list.map((plan, index) => {
+        const status = statusFor(plan.week);
+        return (
+          <div key={`${plan.week}-${index}`} className="rounded-lg border border-slate-200 bg-white p-3">
+            <div className="flex items-center justify-between gap-3">
+              <p className="text-sm font-semibold text-slate-950">{plan.week}</p>
+              <span className={`rounded-full border px-2 py-0.5 text-[11px] font-semibold ${status.className}`}>{status.label}</span>
+            </div>
+            <p className="mt-2 whitespace-pre-wrap text-sm leading-6 text-slate-600">{plan.detail}</p>
+          </div>
+        );
+      })}
     </div>
   );
 }
