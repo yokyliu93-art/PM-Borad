@@ -404,7 +404,8 @@ function topicTimelineText(topic, deep = false) {
       'W4：成稿、编辑、发布与复盘',
     ].join('\n');
   }
-  return topic.firstDraftAt ? `交稿日期：${topic.firstDraftAt}` : '交稿日期：待定';
+  const firstDraftAt = String(topic.firstDraftAt || '').trim();
+  return firstDraftAt && !/待定|暂无|没有|无/i.test(firstDraftAt) ? `交稿日期：${firstDraftAt}` : '';
 }
 
 const TOPIC_LINE_KEYWORDS = /选题|题目|主题|初稿|截稿|稿|文章|报道|采访|约访|试用|体验|Demo|demo|深度|日常|专题|系列|发布|上线|推荐|Builder|GAI|GenAI|下周|本周|时间|进度|排期|timeline|讨论|确定|待定/i;

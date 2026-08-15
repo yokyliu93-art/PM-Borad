@@ -313,6 +313,15 @@ export function ContentHub({ mode = 'all', initialTopicType = 'daily' }) {
     return canEditTopics || String(jobTitle).includes('编辑');
   }
 
+  function topicDraftDateText(item) {
+    const text = String(item.timeline_text || '').trim();
+    const match = text.match(/交稿日期[：:]\s*([^\n]+)/);
+    if (!match) return '';
+    const value = match[1].trim();
+    if (!value || /待定|暂无|没有|无/.test(value)) return '';
+    return value;
+  }
+
   async function archiveTopic(item) {
     const targetProjectId = item.project_id || projectId;
     const res = await post(`/api/projects/${targetProjectId}/content/${item.id}/archive-topic`, {});
@@ -539,7 +548,7 @@ export function ContentHub({ mode = 'all', initialTopicType = 'daily' }) {
                     {item.kind === 'topic' ? (
                       <>
                         <p className="text-xs font-semibold text-slate-500">交稿日期</p>
-                        <p className="mt-1 text-sm font-semibold text-slate-950">8 月 15 日</p>
+                        <p className="mt-1 min-h-5 text-sm font-semibold text-slate-950">{topicDraftDateText(item)}</p>
                       </>
                     ) : (
                       <>
