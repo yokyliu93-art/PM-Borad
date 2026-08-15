@@ -77,7 +77,7 @@ export function listByProject(projectId, userId, kind = '') {
     LEFT JOIN content_memo_votes v ON v.memo_id = m.id AND v.vote = 'demo'
     LEFT JOIN content_memo_votes myv ON myv.memo_id = m.id AND myv.vote = 'demo' AND myv.user_id = ?
     LEFT JOIN content_memo_experiences e ON e.memo_id = m.id
-    WHERE m.project_id = ? ${whereKind}
+    WHERE m.project_id = ? AND m.status != 'archived' ${whereKind}
     GROUP BY m.id
     ORDER BY m.updated_at DESC, m.created_at DESC
   `).all(...params);
@@ -113,7 +113,7 @@ export function listByTeam(teamId, userId, filters = {}) {
     LEFT JOIN content_memo_votes v ON v.memo_id = m.id AND v.vote = 'demo'
     LEFT JOIN content_memo_votes myv ON myv.memo_id = m.id AND myv.vote = 'demo' AND myv.user_id = ?
     LEFT JOIN content_memo_experiences e ON e.memo_id = m.id
-    WHERE p.team_id = ? ${where.length ? `AND ${where.join(' AND ')}` : ''}
+    WHERE p.team_id = ? AND m.status != 'archived' ${where.length ? `AND ${where.join(' AND ')}` : ''}
     GROUP BY m.id
     ORDER BY m.updated_at DESC, m.created_at DESC
   `).all(...params);
@@ -183,6 +183,15 @@ export function canEditTopics(userId) {
   return TOPIC_EDITORS.some((editor) => name === editor || name.includes(editor) || editor.includes(name));
 }
 
+function canArchiveTopic(userId, memo) {
+  if (memo.created_by === userId) return true;
+  const user = db.prepare('SELECT name, job_title FROM users WHERE id = ?').get(userId);
+  const name = String(user?.name || '').trim();
+  const jobTitle = String(user?.job_title || '').trim();
+  const namedEditor = name && TOPIC_EDITORS.some((editor) => name === editor || name.includes(editor) || editor.includes(name));
+  return namedEditor || jobTitle.includes('编辑');
+}
+
 export function updateTopicFinalDoc(projectId, memoId, userId, fields = {}) {
   if (!canEditTopics(userId)) throw new Error('只有王兆洋和骆轶航可以编辑选题面板');
   const memo = db.prepare('SELECT id, kind FROM content_memos WHERE id = ? AND project_id = ?').get(memoId, projectId);
@@ -195,6 +204,19 @@ export function updateTopicFinalDoc(projectId, memoId, userId, fields = {}) {
     WHERE id = ? AND project_id = ?
   `).run(finalDocUrl, memoId, projectId);
   return get(projectId, memoId, userId);
+}
+
+export function archiveTopic(projectId, memoId, userId) {
+  const memo = db.prepare('SELECT id, kind, created_by FROM content_memos WHERE id = ? AND project_id = ?').get(memoId, projectId);
+  if (!memo) throw new Error('选题不存在');
+  if (memo.kind !== 'topic') throw new Error('只能归档选题');
+  if (!canArchiveTopic(userId, memo)) throw new Error('只有作者、王兆洋、骆轶航和编辑可以归档选题');
+  db.prepare(`
+    UPDATE content_memos
+    SET status = 'archived', updated_at = datetime('now')
+    WHERE id = ? AND project_id = ?
+  `).run(memoId, projectId);
+  return { id: memoId, archived: true };
 }
 
 export function addExperience(projectId, memoId, userId, content) {

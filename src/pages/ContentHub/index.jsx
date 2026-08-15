@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useParams } from 'react-router-dom';
 import toast from 'react-hot-toast';
-import { BookOpenText, CalendarDays, Copy, FilePlus2, FlaskConical, LogIn, MessageSquareText, Sparkles, ThumbsUp, UserCheck, Vote } from 'lucide-react';
+import { Archive, BookOpenText, CalendarDays, Copy, FilePlus2, FlaskConical, LogIn, MessageSquareText, Sparkles, ThumbsUp, UserCheck, Vote } from 'lucide-react';
 import { get, post, put, del } from '../../lib/api';
 import { useStore } from '../../store';
 import { Avatar } from '../../components/ui/Avatar';
@@ -259,16 +259,25 @@ export function ContentHub({ mode = 'all', initialTopicType = 'daily' }) {
   }
 
   function topicOwnerText(item) {
-    return item.owner_text || item.created_by_name || currentUser?.name || '我';
+    return item.created_by_name || currentUser?.name || '我';
   }
 
-  function topicDateText(item) {
-    const text = String(item.timeline_text || '').trim();
-    if (!text) return '待王兆洋选择';
-    return text
-      .replace(/^初稿时间[:：]\s*/i, '')
-      .replace(/^交稿日期[:：]\s*/i, '')
-      .trim() || '待王兆洋选择';
+  function canArchiveTopic(item) {
+    const currentName = currentUser?.name || '';
+    const jobTitle = currentUser?.job_title || currentUser?.jobTitle || '';
+    const namedEditor = currentName && ['王兆洋', '骆轶航'].some((name) => currentName === name || currentName.includes(name) || name.includes(currentName));
+    return item.created_by === currentUser?.id || namedEditor || String(jobTitle).includes('编辑');
+  }
+
+  async function archiveTopic(item) {
+    const targetProjectId = item.project_id || projectId;
+    const res = await post(`/api/projects/${targetProjectId}/content/${item.id}/archive-topic`, {});
+    if (res.ok) {
+      setItems((current) => current.filter((memo) => memo.id !== item.id));
+      toast.success('已归档');
+    } else {
+      toast.error(res.error || '归档失败');
+    }
   }
 
   const topicParserPanel = isTopics ? (
@@ -462,7 +471,7 @@ export function ContentHub({ mode = 'all', initialTopicType = 'daily' }) {
                     {item.sub_kind === 'daily' ? <span className="rounded-md bg-slate-100 px-2 py-1 text-xs font-medium text-slate-700">日常选题</span> : null}
                     {item.project_name ? <span className="rounded-md bg-slate-100 px-2 py-1 text-xs font-medium text-slate-500">{item.project_name}</span> : null}
                     {item.kind === 'eval' ? <span className="rounded-md bg-violet-50 px-2 py-1 text-xs font-medium text-violet-700">{item.eval_questions?.length || 0} 道题</span> : null}
-                    {item.demo_ready ? <span className="rounded-md bg-slate-950 px-2 py-1 text-xs font-medium text-white">已达 Demo 条件</span> : null}
+                    {item.kind !== 'topic' && item.demo_ready ? <span className="rounded-md bg-slate-950 px-2 py-1 text-xs font-medium text-white">已达 Demo 条件</span> : null}
                   </div>
                   <h3 className="mt-3 text-xl font-semibold tracking-normal text-slate-950">{item.title}</h3>
                   <p className="mt-2 whitespace-pre-wrap text-sm leading-6 text-slate-600">{item.body || '还没有补充内容'}</p>
@@ -480,7 +489,7 @@ export function ContentHub({ mode = 'all', initialTopicType = 'daily' }) {
                     {item.kind === 'topic' ? (
                       <>
                         <p className="text-xs font-semibold text-slate-500">交稿日期</p>
-                        <p className="mt-1 text-sm font-semibold text-slate-950">{topicDateText(item)}</p>
+                        <p className="mt-1 text-sm font-semibold text-slate-950">8 月 15 日</p>
                       </>
                     ) : (
                       <>
@@ -505,18 +514,23 @@ export function ContentHub({ mode = 'all', initialTopicType = 'daily' }) {
                 <div className="mt-4 rounded-md border border-slate-200 bg-white p-3">
                   <div className="flex flex-col gap-3 lg:flex-row lg:items-end">
                     <label className="min-w-0 flex-1">
-                      <span className="mb-1.5 block text-xs font-semibold text-slate-500">飞书稿件链接</span>
+                      <span className="mb-1.5 block text-xs font-semibold text-slate-500">最终成稿飞书链接</span>
                       <input
                         value={topicLinkDrafts[item.id] ?? item.final_doc_url ?? ''}
                         onChange={(event) => setTopicLinkDrafts((drafts) => ({ ...drafts, [item.id]: event.target.value }))}
                         disabled={!canEditTopics}
-                        placeholder={canEditTopics ? '手动填最终稿件飞书链接' : '等待王兆洋或骆轶航填写'}
+                        placeholder={canEditTopics ? '手动填最终成稿飞书链接' : '等待王兆洋或骆轶航填写'}
                         className="w-full rounded-md border border-slate-200 px-3 py-2 text-sm outline-none transition focus:border-emerald-400 disabled:bg-slate-50 disabled:text-slate-500"
                       />
                     </label>
                     {canEditTopics ? (
                       <button onClick={() => saveTopicFinalDoc(item)} className="rounded-md bg-slate-950 px-4 py-2 text-sm font-semibold text-white transition hover:bg-slate-800">
                         保存链接
+                      </button>
+                    ) : null}
+                    {canArchiveTopic(item) ? (
+                      <button onClick={() => archiveTopic(item)} className="inline-flex items-center justify-center gap-2 rounded-md border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-700 transition hover:bg-slate-50">
+                        <Archive size={14} />归档
                       </button>
                     ) : null}
                   </div>
@@ -582,28 +596,32 @@ export function ContentHub({ mode = 'all', initialTopicType = 'daily' }) {
                 ) : null}
               </div>
 
-              <div className="mt-5 flex flex-wrap items-center gap-3">
-                <button onClick={() => toggleVote(item)} className={`inline-flex items-center gap-2 rounded-md px-3 py-2 text-sm font-semibold transition ${item.my_vote ? 'bg-emerald-600 text-white hover:bg-emerald-500' : 'border border-slate-200 text-slate-700 hover:bg-slate-50'}`}>
-                  <Vote size={15} />投 Demo 票
-                </button>
-                <span className="text-sm text-slate-500">{item.vote_count}/{item.demo_threshold} 票通过</span>
-                <span className="text-sm text-slate-500">{item.experience_count} 条试用体验</span>
-              </div>
-
-              <div className="mt-5 space-y-3 border-t border-slate-100 pt-4">
-                <div className="flex gap-2">
-                  <input value={experienceDrafts[item.id] || ''} onChange={(event) => setExperienceDrafts((drafts) => ({ ...drafts, [item.id]: event.target.value }))} placeholder="写一条试用体验或建议" className="min-w-0 flex-1 rounded-md border border-slate-200 px-3 py-2 text-sm outline-none focus:border-emerald-400" />
-                  <button onClick={() => addExperience(item)} className="inline-flex items-center gap-2 rounded-md bg-slate-950 px-3 py-2 text-sm font-semibold text-white transition hover:bg-slate-800">
-                    <ThumbsUp size={14} />提交
-                  </button>
-                </div>
-                {item.experiences?.slice(0, 3).map((exp) => (
-                  <div key={exp.id} className="rounded-md bg-slate-50 p-3">
-                    <p className="text-sm leading-6 text-slate-700">{exp.content}</p>
-                    <p className="mt-1 text-xs text-slate-400">{exp.user_name}</p>
+              {item.kind !== 'topic' ? (
+                <>
+                  <div className="mt-5 flex flex-wrap items-center gap-3">
+                    <button onClick={() => toggleVote(item)} className={`inline-flex items-center gap-2 rounded-md px-3 py-2 text-sm font-semibold transition ${item.my_vote ? 'bg-emerald-600 text-white hover:bg-emerald-500' : 'border border-slate-200 text-slate-700 hover:bg-slate-50'}`}>
+                      <Vote size={15} />投 Demo 票
+                    </button>
+                    <span className="text-sm text-slate-500">{item.vote_count}/{item.demo_threshold} 票通过</span>
+                    <span className="text-sm text-slate-500">{item.experience_count} 条试用体验</span>
                   </div>
-                ))}
-              </div>
+
+                  <div className="mt-5 space-y-3 border-t border-slate-100 pt-4">
+                    <div className="flex gap-2">
+                      <input value={experienceDrafts[item.id] || ''} onChange={(event) => setExperienceDrafts((drafts) => ({ ...drafts, [item.id]: event.target.value }))} placeholder="写一条试用体验或建议" className="min-w-0 flex-1 rounded-md border border-slate-200 px-3 py-2 text-sm outline-none focus:border-emerald-400" />
+                      <button onClick={() => addExperience(item)} className="inline-flex items-center gap-2 rounded-md bg-slate-950 px-3 py-2 text-sm font-semibold text-white transition hover:bg-slate-800">
+                        <ThumbsUp size={14} />提交
+                      </button>
+                    </div>
+                    {item.experiences?.slice(0, 3).map((exp) => (
+                      <div key={exp.id} className="rounded-md bg-slate-50 p-3">
+                        <p className="text-sm leading-6 text-slate-700">{exp.content}</p>
+                        <p className="mt-1 text-xs text-slate-400">{exp.user_name}</p>
+                      </div>
+                    ))}
+                  </div>
+                </>
+              ) : null}
             </article>
           ))}
         </div>
