@@ -167,6 +167,47 @@ export function create(projectId, userId, fields = {}) {
   return get(projectId, id, userId);
 }
 
+function createOrUpdateParsedTopic(projectId, userId, fields = {}) {
+  const title = String(fields.title || '').trim();
+  const subKind = normalizeSubKind(fields.subKind || fields.sub_kind);
+  const existing = db.prepare(`
+    SELECT id
+    FROM content_memos
+    WHERE project_id = ?
+      AND kind = 'topic'
+      AND sub_kind = ?
+      AND status != 'archived'
+      AND LOWER(TRIM(title)) = LOWER(TRIM(?))
+    ORDER BY updated_at DESC, created_at DESC
+    LIMIT 1
+  `).get(projectId, subKind, title);
+  if (!existing) return create(projectId, userId, fields);
+  db.prepare(`
+    UPDATE content_memos
+    SET
+      body = ?,
+      source_url = ?,
+      timeline_text = ?,
+      owner_text = ?,
+      progress = ?,
+      meeting_doc_url = ?,
+      meeting_minutes_url = ?,
+      updated_at = datetime('now')
+    WHERE id = ? AND project_id = ?
+  `).run(
+    fields.body || '',
+    fields.sourceUrl || fields.source_url || '',
+    fields.timelineText || fields.timeline_text || '',
+    fields.ownerText || fields.owner_text || '',
+    Math.min(100, Math.max(0, Math.round(Number(fields.progress || 0)))),
+    fields.meetingDocUrl || fields.meeting_doc_url || fields.weeklyDocUrl || fields.weekly_doc_url || '',
+    fields.meetingMinutesUrl || fields.meeting_minutes_url || fields.minutesUrl || fields.minutes_url || '',
+    existing.id,
+    projectId
+  );
+  return get(projectId, existing.id, userId);
+}
+
 export function get(projectId, memoId, userId) {
   return listByProject(projectId, userId).find((memo) => memo.id === memoId) || null;
 }
@@ -711,7 +752,7 @@ export async function parseWeeklyTopics(projectId, userId, fields = {}) {
     meetingMinutesUrl: meetingNotesUrl,
   });
 
-  const createdDaily = parsed.dailyTopics.map((topic) => create(projectId, userId, {
+  const createdDaily = parsed.dailyTopics.map((topic) => createOrUpdateParsedTopic(projectId, userId, {
     kind: 'topic',
     subKind: 'daily',
     title: topic.title || '未命名日常选题',
@@ -723,7 +764,7 @@ export async function parseWeeklyTopics(projectId, userId, fields = {}) {
     meetingDocUrl,
     meetingMinutesUrl: meetingNotesUrl,
   }));
-  const createdBusiness = (parsed.businessTopics || []).map((topic) => create(projectId, userId, {
+  const createdBusiness = (parsed.businessTopics || []).map((topic) => createOrUpdateParsedTopic(projectId, userId, {
     kind: 'topic',
     subKind: 'business',
     title: topic.title || '未命名商务选题',
@@ -735,7 +776,7 @@ export async function parseWeeklyTopics(projectId, userId, fields = {}) {
     meetingDocUrl,
     meetingMinutesUrl: meetingNotesUrl,
   }));
-  const createdDeep = parsed.deepTopics.map((topic) => create(projectId, userId, {
+  const createdDeep = parsed.deepTopics.map((topic) => createOrUpdateParsedTopic(projectId, userId, {
     kind: 'topic',
     subKind: 'deep',
     title: topic.title || '未命名深度选题',
@@ -747,7 +788,7 @@ export async function parseWeeklyTopics(projectId, userId, fields = {}) {
     meetingDocUrl,
     meetingMinutesUrl: meetingNotesUrl,
   }));
-  const createdWeekly = (parsed.weeklyRecommendations || []).map((topic) => create(projectId, userId, {
+  const createdWeekly = (parsed.weeklyRecommendations || []).map((topic) => createOrUpdateParsedTopic(projectId, userId, {
     kind: 'topic',
     subKind: 'weekly_recommendation',
     title: topic.title || '未命名本周项目推荐',
@@ -759,7 +800,7 @@ export async function parseWeeklyTopics(projectId, userId, fields = {}) {
     meetingDocUrl,
     meetingMinutesUrl: meetingNotesUrl,
   }));
-  const createdFrontier = (parsed.frontierTopics || []).map((topic) => create(projectId, userId, {
+  const createdFrontier = (parsed.frontierTopics || []).map((topic) => createOrUpdateParsedTopic(projectId, userId, {
     kind: 'topic',
     subKind: 'frontier',
     title: topic.title || '未命名 Frontier',
@@ -775,7 +816,7 @@ export async function parseWeeklyTopics(projectId, userId, fields = {}) {
     meetingDocUrl,
     meetingMinutesUrl: meetingNotesUrl,
   }));
-  const createdPrompt = (parsed.promptTopics || []).map((topic) => create(projectId, userId, {
+  const createdPrompt = (parsed.promptTopics || []).map((topic) => createOrUpdateParsedTopic(projectId, userId, {
     kind: 'topic',
     subKind: 'prompt',
     title: topic.title || '未命名 Prompt PR',

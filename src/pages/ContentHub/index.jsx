@@ -493,7 +493,7 @@ export function ContentHub({ mode = 'all', initialTopicType = 'daily' }) {
   function topicOwnerText(item) {
     const owner = String(item.owner_text || '').trim();
     if (owner && owner !== '待定' && owner !== '待分配') return owner;
-    return item.created_by_name || currentUser?.name || '我';
+    return '待分配';
   }
 
   function currentUserMatchesOwner(item) {
