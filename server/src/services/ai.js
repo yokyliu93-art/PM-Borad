@@ -12,10 +12,15 @@ const AUDIT_PROMPT = `你是总 PM 的审核 Agent。请审核子 PM 或执行 A
 只输出 JSON 对象，不要输出解释或 Markdown。格式：
 {"decision":"通过/需要修改/风险较高","score":0-100,"issues":["问题"],"suggestions":["建议"],"missingResources":["缺少的资源"],"nextQuestions":["需要追问的问题"]}`;
 
-const TOPIC_PARSE_PROMPT = `你是硅星人内容编辑部的选题统筹助手。请根据周会文档和周会速记文档，抽取选题并归类。
+const TOPIC_PARSE_PROMPT = `你是硅星人内容编辑部的选题统筹助手。请根据周会文档抽取候选选题并归类。
 如果周会文档里有「其他」栏目，尤其是写着“大厂报道、商务合作、灵活内容、小绿书”等内容，这一栏里的选题全部归入 businessTopics，不要归入 dailyTopics。
 只输出 JSON 对象，不要输出解释或 Markdown。格式：
-{"dailyTopics":[{"title":"日常选题标题","owner":"负责人姓名","firstDraftAt":"交稿日期，如 8月16日/下周三/待定；如果文档没有明确日期就留空","summary":"当前进展和需要做什么","meetingDiscussion":"周会速记里围绕这个选题的讨论纪要，没有则留空"}],"businessTopics":[{"title":"商务选题标题","owner":"负责人姓名","firstDraftAt":"交稿日期或空","summary":"商务需求、客户/合作背景、当前要做什么","meetingDiscussion":"周会讨论纪要，没有则留空"}],"deepTopics":[{"title":"深度选题标题","owner":"负责人姓名","firstDraftAt":"首稿或阶段稿时间，没有则留空","summary":"选题背景和当前阶段","meetingDiscussion":"周会速记里围绕这个选题的具体讨论、争议、角度判断和下一步动作","timeline":[{"week":"W1","detail":"目标、动作、负责人和交付物"}],"resources":"需要谁配合、需要什么资料"}],"weeklyRecommendations":[{"title":"本周项目推荐标题","owner":"负责人姓名","firstDraftAt":"交稿日期或空","summary":"推荐理由、项目亮点和要做什么","meetingDiscussion":"周会讨论纪要，没有则留空"}],"frontierTopics":[{"title":"Frontier 研究/项目/产品名称","owner":"负责人姓名","summary":"一句话介绍","reason":"人们为什么必须关注","resources":"链接、memo 或下一步操作"}],"promptTopics":[{"title":"Prompt PR 项目或主题","owner":"负责人姓名","firstDraftAt":"交稿日期或空","summary":"当前要做什么、需要谁配合"}]}`;
+{"dailyTopics":[{"title":"日常选题标题","owner":"负责人姓名","firstDraftAt":"交稿日期，如 8月16日/下周三；如果文档没有明确日期就留空","summary":"当前进展和需要做什么"}],"businessTopics":[{"title":"商务选题标题","owner":"负责人姓名","firstDraftAt":"交稿日期或空","summary":"商务需求、客户/合作背景、当前要做什么"}],"deepTopics":[{"title":"深度选题标题","owner":"负责人姓名","firstDraftAt":"首稿或阶段稿时间，没有则留空","summary":"选题背景和当前阶段","timeline":[{"week":"W1","detail":"目标、动作、负责人和交付物"}],"resources":"需要谁配合、需要什么资料"}],"weeklyRecommendations":[{"title":"本周项目推荐标题","owner":"负责人姓名","firstDraftAt":"交稿日期或空","summary":"推荐理由、项目亮点和要做什么"}],"frontierTopics":[{"title":"Frontier 研究/项目/产品名称","owner":"负责人姓名","summary":"一句话介绍","reason":"人们为什么必须关注","resources":"链接、memo 或下一步操作"}],"promptTopics":[{"title":"Prompt PR 项目或主题","owner":"负责人姓名","firstDraftAt":"交稿日期或空","summary":"当前要做什么、需要谁配合"}]}`;
+
+const TOPIC_DISCUSSION_PROMPT = `你是硅星人内容编辑部的周会速记整理助手。请把周会速记里的讨论内容匹配到已经确认的选题上。
+输入会给你已有选题列表，每个选题有 topicId、title、type、owner。你只能给这些已有选题补充讨论纪要，不要新建选题。
+只输出 JSON 对象，不要输出解释或 Markdown。格式：
+{"discussions":[{"topicId":"必须来自已有选题列表的 topicId","title":"选题标题","discussion":"周会上围绕这个选题讨论了什么，包括角度判断、反对意见、信息增量、需要补的材料","editorNotes":"编辑建议和下一步动作，写给负责人看","confidence":0.8}]}`;
 
 const EVAL_PARSE_PROMPT = `你是硅星人 Eval 测试集整理助手。请根据飞书文档内容，整理成 PM Board 里的共享测试集模块，并把测试集拆成一道一道可复制给模型测试的问题。
 只输出 JSON 对象，不要输出解释或 Markdown。格式：
@@ -115,16 +120,41 @@ export async function parseWeeklyTopics({ meetingDoc, meetingNotes }) {
   };
 }
 
+export async function parseTopicDiscussions({ topics = [], meetingNotes }) {
+  const topicList = topics.map((topic) => ({
+    topicId: topic.id,
+    title: topic.title,
+    type: topic.sub_kind,
+    owner: topic.owner_text,
+  }));
+  const userContent = [
+    `已有选题列表：\n${JSON.stringify(topicList, null, 2)}`,
+    `周会速记链接：${meetingNotes?.url || ''}`,
+    meetingNotes?.title ? `周会速记标题：${meetingNotes.title}` : '',
+    meetingNotes?.content ? `周会速记相关片段：\n${topicRelevantExcerpt(meetingNotes.content, 36000)}` : '',
+  ].filter(Boolean).join('\n\n').slice(0, 52000);
+  const parsed = await callAIJson({
+    systemPrompt: TOPIC_DISCUSSION_PROMPT,
+    userContent,
+    fallbackError: 'DeepSeek 解析周会讨论失败',
+  });
+  return {
+    discussions: Array.isArray(parsed.discussions) ? parsed.discussions.map((item) => ({
+      topicId: String(item.topicId || item.topic_id || '').trim(),
+      title: String(item.title || '').trim(),
+      discussion: String(item.discussion || item.meetingDiscussion || '').trim(),
+      editorNotes: String(item.editorNotes || item.editor_notes || item.notes || '').trim(),
+      confidence: Number(item.confidence || 0),
+    })).filter((item) => item.topicId && (item.discussion || item.editorNotes)) : [],
+  };
+}
+
 function buildTopicParseInput({ meetingDoc, meetingNotes }) {
   const docExcerpt = topicRelevantExcerpt(meetingDoc?.content || '', 12000);
-  const notesExcerpt = topicRelevantExcerpt(meetingNotes?.content || '', 24000);
   return [
     `周会文档链接：${meetingDoc?.url || ''}`,
     meetingDoc?.title ? `周会文档标题：${meetingDoc.title}` : '',
     docExcerpt ? `周会文档选题相关片段：\n${docExcerpt}` : '',
-    `周会速记文档链接：${meetingNotes?.url || ''}`,
-    meetingNotes?.title ? `周会速记文档标题：${meetingNotes.title}` : '',
-    notesExcerpt ? `周会速记文档选题相关片段：\n${notesExcerpt}` : '',
   ].filter(Boolean).join('\n\n').slice(0, 42000);
 }
 

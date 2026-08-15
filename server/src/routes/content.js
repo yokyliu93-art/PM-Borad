@@ -43,6 +43,36 @@ router.post('/parse-weekly-topics', async (req, res) => {
   }
 });
 
+router.post('/preview-weekly-topics', async (req, res) => {
+  try {
+    const data = await contentService.previewWeeklyTopics(req.params.projectId, req.user.id, req.body || {});
+    res.json({ ok: true, data });
+  } catch (err) {
+    console.error('[content] preview weekly topics failed:', err.userMessage || err.message);
+    res.status(400).json({ ok: false, error: err.userMessage || err.message });
+  }
+});
+
+router.post('/confirm-weekly-topics', async (req, res) => {
+  try {
+    const data = await contentService.confirmWeeklyTopics(req.params.projectId, req.user.id, req.body || {});
+    res.status(201).json({ ok: true, data });
+  } catch (err) {
+    console.error('[content] confirm weekly topics failed:', err.userMessage || err.message);
+    res.status(400).json({ ok: false, error: err.userMessage || err.message });
+  }
+});
+
+router.post('/parse-topic-discussions', async (req, res) => {
+  try {
+    const data = await contentService.parseTopicDiscussions(req.params.projectId, req.user.id, req.body || {});
+    res.json({ ok: true, data });
+  } catch (err) {
+    console.error('[content] parse topic discussions failed:', err.userMessage || err.message);
+    res.status(400).json({ ok: false, error: err.userMessage || err.message });
+  }
+});
+
 router.post('/import-eval-doc', async (req, res) => {
   try {
     const data = await contentService.importEvalDoc(req.params.projectId, req.user.id, req.body || {});

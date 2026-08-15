@@ -53,7 +53,9 @@ export function ContentHub({ mode = 'all', initialTopicType = 'daily' }) {
   const [topicPublishDates, setTopicPublishDates] = useState({});
   const [topicEditorNotes, setTopicEditorNotes] = useState({});
   const [topicDocLinkDrafts, setTopicDocLinkDrafts] = useState({});
-  const [topicFieldDrafts, setTopicFieldDrafts] = useState({});
+  const [topicCandidateBatch, setTopicCandidateBatch] = useState(null);
+  const [topicCandidateEnabled, setTopicCandidateEnabled] = useState({});
+  const [parsingDiscussions, setParsingDiscussions] = useState(false);
   const [selectedTopicId, setSelectedTopicId] = useState('');
   const [topicOverview, setTopicOverview] = useState(null);
   const [form, setForm] = useState({ kind: isInitialTopicLike ? 'topic' : mode === 'demo' ? 'demo' : mode === 'eval' ? 'eval' : 'memo', subKind: isInitialTopicLike ? initialTopicType : '', title: '', body: '', sourceUrl: '', timelineText: '', ownerText: '', progress: 0, meetingDocUrl: '', meetingMinutesUrl: '' });
@@ -221,7 +223,6 @@ export function ContentHub({ mode = 'all', initialTopicType = 'daily' }) {
       toast.error('请先在 Build 里创建一个项目，用来承载例会记录');
       return;
     }
-    const endpoint = isTopics ? 'parse-weekly-topics' : 'import-minutes';
     if (isTopics && !minutes.meetingDocUrl) {
       toast.error('请填写周会文档链接');
       return;
@@ -231,7 +232,7 @@ export function ContentHub({ mode = 'all', initialTopicType = 'daily' }) {
     else setImporting(true);
     let res;
     try {
-      res = await post(`/api/projects/${targetProjectId}/content/${endpoint}`, minutes);
+      res = await post(`/api/projects/${targetProjectId}/content/${isTopics ? 'preview-weekly-topics' : 'import-minutes'}`, minutes);
     } catch (err) {
       res = { ok: false, error: err.message || '请求失败，请重试' };
     } finally {
@@ -240,24 +241,77 @@ export function ContentHub({ mode = 'all', initialTopicType = 'daily' }) {
     }
     if (res.ok) {
       if (isTopics) {
-        const daily = res.data?.dailyTopics?.length || 0;
-        const business = res.data?.businessTopics?.length || 0;
-        const deep = res.data?.deepTopics?.length || 0;
-        const weekly = res.data?.weeklyRecommendations?.length || 0;
-        const frontier = res.data?.frontierTopics?.length || 0;
-        const prompt = res.data?.promptTopics?.length || 0;
-        const pushed = (res.data?.notifications || []).filter((item) => item.pushed).length;
-        toast.success(res.data?.fallback
-          ? `DeepSeek 解析失败，但已先回传飞书内容，生成 ${daily} 个待整理选题`
-          : `已解析 ${daily} 个日常、${business} 个商务、${deep} 个深度、${weekly} 个本周项目推荐、${frontier} 个 Frontier、${prompt} 个 Prompt PR，已推送 ${pushed} 位负责人`);
+        const batch = res.data || {};
+        const candidates = flattenTopicCandidates(batch.parsed);
+        setTopicCandidateBatch(batch);
+        setTopicCandidateEnabled(Object.fromEntries(candidates.map((candidate) => [candidate.key, true])));
+        toast.success(`已解析出 ${candidates.length} 个候选，先确认再更新卡片`);
       } else {
         toast.success(`已导入例会，并生成 ${res.data?.topics?.length || 0} 条候选选题`);
+        setMinutes({ title: '', meetingDocUrl: '', meetingMinutesUrl: '', transcript: '' });
+        loadItems();
       }
-      setMinutes({ title: '', meetingDocUrl: '', meetingMinutesUrl: '', transcript: '' });
-      loadItems();
     } else {
       if (isTopics) setTopicParseError(res.error || '解析失败');
       toast.error(res.error || '导入失败');
+    }
+  }
+
+  async function confirmTopicCandidates() {
+    const targetProjectId = projectId || selectedProjectId;
+    const parsed = filterTopicCandidates(topicCandidateBatch?.parsed, topicCandidateEnabled);
+    const selectedCount = flattenTopicCandidates(parsed).length;
+    if (!selectedCount) {
+      toast.error('请至少保留一个候选选题');
+      return;
+    }
+    setParsingTopics(true);
+    const res = await post(`/api/projects/${targetProjectId}/content/confirm-weekly-topics`, {
+      parsed,
+      source: topicCandidateBatch?.source,
+      fallback: topicCandidateBatch?.fallback,
+      aiError: topicCandidateBatch?.aiError,
+      meetingDocUrl: topicCandidateBatch?.source?.meetingDoc?.url || minutes.meetingDocUrl,
+      title: minutes.title,
+    });
+    setParsingTopics(false);
+    if (res.ok) {
+      const pushed = (res.data?.notifications || []).filter((item) => item.pushed).length;
+      toast.success(`已更新 ${selectedCount} 个选题卡片，推送 ${pushed} 位负责人`);
+      setTopicCandidateBatch(null);
+      setTopicCandidateEnabled({});
+      setMinutes({ title: '', meetingDocUrl: '', meetingMinutesUrl: '', transcript: '' });
+      loadItems();
+      loadTopicOverview();
+    } else {
+      toast.error(res.error || '确认失败');
+    }
+  }
+
+  async function parseTopicDiscussions() {
+    const targetProjectId = projectId || selectedProjectId;
+    if (!targetProjectId) {
+      toast.error('请先选择一个 Build 项目');
+      return;
+    }
+    if (!minutes.meetingMinutesUrl && !minutes.transcript) {
+      toast.error('请填写周会速记文档链接，或粘贴速记文字');
+      return;
+    }
+    setParsingDiscussions(true);
+    const res = await post(`/api/projects/${targetProjectId}/content/parse-topic-discussions`, {
+      title: minutes.title,
+      meetingMinutesUrl: minutes.meetingMinutesUrl,
+      transcript: minutes.transcript,
+    });
+    setParsingDiscussions(false);
+    if (res.ok) {
+      toast.success(`已给 ${res.data?.updatedTopics?.length || 0} 个选题补充周会讨论`);
+      setMinutes((current) => ({ ...current, meetingMinutesUrl: '', transcript: '' }));
+      loadItems();
+    } else {
+      setTopicParseError(res.error || '速记解析失败');
+      toast.error(res.error || '速记解析失败');
     }
   }
 
@@ -353,27 +407,6 @@ export function ContentHub({ mode = 'all', initialTopicType = 'daily' }) {
     }
   }
 
-  async function saveTopicDetails(item) {
-    const targetProjectId = item.project_id || projectId;
-    const draft = topicFieldDrafts[item.id] || {};
-    const res = await put(`/api/projects/${targetProjectId}/content/${item.id}/topic-details`, {
-      title: draft.title ?? item.title,
-      body: draft.body ?? topicCardBody(item),
-      currentProgress: draft.currentProgress ?? topicProgressText(item),
-    });
-    if (res.ok) {
-      setItems((current) => current.map((memo) => (memo.id === item.id ? res.data : memo)));
-      setTopicFieldDrafts((drafts) => {
-        const next = { ...drafts };
-        delete next[item.id];
-        return next;
-      });
-      toast.success('卡片已保存');
-    } else {
-      toast.error(res.error || '保存失败');
-    }
-  }
-
   async function saveTopicDocLinks(item) {
     const targetProjectId = item.project_id || projectId;
     const docLinks = topicDocLinkDrafts[item.id] || topicDocLinks(item);
@@ -435,6 +468,38 @@ export function ContentHub({ mode = 'all', initialTopicType = 'daily' }) {
     ].filter(Boolean).join('\n\n');
   }
 
+  function flattenTopicCandidates(parsed = {}) {
+    const groups = [
+      ['dailyTopics', 'daily', '日常选题'],
+      ['weeklyRecommendations', 'weekly_recommendation', '本周项目推荐'],
+      ['businessTopics', 'business', '商务选题'],
+      ['deepTopics', 'deep', '深度选题'],
+      ['frontierTopics', 'frontier', 'Frontier'],
+      ['promptTopics', 'prompt', 'Prompt PR'],
+    ];
+    return groups.flatMap(([groupKey, subKind, label]) => (
+      (parsed?.[groupKey] || []).map((topic, index) => ({
+        ...topic,
+        groupKey,
+        subKind,
+        label,
+        index,
+        key: `${groupKey}-${index}`,
+      }))
+    ));
+  }
+
+  function filterTopicCandidates(parsed = {}, enabled = {}) {
+    const next = {};
+    for (const candidate of flattenTopicCandidates(parsed)) {
+      if (!enabled[candidate.key]) continue;
+      if (!next[candidate.groupKey]) next[candidate.groupKey] = [];
+      const { groupKey, subKind, label, index, key, ...topic } = candidate;
+      next[groupKey].push(topic);
+    }
+    return next;
+  }
+
   function topicDetailSections(item) {
     const sections = {
       intro: '',
@@ -475,23 +540,6 @@ export function ContentHub({ mode = 'all', initialTopicType = 'daily' }) {
     if (item.draft_doc_url) return item.editor_notes ? '编辑建议已返回' : '已提交初稿';
     if (Number(item.progress || 0) > 0) return '等待提交初稿';
     return '等待提交初稿';
-  }
-
-  function topicFieldValue(item, field) {
-    if (field === 'title') return topicFieldDrafts[item.id]?.title ?? item.title ?? '';
-    if (field === 'body') return topicFieldDrafts[item.id]?.body ?? topicCardBody(item);
-    if (field === 'currentProgress') return topicFieldDrafts[item.id]?.currentProgress ?? topicProgressText(item);
-    return '';
-  }
-
-  function setTopicField(item, field, value) {
-    setTopicFieldDrafts((drafts) => ({
-      ...drafts,
-      [item.id]: {
-        ...(drafts[item.id] || {}),
-        [field]: value,
-      },
-    }));
   }
 
   function topicWeekPlans(item) {
@@ -607,32 +655,56 @@ export function ContentHub({ mode = 'all', initialTopicType = 'daily' }) {
 
   const topicParserPanel = isTopics ? (
     <div className="rounded-xl border border-emerald-100 bg-white p-6 shadow-sm shadow-emerald-950/5">
-      <div className="grid gap-5 xl:grid-cols-[minmax(420px,0.9fr)_1.1fr] xl:items-start">
+      <div className="grid gap-5 xl:grid-cols-[minmax(360px,0.85fr)_1.15fr] xl:items-start">
         <div className="min-w-0">
           <p className="flex items-center gap-2 text-sm font-semibold text-emerald-700">
             <CalendarDays size={16} />周会选题解析台
           </p>
           <h2 className="mt-2 max-w-2xl text-2xl font-semibold leading-tight tracking-normal text-slate-950">
-            连接周会文档和速记文档，自动生成选题板块
+            先确认选题，再补周会编辑意见
           </h2>
           <p className="mt-3 max-w-md text-sm leading-7 text-slate-600">
-            系统会读取飞书周会文档和速记文档，再调用 DeepSeek 解析日常选题、商务选题、深度选题和本周项目推荐；Frontier 与 Prompt PR 会自动分流到左侧对应栏目。
+            周会文档只负责抽取候选选题；速记文档只负责给已确认选题补充讨论结果和编辑建议。确认前不会更新卡片。
           </p>
         </div>
         <div className="space-y-3">
-          <form onSubmit={importMinutes} className="grid w-full gap-3 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)_120px]">
+          <form onSubmit={importMinutes} className="rounded-lg border border-slate-200 bg-slate-50 p-3">
+            <div className="mb-3 flex items-center gap-2">
+              <span className="flex h-6 w-6 items-center justify-center rounded-full bg-emerald-600 text-xs font-semibold text-white">1</span>
+              <div>
+                <p className="text-sm font-semibold text-slate-950">贴周会文档，生成候选选题</p>
+                <p className="text-xs text-slate-500">先让你确认，不直接写入看板。</p>
+              </div>
+            </div>
+            <div className="grid w-full gap-3 lg:grid-cols-[minmax(0,1fr)_120px]">
             <label className="block">
               <span className="mb-1.5 block text-xs font-medium text-slate-500">周会文档链接</span>
               <input value={minutes.meetingDocUrl} onChange={(event) => setMinutes({ ...minutes, meetingDocUrl: event.target.value })} placeholder="https://xxx.feishu.cn/docx/..." className="w-full rounded-md border border-slate-200 px-3 py-2.5 text-sm outline-none focus:border-emerald-400" />
             </label>
-            <label className="block">
-              <span className="mb-1.5 block text-xs font-medium text-slate-500">周会速记文档链接（可选）</span>
-              <input value={minutes.meetingMinutesUrl} onChange={(event) => setMinutes({ ...minutes, meetingMinutesUrl: event.target.value })} placeholder="https://xxx.feishu.cn/wiki/... 或 /docx/..." className="w-full rounded-md border border-slate-200 px-3 py-2.5 text-sm outline-none focus:border-emerald-400" />
-            </label>
             <button disabled={parsingTopics} className="mt-5 rounded-md bg-emerald-600 px-3 py-2.5 text-sm font-semibold text-white transition hover:bg-emerald-500 disabled:opacity-60">
-              {parsingTopics ? '解析中' : '解析'}
+              {parsingTopics ? '解析中' : '解析候选'}
             </button>
+            </div>
           </form>
+          <div className="rounded-lg border border-slate-200 bg-white p-3">
+            <div className="mb-3 flex items-center gap-2">
+              <span className="flex h-6 w-6 items-center justify-center rounded-full bg-slate-950 text-xs font-semibold text-white">2</span>
+              <div>
+                <p className="text-sm font-semibold text-slate-950">贴周会速记，匹配编辑意见</p>
+                <p className="text-xs text-slate-500">只更新已确认选题的详情页右侧栏。</p>
+              </div>
+            </div>
+            <div className="grid gap-3 lg:grid-cols-[minmax(0,1fr)_120px]">
+              <label className="block">
+                <span className="mb-1.5 block text-xs font-medium text-slate-500">周会速记文档链接</span>
+                <input value={minutes.meetingMinutesUrl} onChange={(event) => setMinutes({ ...minutes, meetingMinutesUrl: event.target.value })} placeholder="https://xxx.feishu.cn/docx/..." className="w-full rounded-md border border-slate-200 px-3 py-2.5 text-sm outline-none focus:border-emerald-400" />
+              </label>
+              <button type="button" onClick={parseTopicDiscussions} disabled={parsingDiscussions} className="mt-5 rounded-md border border-slate-200 bg-white px-3 py-2.5 text-sm font-semibold text-slate-800 transition hover:bg-slate-50 disabled:opacity-60">
+                {parsingDiscussions ? '解析中' : '解析意见'}
+              </button>
+              <textarea value={minutes.transcript} onChange={(event) => setMinutes({ ...minutes, transcript: event.target.value })} placeholder="可选：速记太长或链接读不到时，把导出的文字粘贴在这里" rows={3} className="lg:col-span-2 rounded-md border border-slate-200 px-3 py-2 text-sm outline-none focus:border-emerald-400" />
+            </div>
+          </div>
           {topicParseError ? (
             <div className="flex flex-col gap-3 rounded-md border border-red-100 bg-red-50 px-3 py-3 text-sm text-red-700 sm:flex-row sm:items-center sm:justify-between">
               <span>{topicParseError}</span>
@@ -641,6 +713,36 @@ export function ContentHub({ mode = 'all', initialTopicType = 'daily' }) {
                   <LogIn size={13} />重新飞书授权
                 </button>
               ) : null}
+            </div>
+          ) : null}
+          {topicCandidateBatch ? (
+            <div className="rounded-lg border border-emerald-100 bg-emerald-50/50 p-3">
+              <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                <div>
+                  <p className="text-sm font-semibold text-emerald-900">待确认选题</p>
+                  <p className="text-xs text-emerald-800">取消勾选不需要的条目，再更新卡片。</p>
+                </div>
+                <button type="button" onClick={confirmTopicCandidates} disabled={parsingTopics} className="rounded-md bg-emerald-600 px-3 py-2 text-sm font-semibold text-white transition hover:bg-emerald-500 disabled:opacity-60">
+                  确认并更新卡片
+                </button>
+              </div>
+              <div className="mt-3 max-h-72 space-y-2 overflow-auto pr-1">
+                {flattenTopicCandidates(topicCandidateBatch.parsed).map((candidate) => (
+                  <label key={candidate.key} className="flex gap-3 rounded-md border border-emerald-100 bg-white p-3">
+                    <input
+                      type="checkbox"
+                      checked={topicCandidateEnabled[candidate.key] !== false}
+                      onChange={(event) => setTopicCandidateEnabled((current) => ({ ...current, [candidate.key]: event.target.checked }))}
+                      className="mt-1 h-4 w-4 rounded border-slate-300 text-emerald-600"
+                    />
+                    <span className="min-w-0">
+                      <span className="inline-flex rounded-md bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-600">{candidate.label}</span>
+                      <span className="mt-1 block text-sm font-semibold text-slate-950">{candidate.title || '未命名选题'}</span>
+                      <span className="mt-1 line-clamp-2 block text-xs leading-5 text-slate-500">{candidate.summary || '暂无摘要'}</span>
+                    </span>
+                  </label>
+                ))}
+              </div>
             </div>
           ) : null}
         </div>
@@ -814,6 +916,8 @@ export function ContentHub({ mode = 'all', initialTopicType = 'daily' }) {
           <button onClick={() => setSelectedTopicId('')} className="mb-5 inline-flex items-center rounded-md border border-slate-200 px-3 py-2 text-sm font-semibold text-slate-600 transition hover:bg-slate-50">
             返回选题列表
           </button>
+          <div className="grid gap-5 xl:grid-cols-[minmax(0,1fr)_320px]">
+          <div className="min-w-0">
           <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
             <div className="min-w-0">
               <div className="flex flex-wrap items-center gap-2">
@@ -845,7 +949,6 @@ export function ContentHub({ mode = 'all', initialTopicType = 'daily' }) {
           {selectedTopic.sub_kind === 'deep' ? (
           <div className="mt-4 grid gap-3 md:grid-cols-2">
             <TopicDetailBlock title="阶段性进度" value={topicDetailSections(selectedTopic).phaseProgress || '暂无进度更新'} />
-            <TopicDetailBlock title="周会讨论纪要" value={topicDetailSections(selectedTopic).meetingDiscussion || '等待从周会速记中同步讨论纪要'} />
             <TopicDetailBlock title="采访原文" value={topicDetailSections(selectedTopic).interviewRaw || '等待飞书原文链接或摘录'} />
             <TopicDetailBlock title="稿件框架" value={topicDetailSections(selectedTopic).outline || '等待补充稿件框架'} />
           </div>
@@ -924,6 +1027,24 @@ export function ContentHub({ mode = 'all', initialTopicType = 'daily' }) {
                 <Archive size={14} />归档
               </button>
             ) : null}
+          </div>
+          </div>
+          <aside className="rounded-lg border border-amber-100 bg-amber-50/60 p-4">
+            <p className="flex items-center gap-2 text-sm font-semibold text-amber-900">
+              <MessageSquareText size={16} />周会讨论 / 编辑意见
+            </p>
+            <p className="mt-2 whitespace-pre-wrap text-sm leading-6 text-amber-950">
+              {selectedTopic.editor_notes || topicDetailSections(selectedTopic).meetingDiscussion || '第二步解析周会速记后，这里会显示大家围绕这个选题的讨论结果和编辑意见。'}
+            </p>
+            <div className="mt-4 space-y-2 border-t border-amber-100 pt-3">
+              {selectedTopic.meeting_minutes_url ? (
+                <a href={selectedTopic.meeting_minutes_url} target="_blank" rel="noreferrer" className="block text-sm font-medium text-amber-900 hover:text-amber-700">打开周会速记文档</a>
+              ) : null}
+              {selectedTopic.meeting_doc_url ? (
+                <a href={selectedTopic.meeting_doc_url} target="_blank" rel="noreferrer" className="block text-sm font-medium text-amber-900 hover:text-amber-700">打开周会文档</a>
+              ) : null}
+            </div>
+          </aside>
           </div>
         </article>
       ) : loading ? (

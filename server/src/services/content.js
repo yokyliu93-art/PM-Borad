@@ -764,14 +764,22 @@ async function notifyTopicOwner({ ownerName, projectId, title, firstDraftAt, sum
 }
 
 export async function parseWeeklyTopics(projectId, userId, fields = {}) {
+  const preview = await previewWeeklyTopics(projectId, userId, fields);
+  return confirmWeeklyTopics(projectId, userId, {
+    ...fields,
+    parsed: preview.parsed,
+    source: preview.source,
+    fallback: preview.fallback,
+    aiError: preview.aiError,
+  });
+}
+
+export async function previewWeeklyTopics(projectId, userId, fields = {}) {
   const meetingDocUrl = String(fields.meetingDocUrl || fields.meeting_doc_url || '').trim();
-  const meetingNotesUrl = String(fields.meetingNotesUrl || fields.meeting_notes_url || fields.meetingMinutesUrl || fields.meeting_minutes_url || '').trim();
   if (!meetingDocUrl) throw new Error('请提供周会文档链接');
 
-  const [meetingDoc, meetingNotes] = await Promise.all([
-    feishuService.fetchDocContent(userId, meetingDocUrl),
-    meetingNotesUrl ? feishuService.fetchDocContent(userId, meetingNotesUrl) : Promise.resolve({ title: '', url: '', content: '' }),
-  ]);
+  const meetingDoc = await feishuService.fetchDocContent(userId, meetingDocUrl);
+  const meetingNotes = { title: '', url: '', content: '' };
   let parsed;
   let aiError = '';
   try {
@@ -785,22 +793,41 @@ export async function parseWeeklyTopics(projectId, userId, fields = {}) {
     console.error('[content] weekly topics AI fallback:', aiError);
     parsed = fallbackWeeklyTopics({ meetingDoc, meetingNotes, aiError });
   }
+  return {
+    parsed,
+    fallback: !!parsed.fallback,
+    aiError,
+    source: {
+      meetingDoc: { title: meetingDoc.title, url: meetingDocUrl },
+    },
+  };
+}
+
+export async function confirmWeeklyTopics(projectId, userId, fields = {}) {
+  const parsed = fields.parsed || {};
+  const dailyTopics = parsed.dailyTopics || [];
+  const businessTopics = parsed.businessTopics || [];
+  const deepTopics = parsed.deepTopics || [];
+  const weeklyRecommendations = parsed.weeklyRecommendations || [];
+  const frontierTopics = parsed.frontierTopics || [];
+  const promptTopics = parsed.promptTopics || [];
+  const meetingDocUrl = String(fields.meetingDocUrl || fields.meeting_doc_url || fields.source?.meetingDoc?.url || '').trim();
+  const meetingDocTitle = String(fields.source?.meetingDoc?.title || fields.title || '周会选题解析').trim();
   const meeting = create(projectId, userId, {
     kind: 'meeting',
-    title: fields.title || meetingDoc.title || '周会选题解析',
+    title: fields.title || meetingDocTitle || '周会选题解析',
     body: [
-      `周会文档：${meetingDoc.title || meetingDocUrl}`,
-      meetingNotesUrl ? `周会速记文档：${meetingNotes.title || meetingNotesUrl}` : '',
+      `周会文档：${meetingDocTitle || meetingDocUrl}`,
       parsed.fallback
-        ? `DeepSeek 解析失败，已先回传飞书文档内容，生成 ${parsed.dailyTopics.length} 个待整理选题。`
-        : `DeepSeek 已解析出 ${parsed.dailyTopics.length} 个日常选题、${parsed.businessTopics?.length || 0} 个商务选题、${parsed.deepTopics.length} 个深度选题、${parsed.weeklyRecommendations?.length || 0} 个本周项目推荐、${parsed.frontierTopics?.length || 0} 个 Frontier、${parsed.promptTopics?.length || 0} 个 Prompt PR。`,
+        ? `DeepSeek 解析失败，已先回传飞书文档内容，生成 ${dailyTopics.length} 个待整理选题。`
+        : `DeepSeek 已解析出 ${dailyTopics.length} 个日常选题、${businessTopics.length} 个商务选题、${deepTopics.length} 个深度选题、${weeklyRecommendations.length} 个本周项目推荐、${frontierTopics.length} 个 Frontier、${promptTopics.length} 个 Prompt PR。`,
     ].filter(Boolean).join('\n'),
     sourceUrl: meetingDocUrl,
     meetingDocUrl,
-    meetingMinutesUrl: meetingNotesUrl,
+    meetingMinutesUrl: '',
   });
 
-  const createdDaily = parsed.dailyTopics.map((topic) => createOrUpdateParsedTopic(projectId, userId, {
+  const createdDaily = dailyTopics.map((topic) => createOrUpdateParsedTopic(projectId, userId, {
     kind: 'topic',
     subKind: 'daily',
     title: topic.title || '未命名日常选题',
@@ -810,9 +837,9 @@ export async function parseWeeklyTopics(projectId, userId, fields = {}) {
     timelineText: topicTimelineText(topic, false),
     sourceUrl: meetingDocUrl,
     meetingDocUrl,
-    meetingMinutesUrl: meetingNotesUrl,
+    meetingMinutesUrl: '',
   }));
-  const createdBusiness = (parsed.businessTopics || []).map((topic) => createOrUpdateParsedTopic(projectId, userId, {
+  const createdBusiness = businessTopics.map((topic) => createOrUpdateParsedTopic(projectId, userId, {
     kind: 'topic',
     subKind: 'business',
     title: topic.title || '未命名商务选题',
@@ -822,9 +849,9 @@ export async function parseWeeklyTopics(projectId, userId, fields = {}) {
     timelineText: topicTimelineText(topic, false),
     sourceUrl: meetingDocUrl,
     meetingDocUrl,
-    meetingMinutesUrl: meetingNotesUrl,
+    meetingMinutesUrl: '',
   }));
-  const createdDeep = parsed.deepTopics.map((topic) => createOrUpdateParsedTopic(projectId, userId, {
+  const createdDeep = deepTopics.map((topic) => createOrUpdateParsedTopic(projectId, userId, {
     kind: 'topic',
     subKind: 'deep',
     title: topic.title || '未命名深度选题',
@@ -834,9 +861,9 @@ export async function parseWeeklyTopics(projectId, userId, fields = {}) {
     timelineText: topicTimelineText(topic, true),
     sourceUrl: meetingDocUrl,
     meetingDocUrl,
-    meetingMinutesUrl: meetingNotesUrl,
+    meetingMinutesUrl: '',
   }));
-  const createdWeekly = (parsed.weeklyRecommendations || []).map((topic) => createOrUpdateParsedTopic(projectId, userId, {
+  const createdWeekly = weeklyRecommendations.map((topic) => createOrUpdateParsedTopic(projectId, userId, {
     kind: 'topic',
     subKind: 'weekly_recommendation',
     title: topic.title || '未命名本周项目推荐',
@@ -846,9 +873,9 @@ export async function parseWeeklyTopics(projectId, userId, fields = {}) {
     timelineText: topicTimelineText(topic, false),
     sourceUrl: meetingDocUrl,
     meetingDocUrl,
-    meetingMinutesUrl: meetingNotesUrl,
+    meetingMinutesUrl: '',
   }));
-  const createdFrontier = (parsed.frontierTopics || []).map((topic) => createOrUpdateParsedTopic(projectId, userId, {
+  const createdFrontier = frontierTopics.map((topic) => createOrUpdateParsedTopic(projectId, userId, {
     kind: 'topic',
     subKind: 'frontier',
     title: topic.title || '未命名 Frontier',
@@ -862,9 +889,9 @@ export async function parseWeeklyTopics(projectId, userId, fields = {}) {
     timelineText: topicTimelineText(topic, false),
     sourceUrl: meetingDocUrl,
     meetingDocUrl,
-    meetingMinutesUrl: meetingNotesUrl,
+    meetingMinutesUrl: '',
   }));
-  const createdPrompt = (parsed.promptTopics || []).map((topic) => createOrUpdateParsedTopic(projectId, userId, {
+  const createdPrompt = promptTopics.map((topic) => createOrUpdateParsedTopic(projectId, userId, {
     kind: 'topic',
     subKind: 'prompt',
     title: topic.title || '未命名 Prompt PR',
@@ -874,12 +901,12 @@ export async function parseWeeklyTopics(projectId, userId, fields = {}) {
     timelineText: topicTimelineText(topic, false),
     sourceUrl: meetingDocUrl,
     meetingDocUrl,
-    meetingMinutesUrl: meetingNotesUrl,
+    meetingMinutesUrl: '',
   }));
 
   const boardUrl = `${config.clientUrl}/topics/daily`;
   const notifications = [];
-  for (const topic of [...parsed.dailyTopics, ...(parsed.businessTopics || []), ...parsed.deepTopics, ...(parsed.weeklyRecommendations || []), ...(parsed.frontierTopics || []), ...(parsed.promptTopics || [])]) {
+  for (const topic of [...dailyTopics, ...businessTopics, ...deepTopics, ...weeklyRecommendations, ...frontierTopics, ...promptTopics]) {
     if (!topic.owner) continue;
     notifications.push(await notifyTopicOwner({
       ownerName: topic.owner,
@@ -903,8 +930,46 @@ export async function parseWeeklyTopics(projectId, userId, fields = {}) {
     fallback: !!parsed.fallback,
     aiError,
     source: {
-      meetingDoc: { title: meetingDoc.title, url: meetingDocUrl },
-      meetingNotes: { title: meetingNotes.title, url: meetingNotesUrl },
+      meetingDoc: { title: meetingDocTitle, url: meetingDocUrl },
     },
+  };
+}
+
+export async function parseTopicDiscussions(projectId, userId, fields = {}) {
+  const meetingNotesUrl = String(fields.meetingNotesUrl || fields.meeting_notes_url || fields.meetingMinutesUrl || fields.meeting_minutes_url || '').trim();
+  const transcript = String(fields.transcript || '').trim();
+  if (!meetingNotesUrl && !transcript) throw new Error('请提供周会速记文档链接或粘贴速记文字');
+  const totalMembers = teamSize(projectId);
+  const topics = db.prepare(`
+    SELECT *
+    FROM content_memos
+    WHERE project_id = ? AND kind = 'topic' AND status != 'archived'
+    ORDER BY updated_at DESC, created_at DESC
+  `).all(projectId).map((row) => hydrateMemo(row, totalMembers));
+  if (!topics.length) throw new Error('还没有已确认选题，请先解析周会文档并确认入库');
+  const meetingNotes = meetingNotesUrl
+    ? await feishuService.fetchDocContent(userId, meetingNotesUrl)
+    : { title: fields.title || '粘贴的周会速记', url: '', content: transcript };
+  const parsed = await aiService.parseTopicDiscussions({ topics, meetingNotes });
+  const updates = [];
+  const updateStmt = db.prepare(`
+    UPDATE content_memos
+    SET editor_notes = ?, meeting_minutes_url = ?, updated_at = datetime('now')
+    WHERE id = ? AND project_id = ? AND kind = 'topic'
+  `);
+  for (const item of parsed.discussions) {
+    const topic = topics.find((candidate) => candidate.id === item.topicId);
+    if (!topic) continue;
+    const editorNotes = [
+      item.discussion ? `周会讨论：\n${item.discussion}` : '',
+      item.editorNotes ? `编辑意见：\n${item.editorNotes}` : '',
+    ].filter(Boolean).join('\n\n');
+    updateStmt.run(editorNotes, meetingNotesUrl, topic.id, projectId);
+    updates.push(get(projectId, topic.id, userId));
+  }
+  return {
+    updatedTopics: updates,
+    discussions: parsed.discussions,
+    source: { title: meetingNotes.title, url: meetingNotesUrl },
   };
 }
