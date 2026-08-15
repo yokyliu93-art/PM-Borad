@@ -815,59 +815,17 @@ export function ContentHub({ mode = 'all', initialTopicType = 'daily' }) {
             返回选题列表
           </button>
           <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
-            <div className="min-w-0 flex-1">
+            <div className="min-w-0">
               <div className="flex flex-wrap items-center gap-2">
                 <span className="rounded-md bg-emerald-50 px-2 py-1 text-xs font-medium text-emerald-700">{topicTypeLabels[selectedTopic.sub_kind] || '选题'}</span>
                 <span className="rounded-md bg-slate-100 px-2 py-1 text-xs font-medium text-slate-500">{topicProgressText(selectedTopic)}</span>
               </div>
-              {canEditTopicMeta(selectedTopic) ? (
-                <div className="mt-3 space-y-3">
-                  <input
-                    value={topicFieldValue(selectedTopic, 'title')}
-                    onChange={(event) => setTopicField(selectedTopic, 'title', event.target.value)}
-                    className="w-full rounded-md border border-slate-200 bg-white px-3 py-2 text-2xl font-semibold tracking-normal text-slate-950 outline-none transition focus:border-emerald-400"
-                  />
-                  <textarea
-                    value={topicFieldValue(selectedTopic, 'body')}
-                    onChange={(event) => setTopicField(selectedTopic, 'body', event.target.value)}
-                    rows={4}
-                    className="w-full max-w-3xl rounded-md border border-slate-200 bg-white px-3 py-2 text-sm leading-6 text-slate-700 outline-none transition focus:border-emerald-400"
-                  />
-                  <div className="grid gap-3 sm:grid-cols-[minmax(0,1fr)_auto] sm:items-end">
-                    <label>
-                      <span className="mb-1.5 block text-xs font-semibold text-slate-500">当前进度</span>
-                      <input
-                        value={topicFieldValue(selectedTopic, 'currentProgress')}
-                        onChange={(event) => setTopicField(selectedTopic, 'currentProgress', event.target.value)}
-                        className="w-full rounded-md border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-950 outline-none transition focus:border-emerald-400"
-                      />
-                    </label>
-                    <button onClick={() => saveTopicDetails(selectedTopic)} className="rounded-md bg-slate-950 px-4 py-2 text-sm font-semibold text-white transition hover:bg-slate-800">
-                      保存卡片
-                    </button>
-                  </div>
-                </div>
-              ) : (
-                <>
-                  <h3 className="mt-3 text-2xl font-semibold tracking-normal text-slate-950">{selectedTopic.title}</h3>
-                  <p className="mt-2 max-w-3xl whitespace-pre-wrap text-sm leading-6 text-slate-600">{topicCardBody(selectedTopic)}</p>
-                </>
-              )}
+              <h3 className="mt-3 text-2xl font-semibold tracking-normal text-slate-950">{selectedTopic.title}</h3>
+              <p className="mt-2 max-w-3xl whitespace-pre-wrap text-sm leading-6 text-slate-600">{topicCardBody(selectedTopic)}</p>
             </div>
             <div className="shrink-0 rounded-md border border-slate-200 bg-slate-50 p-3">
               <p className="text-xs font-semibold text-slate-500">执行人</p>
-              {canEditTopicMeta(selectedTopic) ? (
-                <select
-                  value={topicOwnerText(selectedTopic)}
-                  onChange={(event) => saveTopicOwner(selectedTopic, event.target.value)}
-                  className="mt-1 w-full rounded-md border border-slate-200 bg-white px-2 py-1.5 text-sm font-semibold text-slate-950 outline-none transition focus:border-emerald-400"
-                >
-                  {!teamMemberNames().includes(topicOwnerText(selectedTopic)) ? <option value={topicOwnerText(selectedTopic)}>{topicOwnerText(selectedTopic)}</option> : null}
-                  {teamMemberNames().map((name) => <option key={name} value={name}>{name}</option>)}
-                </select>
-              ) : (
-                <p className="mt-1 text-sm font-semibold text-slate-950">{topicOwnerText(selectedTopic)}</p>
-              )}
+              <p className="mt-1 text-sm font-semibold text-slate-950">{topicOwnerText(selectedTopic)}</p>
             </div>
           </div>
 
@@ -982,66 +940,25 @@ export function ContentHub({ mode = 'all', initialTopicType = 'daily' }) {
                     <span className="rounded-md bg-emerald-50 px-2 py-1 text-xs font-medium text-emerald-700">{topicTypeLabels[item.sub_kind] || kindLabels[item.kind] || 'Memo'}</span>
                     {hasTopicMemo(item) ? <span className="rounded-md bg-sky-50 px-2 py-1 text-xs font-medium text-sky-700">有 memo / 文档</span> : null}
                   </div>
-                  {canEditTopicMeta(item) ? (
-                    <input
-                      value={topicFieldValue(item, 'title')}
-                      onChange={(event) => setTopicField(item, 'title', event.target.value)}
-                      className="mt-4 w-full rounded-md border border-slate-200 bg-white px-3 py-2 text-xl font-semibold tracking-normal text-slate-950 outline-none transition focus:border-emerald-400"
-                    />
-                  ) : (
-                    <h3 className="mt-4 text-xl font-semibold tracking-normal text-slate-950">{item.title}</h3>
-                  )}
+                  <h3 className="mt-4 text-xl font-semibold tracking-normal text-slate-950">{item.title}</h3>
                   <div className="mt-4 rounded-md border border-slate-200 bg-slate-50 p-3">
                     <p className="text-xs font-semibold text-slate-500">主题</p>
-                    {canEditTopicMeta(item) ? (
-                      <textarea
-                        value={topicFieldValue(item, 'body')}
-                        onChange={(event) => setTopicField(item, 'body', event.target.value)}
-                        rows={4}
-                        className="mt-1 w-full rounded-md border border-slate-200 bg-white px-3 py-2 text-sm leading-6 text-slate-700 outline-none transition focus:border-emerald-400"
-                      />
-                    ) : (
-                      <p className="mt-1 line-clamp-3 text-sm leading-6 text-slate-700">{topicCardBody(item)}</p>
-                    )}
+                    <p className="mt-1 line-clamp-3 text-sm leading-6 text-slate-700">{topicCardBody(item)}</p>
                   </div>
                   <div className="mt-3 grid gap-3 md:grid-cols-2">
                     <div className="rounded-md border border-slate-200 bg-slate-50 p-3">
                       <p className="text-xs font-semibold text-slate-500">负责人</p>
-                      {canEditTopicMeta(item) ? (
-                        <select
-                          value={topicOwnerText(item)}
-                          onChange={(event) => saveTopicOwner(item, event.target.value)}
-                          className="mt-1 w-full rounded-md border border-slate-200 bg-white px-2 py-1.5 text-sm font-semibold text-slate-950 outline-none transition focus:border-emerald-400"
-                        >
-                          {!teamMemberNames().includes(topicOwnerText(item)) ? <option value={topicOwnerText(item)}>{topicOwnerText(item)}</option> : null}
-                          {teamMemberNames().map((name) => <option key={name} value={name}>{name}</option>)}
-                        </select>
-                      ) : (
-                        <p className="mt-1 text-sm font-semibold text-slate-950">{topicOwnerText(item)}</p>
-                      )}
+                      <p className="mt-1 text-sm font-semibold text-slate-950">{topicOwnerText(item)}</p>
                     </div>
                     <div className="rounded-md border border-slate-200 bg-slate-50 p-3">
                       <p className="text-xs font-semibold text-slate-500">当前进度</p>
-                      {canEditTopicMeta(item) ? (
-                        <input
-                          value={topicFieldValue(item, 'currentProgress')}
-                          onChange={(event) => setTopicField(item, 'currentProgress', event.target.value)}
-                          className="mt-1 w-full rounded-md border border-slate-200 bg-white px-2 py-1.5 text-sm font-semibold text-slate-950 outline-none transition focus:border-emerald-400"
-                        />
-                      ) : (
-                        <p className="mt-1 text-sm font-semibold text-slate-950">{topicProgressText(item)}</p>
-                      )}
+                      <p className="mt-1 text-sm font-semibold text-slate-950">{topicProgressText(item)}</p>
                     </div>
                   </div>
                   <div className="mt-4 flex flex-wrap gap-2">
                     <button onClick={() => setSelectedTopicId(item.id)} className="inline-flex items-center justify-center rounded-md bg-slate-950 px-4 py-2 text-sm font-semibold text-white transition hover:bg-slate-800">
                       查看详情
                     </button>
-                    {canEditTopicMeta(item) ? (
-                      <button onClick={() => saveTopicDetails(item)} className="inline-flex items-center justify-center rounded-md border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-700 transition hover:bg-slate-50">
-                        保存卡片
-                      </button>
-                    ) : null}
                   </div>
                 </>
               ) : (
