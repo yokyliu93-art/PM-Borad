@@ -1037,8 +1037,8 @@ export function ContentHub({ mode = 'all', initialTopicType = 'daily' }) {
               <div className="grid gap-4 lg:grid-cols-[0.9fr_1.1fr]">
                 <div className="rounded-lg border border-slate-200 bg-white p-4 lg:col-span-2">
                   <p className="text-sm font-semibold text-slate-950">组队与分工</p>
-                  <p className="mt-1 text-xs leading-5 text-slate-500">预留三个协作位，可以选一个、两个或三个人；发起人也可以选自己。</p>
-                  <MemberSlotSelect
+                  <p className="mt-1 text-xs leading-5 text-slate-500">横向点选团队成员即可，可以多选；具体分工放到飞书文档里写细。</p>
+                  <MemberTagSelect
                     members={teamMemberNames()}
                     value={docLinkValue(selectedTopic, 'members')}
                     disabled={!canEditTopicDocLinks(selectedTopic)}
@@ -1074,6 +1074,7 @@ export function ContentHub({ mode = 'all', initialTopicType = 'daily' }) {
               <div className="rounded-lg border border-slate-200 bg-white p-4">
                 <p className="text-sm font-semibold text-slate-950">阶段性进度更新</p>
                 <p className="mt-1 text-xs leading-5 text-slate-500">这里主要由 AI 自动追加，比如今天采访谁、资料补到哪里、卡点是什么。</p>
+                <DeepNewsFeed value={docLinkValue(selectedTopic, 'phaseProgress') || topicDetailSections(selectedTopic).phaseProgress} />
                 <DeepTextArea
                   label="AI 进度记录"
                   value={docLinkValue(selectedTopic, 'phaseProgress') || topicDetailSections(selectedTopic).phaseProgress}
@@ -1098,7 +1099,6 @@ export function ContentHub({ mode = 'all', initialTopicType = 'daily' }) {
                 <div className="mt-3 grid gap-3 md:grid-cols-2">
                   {[
                     ['sourceDoc', '选题文档'],
-                    ['meetingNotes', '周会编辑意见'],
                     ['techIntro', '要点整理'],
                     ['outline', '写作提纲'],
                     ['draft', '稿件链接'],
@@ -1113,6 +1113,13 @@ export function ContentHub({ mode = 'all', initialTopicType = 'daily' }) {
                     />
                   ))}
                 </div>
+                <DeepTextArea
+                  label="周会讨论和编辑意见（解析结果）"
+                  value={docLinkValue(selectedTopic, 'meetingNotes') || selectedTopic.editor_notes || topicDetailSections(selectedTopic).meetingDiscussion}
+                  disabled={!canEditTopicDocLinks(selectedTopic)}
+                  placeholder="解析周会速记后，把兆洋或骆老师给出的编辑意见、指导思想和讨论结论沉淀到这里"
+                  onChange={(value) => setTopicDocLink(selectedTopic, 'meetingNotes', value)}
+                />
                 <div className="mt-4 rounded-md border border-amber-100 bg-amber-50/60 p-3">
                   <span className="text-xs font-semibold text-amber-800">编辑建议</span>
                   <div className="mt-2 grid gap-3 lg:grid-cols-[1fr_auto] lg:items-end">
@@ -1607,16 +1614,47 @@ function DeepTextArea({ label, value, disabled, placeholder, onChange }) {
   );
 }
 
-function MemberSlotSelect({ members, value, disabled, onChange }) {
+function DeepNewsFeed({ value }) {
+  const items = String(value || '')
+    .split(/\n+/)
+    .map((line) => line.trim().replace(/^[-•]\s*/, ''))
+    .filter(Boolean);
+
+  if (!items.length) {
+    return (
+      <div className="mt-3 rounded-lg border border-dashed border-slate-200 bg-slate-50 px-4 py-5 text-sm text-slate-500">
+        等待 AI 回传阶段性进度
+      </div>
+    );
+  }
+
+  return (
+    <div className="mt-3 max-h-72 overflow-y-auto rounded-lg border border-slate-200 bg-slate-50">
+      {items.map((item, index) => (
+        <div key={`${item}-${index}`} className="flex gap-3 border-b border-slate-200/70 px-4 py-3 last:border-b-0">
+          <span className="mt-1 h-2 w-2 shrink-0 rounded-full bg-emerald-500" />
+          <div className="min-w-0">
+            <p className="text-xs font-semibold text-slate-400">更新 {index + 1}</p>
+            <p className="mt-1 text-sm leading-6 text-slate-800">{item}</p>
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+}
+
+function MemberTagSelect({ members, value, disabled, onChange }) {
   const selected = String(value || '')
     .split(/[、,，\n]/)
     .map((name) => name.trim())
     .filter(Boolean);
+  const selectedSet = new Set(selected);
 
-  function setSlot(index, name) {
+  function toggle(name) {
     if (disabled) return;
-    const next = [selected[0] || '', selected[1] || '', selected[2] || ''];
-    next[index] = name;
+    const next = selectedSet.has(name)
+      ? selected.filter((item) => item !== name)
+      : [...selected, name];
     onChange(next.filter(Boolean).join('、'));
   }
 
@@ -1630,21 +1668,21 @@ function MemberSlotSelect({ members, value, disabled, onChange }) {
 
   return (
     <div className="mt-3">
-      <div className="grid gap-3 md:grid-cols-3">
-        {[0, 1, 2].map((index) => (
-          <label key={index} className="block">
-            <span className="text-xs font-semibold text-slate-500">协作人 {index + 1}</span>
-            <select
-              value={selected[index] || ''}
+      <div className="flex flex-nowrap gap-2 overflow-x-auto pb-1">
+        {members.map((name) => {
+          const active = selectedSet.has(name);
+          return (
+            <button
+              key={name}
+              type="button"
               disabled={disabled}
-              onChange={(event) => setSlot(index, event.target.value)}
-              className="mt-1.5 w-full rounded-md border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-800 outline-none transition focus:border-emerald-400 disabled:bg-slate-50 disabled:text-slate-500"
+              onClick={() => toggle(name)}
+              className={`shrink-0 rounded-full border px-4 py-2 text-sm font-semibold transition disabled:cursor-not-allowed disabled:opacity-70 ${active ? 'border-emerald-200 bg-emerald-50 text-emerald-700' : 'border-slate-200 bg-white text-slate-600 hover:bg-slate-50'}`}
             >
-              <option value="">不选择</option>
-              {members.map((name) => <option key={name} value={name}>{name}</option>)}
-            </select>
-          </label>
-        ))}
+              {name}
+            </button>
+          );
+        })}
       </div>
       <p className="mt-3 text-xs leading-5 text-slate-500">已选择：{selected.length ? selected.join('、') : '暂无'}</p>
     </div>
