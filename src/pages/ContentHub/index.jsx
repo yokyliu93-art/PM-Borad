@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useParams } from 'react-router-dom';
 import toast from 'react-hot-toast';
-import { Archive, BookOpenText, CalendarDays, Copy, ExternalLink, FilePlus2, FlaskConical, LogIn, MessageSquareText, Sparkles, ThumbsUp, UserCheck, Vote } from 'lucide-react';
+import { BookOpenText, CalendarDays, Copy, ExternalLink, FilePlus2, FlaskConical, LogIn, MessageSquareText, Sparkles, ThumbsUp, Trash2, UserCheck, Vote } from 'lucide-react';
 import { get, post, put, del } from '../../lib/api';
 import { useStore } from '../../store';
 import { Avatar } from '../../components/ui/Avatar';
@@ -643,13 +643,14 @@ export function ContentHub({ mode = 'all', initialTopicType = 'daily' }) {
   }
 
   async function archiveTopic(item) {
+    if (!window.confirm(`确定删除「${item.title}」吗？删除后它不会再出现在选题列表里。`)) return;
     const targetProjectId = item.project_id || projectId;
     const res = await post(`/api/projects/${targetProjectId}/content/${item.id}/archive-topic`, {});
     if (res.ok) {
       setItems((current) => current.filter((memo) => memo.id !== item.id));
-      toast.success('已归档');
+      toast.success('已删除');
     } else {
-      toast.error(res.error || '归档失败');
+      toast.error(res.error || '删除失败');
     }
   }
 
@@ -1024,7 +1025,7 @@ export function ContentHub({ mode = 'all', initialTopicType = 'daily' }) {
             </div>
             {canArchiveTopic(selectedTopic) ? (
               <button onClick={() => archiveTopic(selectedTopic)} className="inline-flex items-center justify-center gap-2 rounded-md border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-700 transition hover:bg-slate-50">
-                <Archive size={14} />归档
+                <Trash2 size={14} />删除选题
               </button>
             ) : null}
           </div>
@@ -1080,6 +1081,11 @@ export function ContentHub({ mode = 'all', initialTopicType = 'daily' }) {
                     <button onClick={() => setSelectedTopicId(item.id)} className="inline-flex items-center justify-center rounded-md bg-slate-950 px-4 py-2 text-sm font-semibold text-white transition hover:bg-slate-800">
                       查看详情
                     </button>
+                    {canArchiveTopic(item) ? (
+                      <button onClick={() => archiveTopic(item)} className="inline-flex items-center justify-center gap-2 rounded-md border border-red-100 bg-white px-3 py-2 text-sm font-semibold text-red-600 transition hover:bg-red-50">
+                        <Trash2 size={14} />删除
+                      </button>
+                    ) : null}
                   </div>
                 </>
               ) : (
@@ -1205,7 +1211,7 @@ export function ContentHub({ mode = 'all', initialTopicType = 'daily' }) {
 
                   {canArchiveTopic(item) ? (
                     <button onClick={() => archiveTopic(item)} className="inline-flex items-center justify-center gap-2 rounded-md border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-700 transition hover:bg-slate-50">
-                      <Archive size={14} />归档
+                      <Trash2 size={14} />删除
                     </button>
                   ) : null}
                 </div>
