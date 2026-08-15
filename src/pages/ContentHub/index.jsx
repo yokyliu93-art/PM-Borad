@@ -1,5 +1,5 @@
-import { useEffect, useMemo, useState } from 'react';
-import { useParams } from 'react-router-dom';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { useParams, useSearchParams } from 'react-router-dom';
 import toast from 'react-hot-toast';
 import { BookOpenText, CalendarDays, Copy, ExternalLink, FilePlus2, FlaskConical, Link2, LogIn, MessageSquareText, Sparkles, ThumbsUp, Trash2, UserCheck, Vote } from 'lucide-react';
 import { get, post, put, del } from '../../lib/api';
@@ -43,6 +43,7 @@ const deepTopicStages = [
 
 export function ContentHub({ mode = 'all', initialTopicType = 'daily' }) {
   const { projectId } = useParams();
+  const [searchParams, setSearchParams] = useSearchParams();
   const { currentTeamId, currentUser } = useStore();
   const [items, setItems] = useState([]);
   const [projects, setProjects] = useState([]);
@@ -66,8 +67,9 @@ export function ContentHub({ mode = 'all', initialTopicType = 'daily' }) {
   const [topicCandidateBatch, setTopicCandidateBatch] = useState(null);
   const [topicCandidateEnabled, setTopicCandidateEnabled] = useState({});
   const [parsingDiscussions, setParsingDiscussions] = useState(false);
-  const [selectedTopicId, setSelectedTopicId] = useState('');
-  const [selectedEvalId, setSelectedEvalId] = useState('');
+  const [selectedTopicId, setSelectedTopicId] = useState(searchParams.get('topic') || '');
+  const [selectedEvalId, setSelectedEvalId] = useState(searchParams.get('eval') || '');
+  const didInitSelectionRef = useRef(false);
   const [topicOverview, setTopicOverview] = useState(null);
   const [form, setForm] = useState({ kind: isInitialTopicLike ? 'topic' : mode === 'demo' ? 'demo' : mode === 'eval' ? 'eval' : 'memo', subKind: isInitialTopicLike ? initialTopicType : '', title: '', body: '', sourceUrl: '', timelineText: '', ownerText: '', progress: 0, meetingDocUrl: '', meetingMinutesUrl: '' });
   const [minutes, setMinutes] = useState({ title: '', meetingDocUrl: '', meetingMinutesUrl: '', transcript: '' });
@@ -105,8 +107,26 @@ export function ContentHub({ mode = 'all', initialTopicType = 'daily' }) {
   }, [initialTopicType]);
 
   useEffect(() => {
+    if (!didInitSelectionRef.current) {
+      didInitSelectionRef.current = true;
+      return;
+    }
     setSelectedTopicId('');
+    setSelectedEvalId('');
+    setSearchParams((current) => {
+      const next = new URLSearchParams(current);
+      next.delete('topic');
+      next.delete('eval');
+      return next;
+    }, { replace: true });
   }, [mode, topicType]);
+
+  useEffect(() => {
+    const topicId = searchParams.get('topic') || '';
+    const evalId = searchParams.get('eval') || '';
+    setSelectedTopicId(topicId);
+    setSelectedEvalId(evalId);
+  }, [searchParams]);
 
   useEffect(() => {
     if (!selectedProjectId && projects[0]?.id) setSelectedProjectId(projects[0].id);
@@ -153,6 +173,39 @@ export function ContentHub({ mode = 'all', initialTopicType = 'daily' }) {
     const res = await get(path);
     if (res.ok) setItems(res.data || []);
     setLoading(false);
+  }
+
+  function openTopicDetail(id) {
+    setSelectedTopicId(id);
+    setSelectedEvalId('');
+    setSearchParams((current) => {
+      const next = new URLSearchParams(current);
+      next.set('topic', id);
+      next.delete('eval');
+      return next;
+    });
+  }
+
+  function openEvalDetail(id) {
+    setSelectedEvalId(id);
+    setSelectedTopicId('');
+    setSearchParams((current) => {
+      const next = new URLSearchParams(current);
+      next.set('eval', id);
+      next.delete('topic');
+      return next;
+    });
+  }
+
+  function closeDetail() {
+    setSelectedTopicId('');
+    setSelectedEvalId('');
+    setSearchParams((current) => {
+      const next = new URLSearchParams(current);
+      next.delete('topic');
+      next.delete('eval');
+      return next;
+    });
   }
 
   async function loadTopicOverview() {
@@ -978,7 +1031,7 @@ export function ContentHub({ mode = 'all', initialTopicType = 'daily' }) {
 
       {selectedTopic ? (
         <article className="rounded-xl border border-slate-200 bg-white p-6 shadow-sm shadow-slate-950/5">
-          <button onClick={() => setSelectedTopicId('')} className="mb-5 inline-flex items-center rounded-md border border-slate-200 px-3 py-2 text-sm font-semibold text-slate-600 transition hover:bg-slate-50">
+          <button onClick={closeDetail} className="mb-5 inline-flex items-center rounded-md border border-slate-200 px-3 py-2 text-sm font-semibold text-slate-600 transition hover:bg-slate-50">
             返回选题列表
           </button>
           <div className={`grid gap-5 ${selectedTopic.sub_kind === 'deep' ? '' : 'xl:grid-cols-[minmax(0,1fr)_320px]'}`}>
@@ -1216,7 +1269,7 @@ export function ContentHub({ mode = 'all', initialTopicType = 'daily' }) {
         </article>
       ) : selectedEval ? (
         <article className="rounded-xl border border-slate-200 bg-white p-6 shadow-sm shadow-slate-950/5">
-          <button onClick={() => setSelectedEvalId('')} className="mb-5 inline-flex items-center rounded-md border border-slate-200 px-3 py-2 text-sm font-semibold text-slate-600 transition hover:bg-slate-50">
+          <button onClick={closeDetail} className="mb-5 inline-flex items-center rounded-md border border-slate-200 px-3 py-2 text-sm font-semibold text-slate-600 transition hover:bg-slate-50">
             返回测试集列表
           </button>
           <div className="flex flex-wrap items-center gap-2">
@@ -1316,7 +1369,7 @@ export function ContentHub({ mode = 'all', initialTopicType = 'daily' }) {
                   <h3 className="mt-3 text-xl font-semibold tracking-normal text-slate-950">{item.title}</h3>
                   <p className="mt-2 line-clamp-4 whitespace-pre-wrap text-sm leading-6 text-slate-600">{item.body || '还没有补充介绍'}</p>
                   <div className="mt-4 flex flex-wrap gap-2">
-                    <button onClick={() => setSelectedEvalId(item.id)} className="inline-flex items-center justify-center rounded-md bg-slate-950 px-4 py-2 text-sm font-semibold text-white transition hover:bg-slate-800">
+                    <button onClick={() => openEvalDetail(item.id)} className="inline-flex items-center justify-center rounded-md bg-slate-950 px-4 py-2 text-sm font-semibold text-white transition hover:bg-slate-800">
                       查看详情
                     </button>
                     <button onClick={() => copyText(window.location.origin + '/p/eval/' + item.id, '公开链接已复制')} className="inline-flex items-center gap-1.5 rounded-md border border-violet-200 bg-white px-3 py-2 text-sm font-semibold text-violet-700 transition hover:bg-violet-50">
@@ -1346,7 +1399,7 @@ export function ContentHub({ mode = 'all', initialTopicType = 'daily' }) {
                     </div>
                   </div>
                   <div className="mt-4 flex flex-wrap gap-2">
-                    <button onClick={() => setSelectedTopicId(item.id)} className="inline-flex items-center justify-center rounded-md bg-slate-950 px-4 py-2 text-sm font-semibold text-white transition hover:bg-slate-800">
+                    <button onClick={() => openTopicDetail(item.id)} className="inline-flex items-center justify-center rounded-md bg-slate-950 px-4 py-2 text-sm font-semibold text-white transition hover:bg-slate-800">
                       查看详情
                     </button>
                     {canArchiveTopic(item) ? (
