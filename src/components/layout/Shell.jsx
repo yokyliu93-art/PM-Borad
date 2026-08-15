@@ -4,7 +4,7 @@ import { NavLink, Outlet, useLocation } from 'react-router-dom';
 import { useEffect, useState } from 'react';
 import { useStore } from '../../store';
 import { AgentAccountMenu } from '../AgentAccountMenu';
-import { Boxes, UserCheck, LayoutDashboard, BarChart3, List, Plus, Settings, NotebookTabs, Presentation, ChevronDown, Circle, Microscope } from 'lucide-react';
+import { Boxes, UserCheck, LayoutDashboard, BarChart3, List, Plus, Settings, NotebookTabs, Presentation, ChevronDown, Circle, Microscope, Sparkles, MessageSquareText } from 'lucide-react';
 import { get } from '../../lib/api';
 
 export function Shell() {
@@ -68,9 +68,19 @@ export function Shell() {
                 <span className="ml-auto text-xs text-slate-400">统帅视角</span>
               </NavLink>
 
-              <NavLink to="/topics" className={({ isActive }) => navClass(isActive || location.pathname.startsWith('/topics'))}>
+              <NavLink to="/topics" className={({ isActive }) => navClass(isActive || location.pathname === '/topics/daily' || location.pathname === '/topics/deep')}>
                 <NotebookTabs size={16} />
                 <span>选题</span>
+              </NavLink>
+
+              <NavLink to="/topics/frontier" className={({ isActive }) => navClass(isActive)}>
+                <Sparkles size={16} />
+                <span>Frontier</span>
+              </NavLink>
+
+              <NavLink to="/topics/prompt" className={({ isActive }) => navClass(isActive)}>
+                <MessageSquareText size={16} />
+                <span>Prompt</span>
               </NavLink>
 
               <NavGroup icon={Presentation} title="Demo" defaultOpen={location.pathname.startsWith('/demo')}>
