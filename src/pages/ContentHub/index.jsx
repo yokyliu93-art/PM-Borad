@@ -981,7 +981,7 @@ export function ContentHub({ mode = 'all', initialTopicType = 'daily' }) {
           <button onClick={() => setSelectedTopicId('')} className="mb-5 inline-flex items-center rounded-md border border-slate-200 px-3 py-2 text-sm font-semibold text-slate-600 transition hover:bg-slate-50">
             返回选题列表
           </button>
-          <div className={`grid gap-5 ${selectedTopic.sub_kind === 'deep' ? 'xl:grid-cols-[minmax(0,1fr)_420px]' : 'xl:grid-cols-[minmax(0,1fr)_320px]'}`}>
+          <div className={`grid gap-5 ${selectedTopic.sub_kind === 'deep' ? '' : 'xl:grid-cols-[minmax(0,1fr)_320px]'}`}>
           <div className="min-w-0">
           <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
             <div className="min-w-0">
@@ -1035,34 +1035,51 @@ export function ContentHub({ mode = 'all', initialTopicType = 'daily' }) {
               </div>
 
               <div className="grid gap-4 lg:grid-cols-[0.9fr_1.1fr]">
-                <div className="rounded-lg border border-slate-200 bg-white p-4">
+                <div className="rounded-lg border border-slate-200 bg-white p-4 lg:col-span-2">
                   <p className="text-sm font-semibold text-slate-950">组队与分工</p>
-                  <p className="mt-1 text-xs leading-5 text-slate-500">直接从团队成员里点选，可以多选；具体分工可以在飞书文档里写细。</p>
-                  <MemberMultiSelect
+                  <p className="mt-1 text-xs leading-5 text-slate-500">预留三个协作位，可以选一个、两个或三个人；发起人也可以选自己。</p>
+                  <MemberSlotSelect
                     members={teamMemberNames()}
                     value={docLinkValue(selectedTopic, 'members')}
                     disabled={!canEditTopicDocLinks(selectedTopic)}
                     onChange={(value) => setTopicDocLink(selectedTopic, 'members', value)}
                   />
                 </div>
-                <div className="rounded-lg border border-slate-200 bg-white p-4">
-                  <p className="text-sm font-semibold text-slate-950">本页怎么协作</p>
-                  <div className="mt-3 space-y-2 text-sm leading-6 text-slate-600">
-                    <p>1. 负责人和队员在飞书文档里推进具体内容。</p>
-                    <p>2. Agent 每天把进度回传到 PM Board。</p>
-                    <p>3. 右侧 timeline 固定展示周计划和当前阶段。</p>
-                  </div>
-                </div>
               </div>
 
-              <div className="grid gap-4 md:grid-cols-2">
-                <TopicDetailBlock title="阶段性进度" value={topicDetailSections(selectedTopic).phaseProgress || '等待 Agent 或负责人回传进度'} />
+              <div className="rounded-lg border border-slate-200 bg-white p-4">
+                <div className="flex flex-col gap-3 lg:flex-row lg:items-start lg:justify-between">
+                  <div>
+                    <p className="text-sm font-semibold text-slate-950">周计划</p>
+                    <p className="mt-1 text-xs leading-5 text-slate-500">由 AI / Agent 回传更新。默认展示 W1-W4，后续有 W5、W6 会继续往后加。</p>
+                  </div>
+                  {canEditTopicMeta(selectedTopic) ? (
+                    <button onClick={() => saveDeepTopicState(selectedTopic)} className="rounded-md bg-emerald-600 px-3 py-2 text-sm font-semibold text-white transition hover:bg-emerald-500">
+                      保存周计划
+                    </button>
+                  ) : null}
+                </div>
+                <TopicWeekPlan plans={topicWeekPlans({ ...selectedTopic, timeline_text: deepTopicDraftValue(selectedTopic, 'timelineText') })} currentWeek="W4" minWeeks={4} />
+                {canEditTopicMeta(selectedTopic) ? (
+                  <textarea
+                    value={deepTopicDraftValue(selectedTopic, 'timelineText')}
+                    onChange={(event) => setDeepTopicDraft(selectedTopic, 'timelineText', event.target.value)}
+                    rows={4}
+                    placeholder="AI 回传格式示例：&#10;W1：要点整理&#10;W2：采访和资料补齐&#10;W3：写作提纲&#10;W4：初稿"
+                    className="mt-3 w-full rounded-md border border-slate-200 px-3 py-2 text-sm leading-6 outline-none transition focus:border-emerald-400"
+                  />
+                ) : null}
+              </div>
+
+              <div className="rounded-lg border border-slate-200 bg-white p-4">
+                <p className="text-sm font-semibold text-slate-950">阶段性进度更新</p>
+                <p className="mt-1 text-xs leading-5 text-slate-500">这里主要由 AI 自动追加，比如今天采访谁、资料补到哪里、卡点是什么。</p>
                 <DeepTextArea
-                  label="采访对象"
-                  value={docLinkValue(selectedTopic, 'interviews')}
+                  label="AI 进度记录"
+                  value={docLinkValue(selectedTopic, 'phaseProgress') || topicDetailSections(selectedTopic).phaseProgress}
                   disabled={!canEditTopicDocLinks(selectedTopic)}
-                  placeholder="记录采访对象、联络状态、已完成/待约"
-                  onChange={(value) => setTopicDocLink(selectedTopic, 'interviews', value)}
+                  placeholder="例如：8/15 已约 A 公司创始人；8/16 补齐模型能力资料；当前卡点是缺采访对象确认"
+                  onChange={(value) => setTopicDocLink(selectedTopic, 'phaseProgress', value)}
                 />
               </div>
 
@@ -1070,7 +1087,7 @@ export function ContentHub({ mode = 'all', initialTopicType = 'daily' }) {
                 <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
                   <div>
                     <p className="text-sm font-semibold text-slate-950">飞书工作空间</p>
-                    <p className="mt-1 text-xs leading-5 text-slate-500">资料放在飞书里，PM Board 只做入口、状态和提醒。</p>
+                    <p className="mt-1 text-xs leading-5 text-slate-500">飞书文档承载正文和资料，PM Board 负责同步入口、编辑意见和推送。</p>
                   </div>
                   {canEditTopicDocLinks(selectedTopic) ? (
                     <button onClick={() => saveTopicDocLinks(selectedTopic)} className="inline-flex items-center justify-center rounded-md bg-emerald-600 px-3 py-2 text-sm font-semibold text-white transition hover:bg-emerald-500">
@@ -1081,10 +1098,10 @@ export function ContentHub({ mode = 'all', initialTopicType = 'daily' }) {
                 <div className="mt-3 grid gap-3 md:grid-cols-2">
                   {[
                     ['sourceDoc', '选题文档'],
-                    ['references', '参考资料'],
+                    ['meetingNotes', '周会编辑意见'],
+                    ['techIntro', '要点整理'],
                     ['outline', '写作提纲'],
-                    ['draft', '初稿'],
-                    ['final', '终稿 / 发布稿'],
+                    ['draft', '稿件链接'],
                   ].map(([key, label]) => (
                     <TopicDocLinkInput
                       key={key}
@@ -1096,10 +1113,34 @@ export function ContentHub({ mode = 'all', initialTopicType = 'daily' }) {
                     />
                   ))}
                 </div>
+                <div className="mt-4 rounded-md border border-amber-100 bg-amber-50/60 p-3">
+                  <span className="text-xs font-semibold text-amber-800">编辑建议</span>
+                  <div className="mt-2 grid gap-3 lg:grid-cols-[1fr_auto] lg:items-end">
+                    <textarea
+                      value={topicEditorNotes[selectedTopic.id] ?? selectedTopic.editor_notes ?? ''}
+                      onChange={(event) => setTopicEditorNotes((drafts) => ({ ...drafts, [selectedTopic.id]: event.target.value }))}
+                      disabled={!canEditTopicMeta(selectedTopic)}
+                      placeholder={canEditTopicMeta(selectedTopic) ? '兆洋或 Agent 写入编辑建议，保存后推送给相关负责人' : '暂无编辑建议'}
+                      rows={3}
+                      className="w-full rounded-md border border-amber-100 bg-white px-3 py-2 text-sm outline-none transition focus:border-amber-400 disabled:bg-amber-50 disabled:text-amber-900"
+                    />
+                    {canEditTopicMeta(selectedTopic) ? (
+                      <button onClick={() => saveTopicEditorNotes(selectedTopic)} className="rounded-md bg-slate-950 px-4 py-2 text-sm font-semibold text-white transition hover:bg-slate-800">
+                        推送建议
+                      </button>
+                    ) : null}
+                  </div>
+                </div>
               </div>
+              {canArchiveTopic(selectedTopic) ? (
+                <button onClick={() => archiveTopic(selectedTopic)} className="inline-flex w-fit items-center justify-center gap-2 rounded-md border border-slate-200 px-4 py-2 text-sm font-semibold text-slate-700 transition hover:bg-slate-50">
+                  <Trash2 size={14} />删除选题
+                </button>
+              ) : null}
             </div>
           ) : null}
 
+          {selectedTopic.sub_kind !== 'deep' ? (
           <div className="mt-4 space-y-3 rounded-md border border-slate-200 bg-white p-3">
             <div className="grid gap-3 lg:grid-cols-[1fr_auto] lg:items-end">
               <label className="min-w-0">
@@ -1142,36 +1183,10 @@ export function ContentHub({ mode = 'all', initialTopicType = 'daily' }) {
               </button>
             ) : null}
           </div>
+          ) : null}
           </div>
+          {selectedTopic.sub_kind !== 'deep' ? (
           <aside className="space-y-4 xl:sticky xl:top-5 xl:self-start">
-            {selectedTopic.sub_kind === 'deep' ? (
-              <div className="rounded-lg border border-emerald-100 bg-white p-4 shadow-sm shadow-emerald-950/5">
-                <div className="flex items-start justify-between gap-3">
-                  <div>
-                    <p className="flex items-center gap-2 text-sm font-semibold text-slate-950">
-                      <CalendarDays size={16} />按周推进
-                    </p>
-                    <p className="mt-1 text-xs leading-5 text-slate-500">这块固定在右侧，方便一眼看到进度。</p>
-                  </div>
-                  <span className="rounded-full bg-emerald-50 px-2.5 py-1 text-xs font-semibold text-emerald-700">{deepTopicDraftValue(selectedTopic, 'status')}</span>
-                </div>
-                {canEditTopicMeta(selectedTopic) ? (
-                  <div className="mt-3 space-y-2">
-                    <textarea
-                      value={deepTopicDraftValue(selectedTopic, 'timelineText')}
-                      onChange={(event) => setDeepTopicDraft(selectedTopic, 'timelineText', event.target.value)}
-                      rows={5}
-                      placeholder="W1：要点整理&#10;W2：采访和资料补齐&#10;W3：写作提纲&#10;W4：初稿"
-                      className="w-full rounded-md border border-slate-200 px-3 py-2 text-sm leading-6 outline-none transition focus:border-emerald-400"
-                    />
-                    <button onClick={() => saveDeepTopicState(selectedTopic)} className="w-full rounded-md bg-emerald-600 px-3 py-2 text-sm font-semibold text-white transition hover:bg-emerald-500">
-                      保存 timeline
-                    </button>
-                  </div>
-                ) : null}
-                <TopicWeekPlan plans={topicWeekPlans({ ...selectedTopic, timeline_text: deepTopicDraftValue(selectedTopic, 'timelineText') })} currentWeek="W4" compact />
-              </div>
-            ) : null}
             <div className="rounded-lg border border-amber-100 bg-amber-50/60 p-4">
               <p className="flex items-center gap-2 text-sm font-semibold text-amber-900">
                 <MessageSquareText size={16} />周会讨论 / 编辑意见
@@ -1189,6 +1204,7 @@ export function ContentHub({ mode = 'all', initialTopicType = 'daily' }) {
               </div>
             </div>
           </aside>
+          ) : null}
           </div>
         </article>
       ) : selectedEval ? (
@@ -1591,19 +1607,17 @@ function DeepTextArea({ label, value, disabled, placeholder, onChange }) {
   );
 }
 
-function MemberMultiSelect({ members, value, disabled, onChange }) {
+function MemberSlotSelect({ members, value, disabled, onChange }) {
   const selected = String(value || '')
     .split(/[、,，\n]/)
     .map((name) => name.trim())
     .filter(Boolean);
-  const selectedSet = new Set(selected);
 
-  function toggle(name) {
+  function setSlot(index, name) {
     if (disabled) return;
-    const next = selectedSet.has(name)
-      ? selected.filter((item) => item !== name)
-      : [...selected, name];
-    onChange(next.join('、'));
+    const next = [selected[0] || '', selected[1] || '', selected[2] || ''];
+    next[index] = name;
+    onChange(next.filter(Boolean).join('、'));
   }
 
   if (!members.length) {
@@ -1616,21 +1630,21 @@ function MemberMultiSelect({ members, value, disabled, onChange }) {
 
   return (
     <div className="mt-3">
-      <div className="flex flex-wrap gap-2">
-        {members.map((name) => {
-          const active = selectedSet.has(name);
-          return (
-            <button
-              key={name}
-              type="button"
+      <div className="grid gap-3 md:grid-cols-3">
+        {[0, 1, 2].map((index) => (
+          <label key={index} className="block">
+            <span className="text-xs font-semibold text-slate-500">协作人 {index + 1}</span>
+            <select
+              value={selected[index] || ''}
               disabled={disabled}
-              onClick={() => toggle(name)}
-              className={`rounded-full border px-3 py-1.5 text-sm font-semibold transition disabled:cursor-not-allowed disabled:opacity-70 ${active ? 'border-emerald-200 bg-emerald-50 text-emerald-700' : 'border-slate-200 bg-white text-slate-600 hover:bg-slate-50'}`}
+              onChange={(event) => setSlot(index, event.target.value)}
+              className="mt-1.5 w-full rounded-md border border-slate-200 bg-white px-3 py-2 text-sm font-semibold text-slate-800 outline-none transition focus:border-emerald-400 disabled:bg-slate-50 disabled:text-slate-500"
             >
-              {name}
-            </button>
-          );
-        })}
+              <option value="">不选择</option>
+              {members.map((name) => <option key={name} value={name}>{name}</option>)}
+            </select>
+          </label>
+        ))}
       </div>
       <p className="mt-3 text-xs leading-5 text-slate-500">已选择：{selected.length ? selected.join('、') : '暂无'}</p>
     </div>
@@ -1646,8 +1660,14 @@ function TopicDetailBlock({ title, value }) {
   );
 }
 
-function TopicWeekPlan({ plans, currentWeek, compact = false }) {
-  const list = plans.length ? plans : [{ week: 'W1', detail: '等待补充周计划' }];
+function TopicWeekPlan({ plans, currentWeek, compact = false, minWeeks = 1 }) {
+  const list = plans.length ? [...plans] : [];
+  for (let index = 1; index <= minWeeks; index += 1) {
+    if (!list.some((plan) => plan.week === `W${index}`)) {
+      list.push({ week: `W${index}`, detail: '等待 AI 回传周计划' });
+    }
+  }
+  if (!list.length) list.push({ week: 'W1', detail: '等待补充周计划' });
   function statusFor(week) {
     if (week === currentWeek) return { label: '当前阶段', className: 'bg-emerald-50 text-emerald-700 border-emerald-100' };
     if (/下周/.test(week)) return { label: '下一阶段', className: 'bg-sky-50 text-sky-700 border-sky-100' };

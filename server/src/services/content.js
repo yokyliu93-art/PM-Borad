@@ -408,6 +408,7 @@ export function updateTopicDocLinks(projectId, memoId, userId, fields = {}) {
     'outline',
     'reference',
     'references',
+    'meetingNotes',
     'members',
     'interviews',
     'draft',
