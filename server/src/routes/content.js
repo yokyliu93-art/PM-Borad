@@ -97,6 +97,15 @@ router.put('/:memoId/topic-draft-date', (req, res) => {
   }
 });
 
+router.put('/:memoId/topic-doc-links', (req, res) => {
+  try {
+    const data = contentService.updateTopicDocLinks(req.params.projectId, req.params.memoId, req.user.id, req.body || {});
+    res.json({ ok: true, data });
+  } catch (err) {
+    res.status(400).json({ ok: false, error: err.message });
+  }
+});
+
 router.post('/:memoId/archive-topic', (req, res) => {
   try {
     const data = contentService.archiveTopic(req.params.projectId, req.params.memoId, req.user.id);

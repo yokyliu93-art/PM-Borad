@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useParams } from 'react-router-dom';
 import toast from 'react-hot-toast';
-import { Archive, BookOpenText, CalendarDays, Copy, FilePlus2, FlaskConical, LogIn, MessageSquareText, Sparkles, ThumbsUp, UserCheck, Vote } from 'lucide-react';
+import { Archive, BookOpenText, CalendarDays, Copy, ExternalLink, FilePlus2, FlaskConical, LogIn, MessageSquareText, Sparkles, ThumbsUp, UserCheck, Vote } from 'lucide-react';
 import { get, post, put, del } from '../../lib/api';
 import { useStore } from '../../store';
 import { Avatar } from '../../components/ui/Avatar';
@@ -51,6 +51,7 @@ export function ContentHub({ mode = 'all', initialTopicType = 'daily' }) {
   const [topicDraftDates, setTopicDraftDates] = useState({});
   const [topicPublishDates, setTopicPublishDates] = useState({});
   const [topicEditorNotes, setTopicEditorNotes] = useState({});
+  const [topicDocLinkDrafts, setTopicDocLinkDrafts] = useState({});
   const [form, setForm] = useState({ kind: isInitialTopicLike ? 'topic' : mode === 'demo' ? 'demo' : mode === 'eval' ? 'eval' : 'memo', subKind: isInitialTopicLike ? initialTopicType : '', title: '', body: '', sourceUrl: '', timelineText: '', ownerText: '', progress: 0, meetingDocUrl: '', meetingMinutesUrl: '' });
   const [minutes, setMinutes] = useState({ title: '', meetingDocUrl: '', meetingMinutesUrl: '', transcript: '' });
   const [experienceDrafts, setExperienceDrafts] = useState({});
@@ -279,6 +280,23 @@ export function ContentHub({ mode = 'all', initialTopicType = 'daily' }) {
     }
   }
 
+  async function saveTopicDocLinks(item) {
+    const targetProjectId = item.project_id || projectId;
+    const docLinks = topicDocLinkDrafts[item.id] || topicDocLinks(item);
+    const res = await put(`/api/projects/${targetProjectId}/content/${item.id}/topic-doc-links`, { docLinks });
+    if (res.ok) {
+      setItems((current) => current.map((memo) => (memo.id === item.id ? res.data : memo)));
+      setTopicDocLinkDrafts((drafts) => {
+        const next = { ...drafts };
+        delete next[item.id];
+        return next;
+      });
+      toast.success('文档入口已保存');
+    } else {
+      toast.error(res.error || '保存失败');
+    }
+  }
+
   async function submitTopicDraft(item) {
     const targetProjectId = item.project_id || projectId;
     const draftDocUrl = topicDraftLinks[item.id] ?? item.draft_doc_url ?? '';
@@ -353,6 +371,15 @@ export function ContentHub({ mode = 'all', initialTopicType = 'daily' }) {
     return item.body || '还没有补充内容';
   }
 
+  function topicDocLinks(item) {
+    if (item.doc_links && typeof item.doc_links === 'object') return item.doc_links;
+    try {
+      return item.doc_links_json ? JSON.parse(item.doc_links_json) : {};
+    } catch {
+      return {};
+    }
+  }
+
   function topicOwnerText(item) {
     const owner = String(item.owner_text || '').trim();
     if (owner && owner !== '待定' && owner !== '待分配') return owner;
@@ -386,6 +413,10 @@ export function ContentHub({ mode = 'all', initialTopicType = 'daily' }) {
     return isTopicAuthor(item) || canEditTopicMeta();
   }
 
+  function canEditTopicDocLinks(item) {
+    return isTopicAuthor(item) || canEditTopicMeta();
+  }
+
   function topicDraftDateText(item) {
     const text = String(item.timeline_text || '').trim();
     const match = text.match(/交稿日期[：:]\s*([^\n]+)/);
@@ -393,6 +424,21 @@ export function ContentHub({ mode = 'all', initialTopicType = 'daily' }) {
     const value = match[1].trim();
     if (!value || /待定|暂无|没有|无/.test(value)) return '';
     return value;
+  }
+
+  function docLinkValue(item, key) {
+    return topicDocLinkDrafts[item.id]?.[key] ?? topicDocLinks(item)[key] ?? '';
+  }
+
+  function setTopicDocLink(item, key, value) {
+    setTopicDocLinkDrafts((drafts) => ({
+      ...drafts,
+      [item.id]: {
+        ...topicDocLinks(item),
+        ...(drafts[item.id] || {}),
+        [key]: value,
+      },
+    }));
   }
 
   async function archiveTopic(item) {
@@ -677,6 +723,38 @@ export function ContentHub({ mode = 'all', initialTopicType = 'daily' }) {
                     <TopicDetailBlock title="采访原文" value={topicDetailSections(item).interviewRaw || '等待飞书原文链接或摘录'} />
                     <TopicDetailBlock title="稿件框架" value={topicDetailSections(item).outline || '等待补充稿件框架'} />
                   </div>
+                  <div className="mt-3 rounded-lg border border-emerald-100 bg-white p-3">
+                    <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+                      <div>
+                        <p className="text-sm font-semibold text-slate-950">飞书文档入口</p>
+                        <p className="mt-1 text-xs leading-5 text-slate-500">正文继续放在飞书里，PM Board 只负责挂入口、看负责人和进度。</p>
+                      </div>
+                      {canEditTopicDocLinks(item) ? (
+                        <button onClick={() => saveTopicDocLinks(item)} className="inline-flex items-center justify-center rounded-md bg-emerald-600 px-3 py-2 text-sm font-semibold text-white transition hover:bg-emerald-500">
+                          保存入口
+                        </button>
+                      ) : null}
+                    </div>
+                    <div className="mt-3 grid gap-3 md:grid-cols-2">
+                      {[
+                        ['techIntro', '技术介绍文档'],
+                        ['weeklyPlan', '周计划文档'],
+                        ['phaseProgress', '阶段进度文档'],
+                        ['interviewRaw', '采访原文文档'],
+                        ['outline', '稿件框架文档'],
+                        ['reference', '资料补充文档'],
+                      ].map(([key, label]) => (
+                        <TopicDocLinkInput
+                          key={key}
+                          label={label}
+                          value={docLinkValue(item, key)}
+                          disabled={!canEditTopicDocLinks(item)}
+                          onChange={(value) => setTopicDocLink(item, key, value)}
+                          onCopy={() => copyText(docLinkValue(item, key), '链接已复制')}
+                        />
+                      ))}
+                    </div>
+                  </div>
                 </details>
               ) : null}
 
@@ -839,5 +917,33 @@ function TopicDetailBlock({ title, value }) {
       <p className="text-xs font-semibold text-slate-500">{title}</p>
       <p className="mt-2 whitespace-pre-wrap text-sm leading-6 text-slate-700">{value}</p>
     </div>
+  );
+}
+
+function TopicDocLinkInput({ label, value, disabled, onChange, onCopy }) {
+  const hasValue = Boolean(String(value || '').trim());
+  return (
+    <label className="block rounded-md border border-slate-100 bg-slate-50 p-3">
+      <span className="text-xs font-semibold text-slate-500">{label}</span>
+      <div className="mt-2 flex gap-2">
+        <input
+          value={value}
+          onChange={(event) => onChange(event.target.value)}
+          disabled={disabled}
+          placeholder="粘贴飞书文档链接"
+          className="min-w-0 flex-1 rounded-md border border-slate-200 bg-white px-3 py-2 text-sm text-slate-950 outline-none transition focus:border-emerald-400 disabled:bg-slate-50 disabled:text-slate-500"
+        />
+        {hasValue ? (
+          <>
+            <a href={value} target="_blank" rel="noreferrer" className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-md border border-slate-200 bg-white text-slate-600 transition hover:bg-slate-100" title="打开飞书文档">
+              <ExternalLink size={15} />
+            </a>
+            <button type="button" onClick={onCopy} className="inline-flex h-10 w-10 shrink-0 items-center justify-center rounded-md border border-slate-200 bg-white text-slate-600 transition hover:bg-slate-100" title="复制链接">
+              <Copy size={15} />
+            </button>
+          </>
+        ) : null}
+      </div>
+    </label>
   );
 }

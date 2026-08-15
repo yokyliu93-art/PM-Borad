@@ -37,10 +37,17 @@ function teamSize(projectId) {
 
 function hydrateMemo(row, totalMembers) {
   if (!row) return null;
+  let docLinks = {};
+  try {
+    docLinks = row.doc_links_json ? JSON.parse(row.doc_links_json) : {};
+  } catch {
+    docLinks = {};
+  }
   const voteCount = Number(row.vote_count || 0);
   const threshold = Math.max(1, Math.ceil((totalMembers || 1) / 2));
   return {
     ...row,
+    doc_links: docLinks && typeof docLinks === 'object' ? docLinks : {},
     vote_count: voteCount,
     experience_count: Number(row.experience_count || 0),
     demo_threshold: threshold,
@@ -133,9 +140,9 @@ export function create(projectId, userId, fields = {}) {
     INSERT INTO content_memos (
       id, project_id, kind, sub_kind, title, body, source_url, timeline_text,
       status, owner_text, progress, meeting_doc_url, meeting_minutes_url, final_doc_url,
-      draft_doc_url, publish_date, editor_notes, created_by
+      draft_doc_url, publish_date, editor_notes, doc_links_json, created_by
     )
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
   `).run(
     id,
     projectId,
@@ -154,6 +161,7 @@ export function create(projectId, userId, fields = {}) {
     fields.draftDocUrl || fields.draft_doc_url || '',
     fields.publishDate || fields.publish_date || '',
     fields.editorNotes || fields.editor_notes || '',
+    JSON.stringify(fields.docLinks || fields.doc_links || {}),
     userId
   );
   return get(projectId, id, userId);
@@ -267,6 +275,36 @@ export function updateTopicDraftDate(projectId, memoId, userId, fields = {}) {
     SET timeline_text = ?, updated_at = datetime('now')
     WHERE id = ? AND project_id = ?
   `).run(timelineText, memoId, projectId);
+  return get(projectId, memoId, userId);
+}
+
+export function updateTopicDocLinks(projectId, memoId, userId, fields = {}) {
+  const memo = db.prepare('SELECT id, kind, created_by, owner_text, doc_links_json FROM content_memos WHERE id = ? AND project_id = ?').get(memoId, projectId);
+  if (!memo) throw new Error('选题不存在');
+  if (memo.kind !== 'topic') throw new Error('只能编辑选题文档入口');
+  const user = db.prepare('SELECT name, job_title FROM users WHERE id = ?').get(userId);
+  if (memo.created_by !== userId && !userMatchesOwnerText(user, memo.owner_text) && !isTopicEditor(userId)) {
+    throw new Error('只有选题负责人和编辑可以维护文档入口');
+  }
+  let current = {};
+  try {
+    current = memo.doc_links_json ? JSON.parse(memo.doc_links_json) : {};
+  } catch {
+    current = {};
+  }
+  const incoming = fields.docLinks || fields.doc_links || {};
+  const allowedKeys = ['techIntro', 'weeklyPlan', 'phaseProgress', 'interviewRaw', 'outline', 'reference', 'draft'];
+  const next = { ...current };
+  for (const key of allowedKeys) {
+    if (Object.prototype.hasOwnProperty.call(incoming, key)) {
+      next[key] = String(incoming[key] || '').trim();
+    }
+  }
+  db.prepare(`
+    UPDATE content_memos
+    SET doc_links_json = ?, updated_at = datetime('now')
+    WHERE id = ? AND project_id = ?
+  `).run(JSON.stringify(next), memoId, projectId);
   return get(projectId, memoId, userId);
 }
 

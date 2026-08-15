@@ -454,6 +454,9 @@ export function migrate() {
   if (!memoCols.includes('editor_notes')) {
     db.exec("ALTER TABLE content_memos ADD COLUMN editor_notes TEXT DEFAULT ''");
   }
+  if (!memoCols.includes('doc_links_json')) {
+    db.exec("ALTER TABLE content_memos ADD COLUMN doc_links_json TEXT DEFAULT '{}'");
+  }
 
   const moduleCols = db.prepare('PRAGMA table_info(project_modules)').all().map((c) => c.name);
   if (!moduleCols.includes('owner_id')) {
